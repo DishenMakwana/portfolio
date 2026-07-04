@@ -61,7 +61,7 @@ export default function HoldingsTab({
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
-  const [sortField, setSortField] = useState<'currentValue' | 'xirr' | 'alpha' | 'gain' | 'cagr'>(initialSort);
+  const [sortField, setSortField] = useState<'currentValue' | 'xirr' | 'alpha' | 'gain' | 'cagr' | 'holdingDays'>(initialSort);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(initialOrder);
 
   // Helper to update query string parameters in the URL
@@ -224,7 +224,6 @@ export default function HoldingsTab({
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
                 <th className="p-4">Scheme Details</th>
                 <th className="p-4">Holder</th>
-                <th className="p-4">Folio</th>
                 <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('currentValue')}>
                   <div className="flex items-center gap-1">
                     Valuation {renderSortIcon('currentValue')}
@@ -233,6 +232,11 @@ export default function HoldingsTab({
                 <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('gain')}>
                   <div className="flex items-center gap-1">
                     Profit/Loss {renderSortIcon('gain')}
+                  </div>
+                </th>
+                <th className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap" onClick={() => handleSort('holdingDays')}>
+                  <div className="flex items-center gap-1">
+                    Holding Days {renderSortIcon('holdingDays')}
                   </div>
                 </th>
                 <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('cagr')}>
@@ -275,7 +279,6 @@ export default function HoldingsTab({
                       </div>
                     </td>
                     <td className="p-4 font-medium text-slate-200">{h.memberName}</td>
-                    <td className="p-4 font-mono text-xs">{h.folioNo}</td>
                     <td className="p-4 font-bold text-slate-100">
                       <div>{formatCurrency(h.currentValue)}</div>
                       <div className="text-[11px] text-slate-500 font-normal">Cost: {formatCurrency(h.purchaseValue)}</div>
@@ -288,9 +291,11 @@ export default function HoldingsTab({
                         {h.absoluteReturn.toFixed(1)}% Abs
                       </div>
                     </td>
+                    <td className="p-4 font-bold text-slate-200 whitespace-nowrap">
+                      {h.holdingDays}
+                    </td>
                     <td className="p-4">
                       <div className="font-bold text-slate-200">{formatPercent(h.cagr)}</div>
-                      <div className="text-[10px] text-slate-500">Days: {h.holdingDays}</div>
                     </td>
                     <td className="p-4">
                       <div className="font-bold text-teal-400">{formatPercent(h.xirr)}</div>

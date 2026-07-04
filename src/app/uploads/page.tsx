@@ -1,13 +1,14 @@
-import { CalendarDays, CheckCircle2, Clock3, FileSpreadsheet, XCircle } from 'lucide-react';
+import { CalendarDays, FileSpreadsheet, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import HeaderClient from '@/components/HeaderClient';
 import DeleteReportButton from '@/components/DeleteReportButton';
 import UploadTrackerControls from '@/components/UploadTrackerControls';
+import UploadedFilesList from '@/components/UploadedFilesList';
 import { getReports, getSchemes } from '@/lib/portfolioService';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-type ReportRow = Awaited<ReturnType<typeof getReports>>[number];
+
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -30,15 +31,7 @@ function formatDate(date: string) {
   });
 }
 
-function formatUploadedAt(date: string) {
-  return new Date(date).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+
 
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -122,12 +115,13 @@ function getLastExpectedSnapshotDate(now: Date) {
 }
 
 interface UploadTrackerPageProps {
-  searchParams: Promise<{ reportId?: string }>;
+  searchParams: Promise<{ reportId?: string; month?: string }>;
 }
 
 export default async function UploadTrackerPage({ searchParams }: UploadTrackerPageProps) {
   const params = await searchParams;
   const reportId = params.reportId ? parseInt(params.reportId, 10) : undefined;
+  const monthParam = params.month;
 
   const [reportsList, allSchemes] = await Promise.all([getReports(), getSchemes()]);
   const unmappedCount = allSchemes.filter(s => !s.schemeCodeApi).length;
@@ -147,6 +141,22 @@ export default async function UploadTrackerPage({ searchParams }: UploadTrackerP
   const lastExpectedSnapshotDate = getLastExpectedSnapshotDate(now);
   const rangeEnd = latestReportDate > lastExpectedSnapshotDate ? latestReportDate : lastExpectedSnapshotDate;
   const months = eachMonth(firstReportDate, rangeEnd);
+
+  // Active month calculation
+  let activeMonth = today;
+  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+    const parsedMonth = new Date(`${monthParam}-01T00:00:00`);
+    if (!isNaN(parsedMonth.getTime())) {
+      activeMonth = parsedMonth;
+    }
+  } else {
+    activeMonth = months.at(-1) || today;
+  }
+  activeMonth = startOfMonth(activeMonth);
+
+  const activeMonthIndex = months.findIndex(m => m.getFullYear() === activeMonth.getFullYear() && m.getMonth() === activeMonth.getMonth());
+  const prevMonth = activeMonthIndex > 0 ? months[activeMonthIndex - 1] : null;
+  const nextMonth = activeMonthIndex !== -1 && activeMonthIndex < months.length - 1 ? months[activeMonthIndex + 1] : null;
   
   // Only expect files on business days (trading days)
   const trackedDays = lastExpectedSnapshotDate >= firstReportDate
@@ -198,7 +208,7 @@ export default async function UploadTrackerPage({ searchParams }: UploadTrackerP
           </div>
           <div className="rounded-2xl border border-violet-500/20 bg-slate-900/70 p-5 shadow-xl">
             <div className="text-xs font-bold uppercase tracking-widest text-slate-500">Latest File</div>
-            <div className="mt-3 min-h-10 text-sm font-bold text-slate-100 line-clamp-2">{latestFile}</div>
+            <div className="mt-3 min-h-10 text-sm font-bold text-slate-100 break-all" title={latestFile}>{latestFile}</div>
             <div className="mt-1 text-xs font-semibold text-violet-400">
               {reportsList[0] ? formatDate(reportsList[0].asOfDate) : 'No date'}
             </div>
@@ -225,103 +235,97 @@ export default async function UploadTrackerPage({ searchParams }: UploadTrackerP
                 <p className="text-sm">Upload your first XLSX file to start tracking.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {months.map(month => (
-                  <div key={month.toISOString()} className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-slate-100">
-                        {month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1.5 text-center">
-                      {WEEKDAYS.map(day => (
-                        <div key={day} className="pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{day}</div>
-                      ))}
-                      {getCalendarDays(month).map((day, index) => {
-                        if (!day) {
-                          return <div key={`blank-${index}`} className="aspect-square rounded-lg bg-transparent" />;
-                        }
-
-                        const key = toDateKey(day);
-                        const report = reportByDate.get(key);
-                        // Exclude weekends from the expected range in the calendar
-                        const inExpectedRange = day >= firstReportDate && day <= lastExpectedSnapshotDate && isBusinessDay(day);
-                        const isUploaded = Boolean(report);
-                        const isMissed = inExpectedRange && !isUploaded;
-                        const title = report ? `${formatDate(report.asOfDate)} - ${report.filename}` : key;
-
-                        return (
-                          <div
-                            key={key}
-                            title={title}
-                            className={`group relative flex aspect-square min-h-10 items-center justify-center rounded-lg border text-xs font-black transition ${
-                              isUploaded
-                                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
-                                : isMissed
-                                  ? 'border-red-500/25 bg-red-500/10 text-red-300'
-                                  : 'border-slate-800/60 bg-slate-900/60 text-slate-700'
-                            }`}
-                          >
-                            {day.getDate()}
-                            {report && (
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 rounded-lg">
-                                <DeleteReportButton reportId={report.id} dateLabel={formatDate(report.asOfDate)} variant="icon" />
-                              </div>
-                            )}
-                            {isUploaded && (
-                              <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-300 group-hover:hidden" />
-                            )}
-                          </div>
-                        );
-                      })}
+              <div className="flex flex-col gap-5">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-5">
+                  {/* Calendar Navigation Header */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-100">
+                      {activeMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <div className="flex items-center gap-1.5">
+                      {prevMonth ? (
+                        <Link
+                          href={`/uploads?month=${toDateKey(prevMonth).substring(0, 7)}${reportId ? `&reportId=${reportId}` : ''}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
+                          title="Previous Month"
+                        >
+                          <ChevronLeft size={14} />
+                        </Link>
+                      ) : (
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-850 bg-slate-900/20 text-slate-700 cursor-not-allowed">
+                          <ChevronLeft size={14} />
+                        </div>
+                      )}
+                      {nextMonth ? (
+                        <Link
+                          href={`/uploads?month=${toDateKey(nextMonth).substring(0, 7)}${reportId ? `&reportId=${reportId}` : ''}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
+                          title="Next Month"
+                        >
+                          <ChevronRight size={14} />
+                        </Link>
+                      ) : (
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-850 bg-slate-900/20 text-slate-700 cursor-not-allowed">
+                          <ChevronRight size={14} />
+                        </div>
+                      )}
                     </div>
                   </div>
-                ))}
+
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-1.5 text-center">
+                    {WEEKDAYS.map(day => (
+                      <div key={day} className="pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{day}</div>
+                    ))}
+                    {getCalendarDays(activeMonth).map((day, index) => {
+                      if (!day) {
+                        return <div key={`blank-${index}`} className="aspect-square rounded-lg bg-transparent" />;
+                      }
+
+                      const key = toDateKey(day);
+                      const report = reportByDate.get(key);
+                      // Exclude weekends from the expected range in the calendar
+                      const inExpectedRange = day >= firstReportDate && day <= lastExpectedSnapshotDate && isBusinessDay(day);
+                      const isUploaded = Boolean(report);
+                      const isMissed = inExpectedRange && !isUploaded;
+                      const title = report ? `${formatDate(report.asOfDate)} - ${report.filename}` : key;
+
+                      return (
+                        <div
+                          key={key}
+                          title={title}
+                          className={`group relative flex aspect-square min-h-10 items-center justify-center rounded-lg border text-xs font-black transition ${
+                            isUploaded
+                              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                              : isMissed
+                                ? 'border-red-500/25 bg-red-500/10 text-red-300'
+                                : 'border-slate-800/60 bg-slate-900/60 text-slate-700'
+                          }`}
+                        >
+                          {day.getDate()}
+                          {report && (
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 rounded-lg">
+                              <DeleteReportButton reportId={report.id} dateLabel={formatDate(report.asOfDate)} variant="icon" />
+                            </div>
+                          )}
+                          {isUploaded && (
+                            <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-300 group-hover:hidden" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </section>
 
-          <section className="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-slate-800/70 px-5 py-4">
+          <section className="rounded-2xl border border-slate-800/80 bg-slate-900/70 shadow-xl overflow-hidden flex flex-col">
+            <div className="flex items-center gap-2 border-b border-slate-800/70 px-5 py-4 bg-slate-900/50">
               <FileSpreadsheet size={16} className="text-teal-400" />
               <h2 className="text-sm font-bold uppercase tracking-widest text-slate-100">Uploaded XLSX Files</h2>
             </div>
-            <div className="max-h-[680px] overflow-y-auto">
-              {reportsList.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-500">No uploads yet.</div>
-              ) : (
-                <div className="divide-y divide-slate-800/70">
-                  {reportsList.map((report: ReportRow) => (
-                    <div key={report.id} className="p-5 hover:bg-slate-950/30 transition">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2 text-sm font-black text-slate-100">
-                            <CheckCircle2 size={15} className="text-emerald-400" />
-                            {formatDate(report.asOfDate)}
-                          </div>
-                          <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                            <Clock3 size={12} />
-                            Uploaded {formatUploadedAt(report.uploadedAt)}
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Link
-                            href={`/?reportId=${report.id}`}
-                            className="inline-flex items-center gap-1 bg-teal-500/15 border border-teal-500/20 px-2.5 py-1.5 text-[11px] font-bold text-teal-400 hover:bg-teal-500/30 rounded-lg transition"
-                          >
-                            View
-                          </Link>
-                          <DeleteReportButton reportId={report.id} dateLabel={formatDate(report.asOfDate)} />
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs font-semibold leading-relaxed text-slate-300 break-words">
-                        {report.filename}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <UploadedFilesList reportsList={reportsList} />
           </section>
         </div>
 
