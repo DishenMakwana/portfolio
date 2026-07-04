@@ -45,7 +45,7 @@ export async function searchMutualFund(query: string): Promise<MfSearchResult[]>
   try {
     await throttleRequest();
     const res = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`, {
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(10000)
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -66,7 +66,7 @@ export async function fetchMfDetails(schemeCode: string): Promise<MfDetailsRespo
   try {
     await throttleRequest();
     const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(10000)
     });
     if (!res.ok) return null;
     return await res.json();
