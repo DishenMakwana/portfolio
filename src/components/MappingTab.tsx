@@ -446,7 +446,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                 <div className="flex-1 flex gap-2">
                   <input
                     type="text"
-                    placeholder="e.g. 119598"
+                    placeholder="e.g. 120716"
                     id="manualCodeInput"
                     className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 flex-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
                   />

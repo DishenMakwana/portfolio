@@ -86,7 +86,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   const fundDetails = holding.schemeCodeApi ? await getSchemeHistoryForDbCode(holding.schemeCodeApi) : null;
   const fundNavHistory = fundDetails?.data || [];
 
-  const benchDetails = await getSchemeHistoryForDbCode('119598');
+  const benchDetails = await getSchemeHistoryForDbCode('120716');
   const benchNavHistory = benchDetails?.data || [];
 
   // 6. Calculate Volatility Stats

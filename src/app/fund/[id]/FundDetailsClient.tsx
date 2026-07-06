@@ -757,7 +757,7 @@ export default function FundDetailsClient({
             <div className="space-y-4">
               <div className="flex justify-between items-start text-sm">
                 <span className="text-slate-400 font-medium">Benchmark Scheme:</span>
-                <span className="font-semibold text-slate-200 text-right text-xs">SBI Nifty 50 Index Fund</span>
+                <span className="font-semibold text-slate-200 text-right text-xs">UTI Nifty 50 Index Fund Direct (120716)</span>
               </div>
               <div className="flex justify-between items-start text-sm">
                 <span className="text-slate-400 font-medium">Scheme Code API:</span>

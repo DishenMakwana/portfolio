@@ -378,7 +378,7 @@ export default function OverviewTab({
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1">
-                Benchmark XIRR <span title="Simulated Nifty 50 XIRR"><Info size={10} className="text-slate-600" /></span>
+                Benchmark XIRR <span title="Simulated UTI Nifty 50 Index Fund Direct Growth (120716) XIRR"><Info size={10} className="text-slate-600" /></span>
               </span>
               <div className="p-2 rounded-xl bg-violet-500/10"><BarChart2 size={17} className="text-violet-400" /></div>
             </div>
@@ -386,7 +386,7 @@ export default function OverviewTab({
             <div className="mt-2">
               <DeltaBadge delta={metricDeltas.benchmarkXirr} />
             </div>
-            <div className="text-xs font-semibold mt-2 text-slate-400">Nifty 50 Index</div>
+            <div className="text-xs font-semibold mt-2 text-slate-400">UTI Nifty 50 Index Direct</div>
           </div>
         </motion.div>
 
@@ -397,7 +397,7 @@ export default function OverviewTab({
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1">
-                Alpha Generated <span title="Portfolio XIRR – Benchmark XIRR"><Info size={10} className="text-slate-600" /></span>
+                Alpha Generated <span title="Portfolio XIRR – UTI Nifty 50 Index Fund Direct (120716) XIRR"><Info size={10} className="text-slate-600" /></span>
               </span>
               <div className={`p-2 rounded-xl ${isAlphaPositive ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
                 <Zap size={17} className={isAlphaPositive ? 'text-emerald-400' : 'text-red-400'} />
@@ -521,7 +521,7 @@ export default function OverviewTab({
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-1.5 rounded-full bg-violet-400 inline-block" />
-              <span className="text-slate-400">Benchmark XIRR</span>
+              <span className="text-slate-400" title="UTI Nifty 50 Index Fund Direct Growth (120716)">Benchmark (UTI Nifty 50)</span>
             </div>
           </div>
         </div>

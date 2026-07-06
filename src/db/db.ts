@@ -1,10 +1,15 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
-import path from 'path';
 
-// SQLite database file will be saved in the root of the workspace
-const dbPath = path.join(process.cwd(), 'portfolio.db');
-const sqlite = new Database(dbPath);
+// Use a placeholder URL during build time if DATABASE_URL is not set
+const databaseUrl = process.env.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder';
 
-export const db = drizzle(sqlite, { schema });
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1') 
+    ? false 
+    : { rejectUnauthorized: false },
+});
+
+export const db = drizzle(pool, { schema });

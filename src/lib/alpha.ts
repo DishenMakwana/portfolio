@@ -1,86 +1,119 @@
 import { calculateXIRR, CashFlow } from './xirr';
 import { fetchMfDetails, isSpecializedFundSchemeCode, MfDetailsResponse } from './mfApi';
-import fs from 'fs';
-import path from 'path';
-
-// Local file cache for Mutual Fund NAVs to avoid hitting the API repeatedly
-const CACHE_DIR = path.join(process.cwd(), '.cache');
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
-
-interface BenchmarkCache {
-  fetchedAt: string;
-  schemeCode: string;
-  data: MfDetailsResponse;
-}
+import { db } from '@/db/db';
+import { schemeNavCacheMeta, schemeNavHistory } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 function normaliseSchemeCode(schemeCode: string | number | null | undefined): string {
   return String(schemeCode || '').trim();
 }
 
-function responseMatchesRequestedScheme(data: MfDetailsResponse | null | undefined, schemeCode: string): boolean {
-  const responseCode = normaliseSchemeCode(data?.meta?.scheme_code);
-  return responseCode === schemeCode;
-}
-
 /**
- * Fetch scheme NAV history for the code passed from the database.
- * Cache files are only storage; their filenames are never treated as source-of-truth scheme codes.
+ * Fetch scheme NAV history for the code passed from the database cache.
  */
 export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
   if (!schemeCode || isSpecializedFundSchemeCode(schemeCode)) return null;
 
-  const cachePath = path.join(CACHE_DIR, `scheme_${schemeCode}.json`);
+  // 1. Check if we have cached metadata in PostgreSQL
+  const cachedMeta = await db.query.schemeNavCacheMeta.findFirst({
+    where: eq(schemeNavCacheMeta.schemeCode, schemeCode),
+  });
 
-  if (fs.existsSync(cachePath)) {
-    try {
-      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as BenchmarkCache;
-      const cachedDate = new Date(cached.fetchedAt);
-      const now = new Date();
-      // Use cache if less than 24 hours old
-      if (
-        now.getTime() - cachedDate.getTime() < 24 * 60 * 60 * 1000 &&
-        normaliseSchemeCode(cached.schemeCode) === schemeCode &&
-        responseMatchesRequestedScheme(cached.data, schemeCode)
-      ) {
-        return cached.data;
-      }
-    } catch (e) {
-      console.error('Error reading NAV cache:', e);
+  const now = new Date();
+  const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+  const isFresh = cachedMeta && (now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() < cacheAgeLimit);
+
+  if (cachedMeta && isFresh) {
+    const history = await db.query.schemeNavHistory.findMany({
+      where: eq(schemeNavHistory.schemeCode, schemeCode),
+    });
+
+    if (history.length > 0) {
+      return {
+        meta: {
+          fund_house: cachedMeta.fundHouse,
+          scheme_type: cachedMeta.schemeType,
+          scheme_category: cachedMeta.schemeCategory,
+          scheme_code: parseInt(cachedMeta.schemeCode),
+          scheme_name: cachedMeta.schemeName,
+        },
+        data: history.map(h => ({
+          date: h.date,
+          nav: String(h.nav),
+        })),
+      };
     }
   }
 
-  // Fetch fresh data
+  // 2. Fetch fresh details from API
   const data = await fetchMfDetails(schemeCode);
-  if (data && data.data && data.data.length > 0) {
+  if (data && data.meta && data.data && data.data.length > 0) {
     try {
-      const dir = path.dirname(cachePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      // Upsert scheme cache metadata
+      await db.insert(schemeNavCacheMeta)
+        .values({
+          schemeCode,
+          fundHouse: data.meta.fund_house || 'Unknown',
+          schemeType: data.meta.scheme_type || 'Unknown',
+          schemeCategory: data.meta.scheme_category || 'Unknown',
+          schemeName: data.meta.scheme_name || 'Unknown',
+          lastFetchedAt: new Date().toISOString(),
+        })
+        .onConflictDoUpdate({
+          target: schemeNavCacheMeta.schemeCode,
+          set: {
+            fundHouse: data.meta.fund_house || 'Unknown',
+            schemeType: data.meta.scheme_type || 'Unknown',
+            schemeCategory: data.meta.scheme_category || 'Unknown',
+            schemeName: data.meta.scheme_name || 'Unknown',
+            lastFetchedAt: new Date().toISOString(),
+          }
+        });
+
+      // Prepare history values for insertion
+      const historyValues = data.data.map(p => ({
+        schemeCode,
+        date: p.date,
+        nav: parseFloat(p.nav) || 0,
+        fetchedAt: new Date().toISOString(),
+      }));
+
+      // Batch insert in chunks of 500
+      const chunkSize = 500;
+      for (let i = 0; i < historyValues.length; i += chunkSize) {
+        const chunk = historyValues.slice(i, i + chunkSize);
+        await db.insert(schemeNavHistory)
+          .values(chunk)
+          .onConflictDoNothing();
       }
-      fs.writeFileSync(
-        cachePath,
-        JSON.stringify({ fetchedAt: new Date().toISOString(), schemeCode, data }, null, 2)
-      );
     } catch (e) {
-      console.error('Error writing NAV cache:', e);
+      console.error('Error writing database NAV cache:', e);
     }
     return data;
   }
 
-  // Fallback to expired cache if fetch fails
-  if (fs.existsSync(cachePath)) {
-    try {
-      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as BenchmarkCache;
-      if (
-        normaliseSchemeCode(cached.schemeCode) === schemeCode &&
-        responseMatchesRequestedScheme(cached.data, schemeCode)
-      ) {
-        return cached.data;
-      }
-    } catch (_) {}
+  // 3. Fallback to expired database cache if API fetch fails
+  if (cachedMeta) {
+    const history = await db.query.schemeNavHistory.findMany({
+      where: eq(schemeNavHistory.schemeCode, schemeCode),
+    });
+
+    if (history.length > 0) {
+      return {
+        meta: {
+          fund_house: cachedMeta.fundHouse,
+          scheme_type: cachedMeta.schemeType,
+          scheme_category: cachedMeta.schemeCategory,
+          scheme_code: parseInt(cachedMeta.schemeCode),
+          scheme_name: cachedMeta.schemeName,
+        },
+        data: history.map(h => ({
+          date: h.date,
+          nav: String(h.nav),
+        })),
+      };
+    }
   }
 
   return null;
@@ -147,7 +180,7 @@ export async function calculateAlpha(
   transactions: PortfolioTransaction[],
   asOfDate: string,
   currentValuation: number,
-  benchmarkSchemeCode: string = '119598' // SBI Nifty 50 Index Fund Regular Growth
+  benchmarkSchemeCode: string = '120716' // UTI Nifty 50 Index Fund Direct Growth
 ): Promise<{
   portfolioXirr: number;
   benchmarkXirr: number;
@@ -543,4 +576,3 @@ export function generateFactsheetChartData(
 
   return chartData;
 }
-

@@ -1,77 +1,75 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { pgSchema, serial, text, integer, doublePrecision, unique } from 'drizzle-orm/pg-core';
 
-export const reports = sqliteTable('reports', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+// Define dynamic schema name based on environment variable
+const schemaName = process.env.DB_SCHEMA || 'portfolio';
+export const mySchema = pgSchema(schemaName);
+
+export const reports = mySchema.table('reports', {
+  id: serial('id').primaryKey(),
   asOfDate: text('as_of_date').notNull(),
   uploadedAt: text('uploaded_at').notNull(),
   filename: text('filename').notNull(),
-  cagr: real('cagr'), // Store parsed Grand Total CAGR
+  cagr: doublePrecision('cagr'), // Store parsed Grand Total CAGR
 });
 
-export const familyMembers = sqliteTable('family_members', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const familyMembers = mySchema.table('family_members', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   pan: text('pan'),
 });
 
-export const memberReportCagrs = sqliteTable('member_report_cagrs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const memberReportCagrs = mySchema.table('member_report_cagrs', {
+  id: serial('id').primaryKey(),
   reportId: integer('report_id').references(() => reports.id, { onDelete: 'cascade' }),
   memberId: integer('member_id').references(() => familyMembers.id, { onDelete: 'cascade' }),
-  cagr: real('cagr').notNull(),
+  cagr: doublePrecision('cagr').notNull(),
 });
 
-export const schemes = sqliteTable('schemes', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const schemes = mySchema.table('schemes', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   category: text('category').notNull(),
   schemeCodeApi: text('scheme_code_api'),
   mappedAt: text('mapped_at'),
 });
 
-export const holdingsSnapshot = sqliteTable('holdings_snapshot', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const holdingsSnapshot = mySchema.table('holdings_snapshot', {
+  id: serial('id').primaryKey(),
   reportId: integer('report_id').references(() => reports.id, { onDelete: 'cascade' }),
   memberId: integer('member_id').references(() => familyMembers.id),
   schemeId: integer('scheme_id').references(() => schemes.id),
   folioNo: text('folio_no').notNull(),
-  balanceUnits: real('balance_units').notNull(),
-  purchaseNav: real('purchase_nav').notNull(),
-  purchaseValue: real('purchase_value').notNull(),
-  currentNav: real('current_nav').notNull(),
-  currentValue: real('current_value').notNull(),
-  dividend: real('dividend').default(0),
-  gain: real('gain').notNull(),
+  balanceUnits: doublePrecision('balance_units').notNull(),
+  purchaseNav: doublePrecision('purchase_nav').notNull(),
+  purchaseValue: doublePrecision('purchase_value').notNull(),
+  currentNav: doublePrecision('current_nav').notNull(),
+  currentValue: doublePrecision('current_value').notNull(),
+  dividend: doublePrecision('dividend').default(0),
+  gain: doublePrecision('gain').notNull(),
   holdingDays: integer('holding_days').notNull(),
-  absoluteReturn: real('absolute_return').notNull(),
-  cagr: real('cagr').notNull(),
+  absoluteReturn: doublePrecision('absolute_return').notNull(),
+  cagr: doublePrecision('cagr').notNull(),
   comments: text('comments'),
 });
 
-export const transactions = sqliteTable('transactions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const transactions = mySchema.table('transactions', {
+  id: serial('id').primaryKey(),
   memberId: integer('member_id').references(() => familyMembers.id),
   schemeId: integer('scheme_id').references(() => schemes.id),
   date: text('date').notNull(),
   type: text('type').notNull(), // 'BUY', 'SELL'
-  units: real('units').notNull(),
-  nav: real('nav').notNull(),
-  amount: real('amount').notNull(),
+  units: doublePrecision('units').notNull(),
+  nav: doublePrecision('nav').notNull(),
+  amount: doublePrecision('amount').notNull(),
   sourceReportId: integer('source_report_id').references(() => reports.id),
 });
 
-/**
- * sip_mandates — one row per investor × scheme × folio SIP mandate.
- * monthlyAmount  : canonical fixed SIP amount (₹) — most common non-zero value seen
- * monthlyHistory : JSON blob { "APR 26": 5000, "MAY 26": 5000, "JUN 26": 0, ... }
- * isActive       : 1 = running, 0 = paused/stopped (latest column was 0)
- */
-export const sipMandates = sqliteTable('sip_mandates', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const sipMandates = mySchema.table('sip_mandates', {
+  id: serial('id').primaryKey(),
   memberId: integer('member_id').references(() => familyMembers.id),
   schemeId: integer('scheme_id').references(() => schemes.id),
   folioNo: text('folio_no').notNull(),
-  monthlyAmount: real('monthly_amount').notNull(),
+  monthlyAmount: doublePrecision('monthly_amount').notNull(),
   monthlyHistory: text('monthly_history'),   // JSON string
   startMonth: text('start_month'),           // e.g. "APR 26"
   isActive: integer('is_active').default(1), // 1=active 0=paused
@@ -79,3 +77,21 @@ export const sipMandates = sqliteTable('sip_mandates', {
   sourceFile: text('source_file'),
 });
 
+export const schemeNavCacheMeta = mySchema.table('scheme_nav_cache_meta', {
+  schemeCode: text('scheme_code').primaryKey(),
+  fundHouse: text('fund_house').notNull(),
+  schemeType: text('scheme_type').notNull(),
+  schemeCategory: text('scheme_category').notNull(),
+  schemeName: text('scheme_name').notNull(),
+  lastFetchedAt: text('last_fetched_at').notNull(),
+});
+
+export const schemeNavHistory = mySchema.table('scheme_nav_history', {
+  id: serial('id').primaryKey(),
+  schemeCode: text('scheme_code').notNull(),
+  date: text('date').notNull(), // stored in DD-MM-YYYY format to match API
+  nav: doublePrecision('nav').notNull(),
+  fetchedAt: text('fetched_at').notNull(),
+}, (table) => [
+  unique('scheme_nav_history_code_date_uq').on(table.schemeCode, table.date)
+]);
