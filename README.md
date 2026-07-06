@@ -1,6 +1,8 @@
 # Family Portfolio Tracker
 
-An advanced, self-hosted mutual fund portfolio tracking application designed for Indian investors. It aggregates multiple family members' mutual fund holdings, calculates key performance metrics (CAGR, XIRR, and Alpha outperformance over Nifty 50), and tracks SIP mandates, all powered by a local SQLite database.
+An advanced, production-ready mutual fund portfolio tracking application designed for Indian investors. It aggregates multiple family members' mutual fund holdings, calculates key performance metrics (CAGR, XIRR, and Alpha outperformance over Nifty 50), and tracks SIP mandates, powered by a PostgreSQL database with dynamic, database-backed pricing caches.
+
+---
 
 ## 🚀 Key Features
 
@@ -8,12 +10,29 @@ An advanced, self-hosted mutual fund portfolio tracking application designed for
 * **In-Depth Financial Metrics**:
   * **XIRR (Internal Rate of Return)**: Computes precise annualized returns based on reconstructed cash flow dates.
   * **CAGR (Compound Annual Growth Rate)**: Weighted average growth rate of active holdings.
-  * **Alpha Comparison**: Outperformance metrics relative to the Nifty 50 index (automatically integrates and pulls historical NAVs from SBI Nifty 50 Index Fund).
+  * **Alpha Comparison**: Outperformance metrics relative to the Nifty 50 index (automatically integrates and pulls historical NAVs from the benchmark UTI Nifty 50 Index Fund Direct Growth).
 * **Dynamic Excel Parser**: Seamlessly ingest standard portfolio valuation reports and SIP mandate sheets.
 * **Smart Fund Mapping**: Automatically links mutual fund schemes from Excel sheets to real-time public APIs using an **Edit Distance (Fuzzy Match)** string similarity algorithm, with support for manual overrides.
 * **SIP Mandate Tracker**: View active SIPs, historical monthly amounts, and overall monthly commitments per member.
 * **Upload Tracker**: A calendar-based dashboard tracking when portfolio snapshots were uploaded, alerting you of missing trading days.
 * **Asset Allocation Visualizer**: Interactive charts showing asset class ratios (Equity, Debt, Hybrid), market cap sizes, and AMC-wise concentration.
+* **Production-Ready & Stateless**: Designed for Vercel/Neon deployment with all cache states persisted in the database.
+
+---
+
+## 🔌 Live NAV Fetching & Caching (`api.mfapi.in`)
+
+To calculate XIRR, volatility metrics, and Nifty 50 Alpha outperformance, the application pulls daily historical Net Asset Value (NAV) price points from the public AMFI api `api.mfapi.in`. 
+
+### The Cache Database Architecture
+To remain completely stateless (essential for cold-starts on serverless hosts like Vercel) and avoid hitting API rate limits, the app persists NAV data in two database tables:
+1. **`scheme_nav_cache_meta`**: Stores the metadata of fetched funds (`fundHouse`, `schemeType`, `schemeCategory`, `schemeName`) along with a `lastFetchedAt` timestamp.
+2. **`scheme_nav_history`**: Stores individual daily historical NAV prices (`date` as `DD-MM-YYYY`, `nav` as float, `fetchedAt` timestamp) with a composite unique index on `(schemeCode, date)` to prevent duplicate entries.
+
+### The Caching Workflow
+- **Database Lookup**: First queries the PostgreSQL database for cached data. If the cache exists and is fresh (less than 24 hours old), the values are loaded instantly.
+- **AMFI Fetch & Batch Insert**: If the cache is expired or missing, it queries `api.mfapi.in` for the complete daily historical NAV array, upserts the scheme metadata, and batch inserts the price points in chunks of 500 records using `ON CONFLICT DO NOTHING` to bypass parameters limits and duplicate key errors.
+- **Failover / Fallback**: If the API call times out or fails, the application falls back gracefully to the latest available NAV data points in the database cache.
 
 ---
 
@@ -21,7 +40,7 @@ An advanced, self-hosted mutual fund portfolio tracking application designed for
 
 * **Core**: Next.js 16 (App Router), React 19
 * **Styling**: Tailwind CSS, PostCSS
-* **Database & ORM**: SQLite (`better-sqlite3`), Drizzle ORM
+* **Database & ORM**: PostgreSQL (`pg` pool connection) with Drizzle ORM
 * **Data Visualization**: Recharts (interactive area, bar, and pie charts)
 * **File Processing**: SheetJS (`xlsx`) for parsing Excel sheets
 * **Icons & Animation**: Lucide React, Framer Motion
@@ -33,6 +52,7 @@ An advanced, self-hosted mutual fund portfolio tracking application designed for
 ```text
 ├── drizzle/                   # Drizzle migration files
 ├── public/                    # Static assets
+├── scripts/                   # Utility scripts (data migration, schema updates)
 └── src/
     ├── app/                   # Next.js App Router pages and Server Actions
     │   ├── allocation/        # Asset allocation dashboard page
@@ -44,43 +64,45 @@ An advanced, self-hosted mutual fund portfolio tracking application designed for
     │   ├── uploads/           # Upload calendar tracker page
     │   ├── actions.ts         # Server Actions for DB queries and uploads
     │   └── layout.tsx         # Root layout with sidebar navigation
-    ├── components/            # Reusable UI component clients
-    ├── db/                    # SQLite connection & schema definitions
+    ├── components/            # Reusable UI client components (Framer Motion animations)
+    ├── db/                    # PostgreSQL client connection & Drizzle schemas
     └── lib/                   # Math utilities (XIRR, Alpha), parsers & APIs
 ```
 
 ---
 
-## ⚙️ Local Setup & Installation
+## ⚙️ Setup & Deployment
 
-### Prerequisites
-* **Node.js**: `v18` or higher
-* **npm** or **yarn**
+### 1. Environment Variables (`.env`)
+Create a `.env` file in the root directory:
+```env
+DATABASE_URL="postgresql://user:pass@host:port/dbname?sslmode=require"
+DB_SCHEMA="portfolio"
+```
+* `DATABASE_URL`: Connection string for your local PostgreSQL or remote Neon/Vercel Postgres.
+* `DB_SCHEMA`: The custom database schema name where all tables are isolated (defaults to `portfolio`).
 
-### 1. Clone & Install Dependencies
-Navigate to the project root and install package dependencies:
+### 2. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Database Initialization
-This project uses SQLite stored locally in the root directory as `portfolio.db`. Push the schema directly to initialize the database:
+### 3. Database Initialization & Schema Push
+Compile schema definitions and create tables in your PostgreSQL database under the custom schema:
 ```bash
-npx drizzle-kit push
+npx drizzle-kit generate
 ```
+Then run the migration script:
+```bash
+npm run db:migrate-data
+```
+*(This script dynamically loads the migration SQL, applies schema & table creation, truncates tables, relational-copies all records, and resets PostgreSQL ID sequences.)*
 
-### 3. Run the Development Server
-Start the Next.js local development server:
+### 4. Run the Development Server
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your web browser to explore the dashboard.
-
-### 4. Running the Test Utility
-To dry-run or verify the parsing of your Excel file without using the web UI, you can use the built-in test script:
-```bash
-npx tsx src/lib/test-parser.ts <path-to-excel-file>
-```
+Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
 
 ---
 
@@ -114,8 +136,7 @@ The SIP parser looks for sheets with "SIP" in the tab name:
 
 ---
 
-## 🔒 Security & Privacy
+## 🛡️ Security & Privacy
 
-All processing is done **100% locally** on your machine:
-* Excel files are parsed client-side/server-side locally without uploading to external servers.
-* No telemetry or external cloud storage is utilized; your data is stored completely inside the `portfolio.db` SQLite file on your filesystem.
+* Excel files are parsed client-side/server-side locally without uploading to unverified third-party processing servers.
+* No telemetry or external cloud storage is utilized; your data is stored completely inside your own private PostgreSQL database.
