@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShieldCheck, AlertTriangle, Zap, CheckCircle2,
-  XCircle, HelpCircle, ChevronDown, ChevronUp, Loader2
+  XCircle, HelpCircle, ChevronDown, ChevronUp, Loader2, X
 } from 'lucide-react';
 import {
   searchMfApiAction,
@@ -396,8 +396,11 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
               </div>
               <button
                 onClick={() => { setMappingSchemeId(null); setApiSearchQuery(''); setApiSearchResults([]); }}
-                className="text-slate-400 hover:text-slate-200 text-sm font-bold cursor-pointer mt-0.5"
-              >✕</button>
+                className="text-slate-400 hover:text-slate-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-slate-800 transition mt-0.5"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
             </div>
 
             <div className="p-5 space-y-4">

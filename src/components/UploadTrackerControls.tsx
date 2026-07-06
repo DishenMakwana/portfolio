@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Upload, RefreshCw, AlertTriangle, X } from 'lucide-react';
 import { uploadReportAction } from '@/app/actions';
 
 interface UploadTrackerControlsProps {
@@ -50,7 +50,7 @@ export default function UploadTrackerControls({ reportsList, selectedReport }: U
             <select
               value={selectedReport?.id || ''}
               onChange={(e) => handleReportChange(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-8 pr-8"
+              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-8"
             >
               {reportsList.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -76,8 +76,10 @@ export default function UploadTrackerControls({ reportsList, selectedReport }: U
       {uploadError && (
         <div className="fixed bottom-4 right-4 z-50 bg-red-950/90 border border-red-800/80 rounded-xl p-3 flex items-center gap-3 text-red-300 text-sm shadow-2xl backdrop-blur-md">
           <AlertTriangle size={16} className="shrink-0" />
-          {uploadError}
-          <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-200 cursor-pointer font-bold">✕</button>
+          <span className="flex-1">{uploadError}</span>
+          <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-red-500/10 transition" aria-label="Close error">
+            <X size={15} />
+          </button>
         </div>
       )}
 

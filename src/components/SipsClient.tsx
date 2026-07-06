@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, Repeat2, CheckCircle2, XCircle, AlertTriangle,
-  Loader2, Trash2, ChevronDown, Users, IndianRupee
+  Loader2, Trash2, ChevronDown, Users, IndianRupee, X
 } from 'lucide-react';
 import { uploadSipAction, clearSipMandatesAction } from '@/app/actions';
 import { formatCurrency } from '@/lib/formatters';
@@ -108,20 +108,24 @@ export default function SipsClient({ mandates }: SipsClientProps) {
         <AnimatePresence>
           {uploadError && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="mt-4 flex items-center gap-3 bg-red-950/60 border border-red-800/60 rounded-xl px-4 py-3 text-red-300 text-sm"
+              className="mt-4 flex items-center gap-3 bg-red-950/60 border border-red-800/60 rounded-xl px-4 py-3 text-red-300 text-sm animate-fade-in"
             >
               <XCircle size={16} className="shrink-0" />
-              {uploadError}
-              <button onClick={() => setUploadError(null)} className="ml-auto font-bold text-red-400 cursor-pointer">✕</button>
+              <span className="flex-1">{uploadError}</span>
+              <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-red-500/10 transition" aria-label="Close error">
+                <X size={15} />
+              </button>
             </motion.div>
           )}
           {uploadSuccess && (
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="mt-4 flex items-center gap-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl px-4 py-3 text-emerald-300 text-sm"
+              className="mt-4 flex items-center gap-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl px-4 py-3 text-emerald-300 text-sm animate-fade-in"
             >
               <CheckCircle2 size={16} className="shrink-0" />
-              Successfully saved <strong>{uploadSuccess.inserted}</strong> SIP mandates from {uploadSuccess.total} rows.
-              <button onClick={() => setUploadSuccess(null)} className="ml-auto font-bold text-emerald-400 cursor-pointer">✕</button>
+              <span className="flex-1">Successfully saved <strong>{uploadSuccess.inserted}</strong> SIP mandates from {uploadSuccess.total} rows.</span>
+              <button onClick={() => setUploadSuccess(null)} className="ml-auto text-emerald-400 hover:text-emerald-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-emerald-500/10 transition" aria-label="Close success">
+                <X size={15} />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
