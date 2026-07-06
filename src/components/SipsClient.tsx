@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, Repeat2, CheckCircle2, XCircle, AlertTriangle,
-  Loader2, Trash2, ChevronDown, ChevronUp, Users, IndianRupee
+  Loader2, Trash2, ChevronDown, Users, IndianRupee
 } from 'lucide-react';
 import { uploadSipAction, clearSipMandatesAction } from '@/app/actions';
 import { formatCurrency } from '@/lib/formatters';
@@ -211,14 +211,28 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                         <div className="text-xs text-slate-500 font-medium">Monthly SIP</div>
                         <div className="text-base font-extrabold text-teal-400">{formatCurrency(memberTotal)}</div>
                       </div>
-                      {isExpanded ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+                      <ChevronDown
+                        size={16}
+                        className={`text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                      />
                     </div>
                   </button>
 
                   {/* SIP table */}
-                  <AnimatePresence>
+                  <AnimatePresence initial={false}>
                     {isExpanded && (
-                      <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+                      <motion.div
+                        key="content"
+                        initial="collapsed"
+                        animate="open"
+                        exit="collapsed"
+                        variants={{
+                          open: { opacity: 1, height: "auto" },
+                          collapsed: { opacity: 0, height: 0 }
+                        }}
+                        transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                        className="overflow-hidden"
+                      >
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>

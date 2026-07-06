@@ -45,13 +45,20 @@ export async function searchMutualFund(query: string): Promise<MfSearchResult[]>
   try {
     await throttleRequest();
     const res = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`, {
-      signal: AbortSignal.timeout(10000)
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(4000)
     });
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
-  } catch (e) {
-    console.error('Error searching MF API:', e);
+  } catch (e: any) {
+    if (e.name === 'TimeoutError' || e.code === 23 || e.name === 'AbortError') {
+      console.warn(`[API TIMEOUT] api.mfapi.in timed out searching for: "${query}"`);
+    } else {
+      console.error('Error searching MF API:', e);
+    }
     return [];
   }
 }
@@ -66,12 +73,19 @@ export async function fetchMfDetails(schemeCode: string): Promise<MfDetailsRespo
   try {
     await throttleRequest();
     const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
-      signal: AbortSignal.timeout(10000)
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(3000) // Lowered to 3s for fast user page loading
     });
     if (!res.ok) return null;
     return await res.json();
-  } catch (e) {
-    console.error(`Error fetching MF details for ${schemeCode}:`, e);
+  } catch (e: any) {
+    if (e.name === 'TimeoutError' || e.code === 23 || e.name === 'AbortError') {
+      console.warn(`[API TIMEOUT] api.mfapi.in timed out fetching details for scheme ${schemeCode}. Using cache or fallback.`);
+    } else {
+      console.error(`Error fetching MF details for ${schemeCode}:`, e);
+    }
     return null;
   }
 }
