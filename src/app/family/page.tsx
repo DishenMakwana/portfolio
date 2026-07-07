@@ -2,6 +2,7 @@ import { getDashboardDataAction } from "@/app/actions";
 import { getSchemes } from "@/lib/portfolioService";
 import MembersTab from "@/components/MembersTab";
 import HeaderClient from "@/components/HeaderClient";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,18 @@ export default async function FamilyPage({ searchParams }: PageProps) {
             Per-member performance and allocation breakdown
           </p>
         </div>
-        <MembersTab
-          memberSummaries={data.memberSummaries}
-          totals={data.totals}
-          metricDeltas={data.metricDeltas}
-          holdings={data.holdings}
-        />
+        <Suspense
+          fallback={
+            <div className="h-96 bg-slate-900/10 animate-pulse rounded-xl" />
+          }
+        >
+          <MembersTab
+            memberSummaries={data.memberSummaries}
+            totals={data.totals}
+            metricDeltas={data.metricDeltas}
+            holdings={data.holdings}
+          />
+        </Suspense>
       </main>
     </>
   );

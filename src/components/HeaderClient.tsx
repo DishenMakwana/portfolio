@@ -2,11 +2,30 @@
 
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 interface HeaderClientProps {
   reportsList?: { id: number; asOfDate: string }[];
   selectedReport?: { id: number; asOfDate: string } | null;
   unmappedCount: number;
+}
+
+function MappingLink({ unmappedCount }: { unmappedCount: number }) {
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
+
+  return (
+    <Link
+      href={
+        reportId ? { pathname: "/mapping", query: { reportId } } : "/mapping"
+      }
+      className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg hover:bg-amber-500/20 transition"
+    >
+      <AlertTriangle size={12} />
+      {unmappedCount} unmapped funds
+    </Link>
+  );
 }
 
 export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
@@ -18,13 +37,13 @@ export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
             Family Portfolio
           </div>
           {unmappedCount > 0 && (
-            <Link
-              href="/mapping"
-              className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg hover:bg-amber-500/20 transition"
+            <Suspense
+              fallback={
+                <div className="h-6 w-32 bg-slate-800/20 animate-pulse rounded-lg" />
+              }
             >
-              <AlertTriangle size={12} />
-              {unmappedCount} unmapped funds
-            </Link>
+              <MappingLink unmappedCount={unmappedCount} />
+            </Suspense>
           )}
         </div>
       </header>

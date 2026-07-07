@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -28,8 +28,51 @@ const NAV_ITEMS = [
   { href: "/mapping", label: "Fund Mapping", icon: GitMerge },
 ];
 
-export default function AppSidebar() {
+function SidebarNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
+
+  return (
+    <nav className="flex-1 space-y-2 px-4 py-8">
+      {NAV_ITEMS.map((item) => {
+        const active = pathname === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={
+              reportId
+                ? { pathname: item.href, query: { reportId } }
+                : item.href
+            }
+            title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
+            className={`group relative flex h-11 items-center gap-3.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+              active
+                ? "bg-teal-500/10 text-teal-400 border-teal-500/30 shadow-[0_0_15px_-3px_rgba(20,184,166,0.1)]"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border-transparent"
+            } ${collapsed ? "justify-center px-0" : "px-4"}`}
+          >
+            <item.icon
+              size={20}
+              className={`shrink-0 ${
+                active
+                  ? "text-teal-400"
+                  : "text-slate-500 group-hover:text-slate-300"
+              }`}
+            />
+            {!collapsed && <span className="truncate">{item.label}</span>}
+            {active && !collapsed && (
+              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
+            )}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -67,37 +110,13 @@ export default function AppSidebar() {
         )}
       </div>
 
-      <nav className="flex-1 space-y-2 px-4 py-8">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              aria-label={collapsed ? item.label : undefined}
-              className={`group relative flex h-11 items-center gap-3.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
-                active
-                  ? "bg-teal-500/10 text-teal-400 border-teal-500/30 shadow-[0_0_15px_-3px_rgba(20,184,166,0.1)]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border-transparent"
-              } ${collapsed ? "justify-center px-0" : "px-4"}`}
-            >
-              <item.icon
-                size={20}
-                className={`shrink-0 ${
-                  active
-                    ? "text-teal-400"
-                    : "text-slate-500 group-hover:text-slate-300"
-                }`}
-              />
-              {!collapsed && <span className="truncate">{item.label}</span>}
-              {active && !collapsed && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+      <Suspense
+        fallback={
+          <div className="flex-1 space-y-2 px-4 py-8 animate-pulse bg-slate-900/20" />
+        }
+      >
+        <SidebarNav collapsed={collapsed} />
+      </Suspense>
     </aside>
   );
 }

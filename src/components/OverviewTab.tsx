@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import {
@@ -212,6 +212,17 @@ export default function OverviewTab({
   holdings,
 }: OverviewTabProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
+
+  const pushWithReportId = (path: string) => {
+    if (reportId) {
+      router.push(`${path}?reportId=${reportId}`);
+    } else {
+      router.push(path);
+    }
+  };
+
   const [investorSort, setInvestorSort] = useState<{
     field: "name" | "value" | "xirr";
     direction: "asc" | "desc";
@@ -411,7 +422,7 @@ export default function OverviewTab({
             initial="hidden"
             animate="visible"
             variants={cardVariants}
-            onClick={() => router.push(card.href)}
+            onClick={() => pushWithReportId(card.href)}
             className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${card.border} rounded-2xl p-5 shadow-xl cursor-pointer ${card.hoverBorder} hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]`}
           >
             <div
@@ -505,7 +516,7 @@ export default function OverviewTab({
           initial="hidden"
           animate="visible"
           variants={cardVariants}
-          onClick={() => router.push("/holdings")}
+          onClick={() => pushWithReportId("/holdings")}
           className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl cursor-pointer hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
@@ -539,7 +550,7 @@ export default function OverviewTab({
           initial="hidden"
           animate="visible"
           variants={cardVariants}
-          onClick={() => router.push("/holdings")}
+          onClick={() => pushWithReportId("/holdings")}
           className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${isAlphaPositive ? "border-emerald-500/20" : "border-red-500/20"} rounded-2xl p-5 shadow-xl cursor-pointer hover:border-${isAlphaPositive ? "emerald-500" : "red-500"}/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]`}
         >
           <div
@@ -595,7 +606,7 @@ export default function OverviewTab({
             initial="hidden"
             animate="visible"
             variants={cardVariants}
-            onClick={() => router.push(card.href)}
+            onClick={() => pushWithReportId(card.href)}
             className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${card.border} rounded-2xl p-5 shadow-xl cursor-pointer ${card.hoverBorder} hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]`}
           >
             <div

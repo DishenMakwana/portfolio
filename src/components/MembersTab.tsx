@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
@@ -82,6 +83,9 @@ export default function MembersTab({
   metricDeltas,
   holdings,
 }: MembersTabProps) {
+  const searchParams = useSearchParams();
+  const reportId = searchParams.get("reportId");
+
   const overallCagr =
     totals.cagr !== undefined && totals.cagr !== null
       ? totals.cagr
@@ -228,7 +232,14 @@ export default function MembersTab({
         {memberSummaries.map((member) => (
           <Link
             key={member.name}
-            href={`/holdings?member=${encodeURIComponent(member.name)}`}
+            href={
+              reportId
+                ? {
+                    pathname: "/holdings",
+                    query: { member: member.name, reportId },
+                  }
+                : { pathname: "/holdings", query: { member: member.name } }
+            }
             className="block bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-xl p-6 shadow-lg hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300 cursor-pointer text-left"
           >
             <div className="flex justify-between items-start border-b border-slate-800 pb-4 mb-4">

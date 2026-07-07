@@ -113,7 +113,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   }
 
   const monthCols = [...unsortedMonthCols].sort((a, b) => {
-    return parseMonthYear(b).getTime() - parseMonthYear(a).getTime();
+    return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
   });
 
   return (

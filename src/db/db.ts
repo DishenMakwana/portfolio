@@ -15,4 +15,7 @@ const pool = new Pool({
       : { rejectUnauthorized: false },
 });
 
-export const db = drizzle(pool, { schema, logger: true });
+export const db = drizzle(pool, {
+  schema,
+  logger: process.env.LOGGING === "true",
+});
