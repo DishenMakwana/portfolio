@@ -7,8 +7,9 @@ import {
   transactions,
   sipMandates,
   memberReportCagrs,
+  sipTransactions,
 } from "../db/schema";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, and } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
 
 export interface HoldingDetails {
@@ -444,9 +445,6 @@ export async function saveSipMandates(
   let inserted = 0;
   let skipped = 0;
 
-  // Delete existing records for this source file to allow re-upload
-  await db.delete(sipMandates).where(eq(sipMandates.sourceFile, sourceFile));
-
   for (const sip of sips) {
     // Upsert member
     let member = await db.query.familyMembers.findFirst({
@@ -477,17 +475,74 @@ export async function saveSipMandates(
       continue;
     }
 
-    await db.insert(sipMandates).values({
-      memberId: member.id,
-      schemeId: scheme.id,
-      folioNo: sip.folioNo,
-      monthlyAmount: sip.monthlyAmount,
-      monthlyHistory: JSON.stringify(sip.monthlyHistory),
-      startMonth: sip.startMonth,
-      isActive: sip.isActive ? 1 : 0,
-      uploadedAt: now,
-      sourceFile,
+    // Check if duplicate exists (same member, scheme, and folio)
+    const existing = await db.query.sipMandates.findFirst({
+      where: and(
+        eq(sipMandates.memberId, member.id),
+        eq(sipMandates.schemeId, scheme.id),
+        eq(sipMandates.folioNo, sip.folioNo)
+      ),
     });
+
+    let mandateId: number;
+    if (existing) {
+      await db
+        .update(sipMandates)
+        .set({
+          monthlyAmount: sip.monthlyAmount,
+          monthlyHistory: null, // Clear old JSON field
+          isActive: sip.isActive ? 1 : 0,
+          uploadedAt: now,
+          sourceFile,
+        })
+        .where(eq(sipMandates.id, existing.id));
+      mandateId = existing.id;
+    } else {
+      const [newMandate] = await db
+        .insert(sipMandates)
+        .values({
+          memberId: member.id,
+          schemeId: scheme.id,
+          folioNo: sip.folioNo,
+          monthlyAmount: sip.monthlyAmount,
+          monthlyHistory: null,
+          startMonth: sip.startMonth,
+          isActive: sip.isActive ? 1 : 0,
+          uploadedAt: now,
+          sourceFile,
+        })
+        .returning();
+      mandateId = newMandate.id;
+    }
+
+    // Upsert individual monthly payment records in the sip_transactions table
+    for (const [month, amount] of Object.entries(sip.monthlyHistory)) {
+      const existingTx = await db.query.sipTransactions.findFirst({
+        where: and(
+          eq(sipTransactions.sipMandateId, mandateId),
+          eq(sipTransactions.month, month)
+        ),
+      });
+
+      if (existingTx) {
+        await db
+          .update(sipTransactions)
+          .set({
+            amount,
+            uploadedAt: now,
+            sourceFile,
+          })
+          .where(eq(sipTransactions.id, existingTx.id));
+      } else {
+        await db.insert(sipTransactions).values({
+          sipMandateId: mandateId,
+          month,
+          amount,
+          uploadedAt: now,
+          sourceFile,
+        });
+      }
+    }
 
     inserted++;
   }
@@ -508,7 +563,6 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
       schemeName: schemes.name,
       folioNo: sipMandates.folioNo,
       monthlyAmount: sipMandates.monthlyAmount,
-      monthlyHistory: sipMandates.monthlyHistory,
       startMonth: sipMandates.startMonth,
       isActive: sipMandates.isActive,
       uploadedAt: sipMandates.uploadedAt,
@@ -519,6 +573,17 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
     .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id))
     .orderBy(asc(familyMembers.name), asc(schemes.name));
 
+  // Fetch all monthly transaction payment records
+  const txs = await db.select().from(sipTransactions);
+
+  // Group transactions by mandateId
+  const txsMap: Record<number, Record<string, number>> = {};
+  txs.forEach((tx) => {
+    if (!tx.sipMandateId) return;
+    if (!txsMap[tx.sipMandateId]) txsMap[tx.sipMandateId] = {};
+    txsMap[tx.sipMandateId][tx.month] = tx.amount;
+  });
+
   return rows.map((r) => ({
     id: r.id,
     memberId: r.memberId!,
@@ -527,7 +592,7 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
     schemeName: r.schemeName || "Unknown",
     folioNo: r.folioNo,
     monthlyAmount: r.monthlyAmount,
-    monthlyHistory: r.monthlyHistory ? JSON.parse(r.monthlyHistory) : {},
+    monthlyHistory: txsMap[r.id] || {},
     startMonth: r.startMonth,
     isActive: r.isActive === 1,
     uploadedAt: r.uploadedAt,

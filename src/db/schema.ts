@@ -90,6 +90,23 @@ export const sipMandates = mySchema.table("sip_mandates", {
   sourceFile: text("source_file"),
 });
 
+export const sipTransactions = mySchema.table(
+  "sip_transactions",
+  {
+    id: serial("id").primaryKey(),
+    sipMandateId: integer("sip_mandate_id").references(() => sipMandates.id, {
+      onDelete: "cascade",
+    }),
+    month: text("month").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    uploadedAt: text("uploaded_at").notNull(),
+    sourceFile: text("source_file"),
+  },
+  (table) => [
+    unique("sip_mandate_month_unique").on(table.sipMandateId, table.month),
+  ]
+);
+
 export const schemeNavCacheMeta = mySchema.table("scheme_nav_cache_meta", {
   schemeCode: text("scheme_code").primaryKey(),
   fundHouse: text("fund_house").notNull(),

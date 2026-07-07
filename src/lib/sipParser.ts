@@ -67,6 +67,37 @@ export function parseSipExcel(buffer: Buffer, filename: string): SipParsed {
   if (monthCols.length === 0)
     throw new Error("No monthly columns found in SIP file");
 
+  // Parse a month/year label (e.g. "APR 26") to a Date object for sorting
+  function parseMonthYear(label: string): Date {
+    const parts = label.trim().split(/\s+/);
+    if (parts.length !== 2) return new Date(0);
+    const [m, y] = parts;
+    const monthNames = [
+      "JAN",
+      "FEB",
+      "MAR",
+      "APR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AUG",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DEC",
+    ];
+    const monthIdx = monthNames.indexOf(m.toUpperCase());
+    const year = 2000 + parseInt(y, 10);
+    return new Date(year, monthIdx >= 0 ? monthIdx : 0, 1);
+  }
+
+  // Sort monthCols in ascending chronological order so the latest month is at the end
+  monthCols.sort((a, b) => {
+    return (
+      parseMonthYear(a.label).getTime() - parseMonthYear(b.label).getTime()
+    );
+  });
+
   const sips: SipRow[] = [];
 
   // Parse data rows (from headerRowIdx+1 until we hit "Total" or end)
@@ -108,9 +139,18 @@ export function parseSipExcel(buffer: Buffer, filename: string): SipParsed {
       );
     }
 
-    // isActive = latest month column is non-zero
+    // A SIP is active if it has a payment in either the latest month
+    // or the second-to-latest month (to allow current unpaid running months).
     const latestMonth = monthCols[monthCols.length - 1];
-    const isActive = (monthlyHistory[latestMonth.label] ?? 0) > 0;
+    const secondLatestMonth =
+      monthCols.length > 1 ? monthCols[monthCols.length - 2] : null;
+
+    const hasPaymentInLatest = (monthlyHistory[latestMonth.label] ?? 0) > 0;
+    const hasPaymentInSecondLatest = secondLatestMonth
+      ? (monthlyHistory[secondLatestMonth.label] ?? 0) > 0
+      : false;
+
+    const isActive = hasPaymentInLatest || hasPaymentInSecondLatest;
 
     sips.push({
       srNo: Number(srCell),

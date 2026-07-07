@@ -85,8 +85,36 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   });
 
   // Month columns from first mandate's history (consistent across all)
-  const monthCols =
+  const unsortedMonthCols =
     mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
+
+  // Parse a month/year label (e.g. "APR 26") to a Date object for sorting
+  function parseMonthYear(label: string): Date {
+    const parts = label.trim().split(/\s+/);
+    if (parts.length !== 2) return new Date(0);
+    const [m, y] = parts;
+    const monthNames = [
+      "JAN",
+      "FEB",
+      "MAR",
+      "APR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AUG",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DEC",
+    ];
+    const monthIdx = monthNames.indexOf(m.toUpperCase());
+    const year = 2000 + parseInt(y, 10);
+    return new Date(year, monthIdx >= 0 ? monthIdx : 0, 1);
+  }
+
+  const monthCols = [...unsortedMonthCols].sort((a, b) => {
+    return parseMonthYear(b).getTime() - parseMonthYear(a).getTime();
+  });
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
@@ -275,9 +303,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
           {/* ── PER-MEMBER TABLES ── */}
           <div className="space-y-4">
             {Object.entries(byMember).map(([memberName, sips]) => {
-              const memberTotal = sips
-                .filter((s) => s.isActive)
-                .reduce((a, s) => a + s.monthlyAmount, 0);
+              const memberTotal = sips.reduce((a, s) => a + s.monthlyAmount, 0);
               const isExpanded =
                 expandedMember === null || expandedMember === memberName;
 
