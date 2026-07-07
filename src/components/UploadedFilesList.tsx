@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, Clock3, FileSpreadsheet, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
-import DeleteReportButton from './DeleteReportButton';
+import { useState } from "react";
+import { Search, Clock3, FileSpreadsheet, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import DeleteReportButton from "./DeleteReportButton";
 
 interface ReportRow {
   id: number;
@@ -22,25 +22,27 @@ function parseLocalDate(date: string) {
 }
 
 function formatDate(date: string) {
-  return parseLocalDate(date).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  return parseLocalDate(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
 function formatUploadedAt(date: string) {
-  return new Date(date).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
+  return new Date(date).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: true,
   });
 }
 
-export default function UploadedFilesList({ reportsList }: UploadedFilesListProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export default function UploadedFilesList({
+  reportsList,
+}: UploadedFilesListProps) {
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredReports = reportsList.filter((report) => {
     const query = searchQuery.toLowerCase();
@@ -54,7 +56,10 @@ export default function UploadedFilesList({ reportsList }: UploadedFilesListProp
       {/* Search Bar */}
       <div className="p-4 border-b border-slate-800/80 bg-slate-900/40">
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+          />
           <input
             type="text"
             placeholder="Search uploaded files by date or name..."
@@ -70,7 +75,9 @@ export default function UploadedFilesList({ reportsList }: UploadedFilesListProp
         {filteredReports.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2 min-h-40">
             <FileSpreadsheet size={24} className="opacity-20 text-slate-400" />
-            <span>{searchQuery ? 'No matching files found.' : 'No uploads yet.'}</span>
+            <span>
+              {searchQuery ? "No matching files found." : "No uploads yet."}
+            </span>
           </div>
         ) : (
           <div className="divide-y divide-slate-800/50">

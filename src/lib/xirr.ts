@@ -24,7 +24,9 @@ export function calculateXIRR(cashFlows: CashFlow[]): number {
   }
 
   // Sort cash flows chronologically
-  const sorted = [...cashFlows].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const sorted = [...cashFlows].sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
   const d0 = sorted[0].date.getTime();
 
   // NPV function
@@ -94,12 +96,17 @@ function bisectionXIRR(sorted: CashFlow[], d0: number): number {
   if (valLow * valHigh > 0) {
     // If signs are same, bisection won't guarantee root. Propose a default CAGR return.
     // Calculate simple CAGR: (EndValue / StartValue) ^ (365 / days) - 1
-    const totalInvested = Math.abs(sorted.filter(c => c.amount < 0).reduce((acc, c) => acc + c.amount, 0));
-    const finalValuation = sorted.filter(c => c.amount > 0).reduce((acc, c) => acc + c.amount, 0);
+    const totalInvested = Math.abs(
+      sorted.filter((c) => c.amount < 0).reduce((acc, c) => acc + c.amount, 0)
+    );
+    const finalValuation = sorted
+      .filter((c) => c.amount > 0)
+      .reduce((acc, c) => acc + c.amount, 0);
     const firstDate = sorted[0].date;
     const lastDate = sorted[sorted.length - 1].date;
-    const diffDays = (lastDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000);
-    
+    const diffDays =
+      (lastDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000);
+
     if (totalInvested > 0 && finalValuation > 0 && diffDays > 0) {
       const cagr = Math.pow(finalValuation / totalInvested, 365 / diffDays) - 1;
       return cagr * 100;

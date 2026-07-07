@@ -19,8 +19,10 @@ export interface MfDetailsResponse {
   data: NavDataPoint[];
 }
 
-export function isSpecializedFundSchemeCode(schemeCode: string | null | undefined): boolean {
-  return Boolean(schemeCode?.toUpperCase().includes('SIF'));
+export function isSpecializedFundSchemeCode(
+  schemeCode: string | null | undefined
+): boolean {
+  return Boolean(schemeCode?.toUpperCase().includes("SIF"));
 }
 
 let lastRequestTime = 0;
@@ -33,31 +35,38 @@ async function throttleRequest(): Promise<void> {
 
   const delay = nextAllowedTime - now;
   if (delay > 0) {
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
 }
 
 /**
  * Search mutual funds by text query on api.mfapi.in
  */
-export async function searchMutualFund(query: string): Promise<MfSearchResult[]> {
+export async function searchMutualFund(
+  query: string
+): Promise<MfSearchResult[]> {
   if (!query || query.trim().length < 3) return [];
   try {
     await throttleRequest();
-    const res = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(4000)
-    });
+    const res = await fetch(
+      `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(4000),
+      }
+    );
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch (e: any) {
-    if (e.name === 'TimeoutError' || e.code === 23 || e.name === 'AbortError') {
-      console.warn(`[API TIMEOUT] api.mfapi.in timed out searching for: "${query}"`);
+    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
+      console.warn(
+        `[API TIMEOUT] api.mfapi.in timed out searching for: "${query}"`
+      );
     } else {
-      console.error('Error searching MF API:', e);
+      console.error("Error searching MF API:", e);
     }
     return [];
   }
@@ -66,7 +75,9 @@ export async function searchMutualFund(query: string): Promise<MfSearchResult[]>
 /**
  * Fetch scheme details and historical NAVs by scheme code
  */
-export async function fetchMfDetails(schemeCode: string): Promise<MfDetailsResponse | null> {
+export async function fetchMfDetails(
+  schemeCode: string
+): Promise<MfDetailsResponse | null> {
   if (!schemeCode) return null;
   if (isSpecializedFundSchemeCode(schemeCode)) return null;
 
@@ -74,15 +85,17 @@ export async function fetchMfDetails(schemeCode: string): Promise<MfDetailsRespo
     await throttleRequest();
     const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
       headers: {
-        'Accept': 'application/json',
+        Accept: "application/json",
       },
-      signal: AbortSignal.timeout(3000) // Lowered to 3s for fast user page loading
+      signal: AbortSignal.timeout(3000), // Lowered to 3s for fast user page loading
     });
     if (!res.ok) return null;
     return await res.json();
   } catch (e: any) {
-    if (e.name === 'TimeoutError' || e.code === 23 || e.name === 'AbortError') {
-      console.warn(`[API TIMEOUT] api.mfapi.in timed out fetching details for scheme ${schemeCode}. Using cache or fallback.`);
+    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
+      console.warn(
+        `[API TIMEOUT] api.mfapi.in timed out fetching details for scheme ${schemeCode}. Using cache or fallback.`
+      );
     } else {
       console.error(`Error fetching MF details for ${schemeCode}:`, e);
     }
@@ -93,15 +106,17 @@ export async function fetchMfDetails(schemeCode: string): Promise<MfDetailsRespo
 /**
  * Auto-fuzzy map scheme name to best scheme code from API
  */
-export async function autoMapScheme(schemeName: string): Promise<{ schemeCode: string; confidence: number } | null> {
+export async function autoMapScheme(
+  schemeName: string
+): Promise<{ schemeCode: string; confidence: number } | null> {
   // Try searching with the scheme name
   const cleanName = schemeName
-    .replace(/Reg(?:ular)?/gi, '')
-    .replace(/\(G\)/g, 'Growth')
-    .replace(/Growth/gi, '')
-    .replace(/-*/g, '')
+    .replace(/Reg(?:ular)?/gi, "")
+    .replace(/\(G\)/g, "Growth")
+    .replace(/Growth/gi, "")
+    .replace(/-*/g, "")
     .trim();
-  
+
   const searchResults = await searchMutualFund(cleanName.slice(0, 30));
   if (searchResults.length === 0) return null;
 
@@ -110,7 +125,10 @@ export async function autoMapScheme(schemeName: string): Promise<{ schemeCode: s
   let highestScore = 0;
 
   for (const result of searchResults) {
-    const score = calculateStringSimilarity(cleanName.toLowerCase(), result.schemeName.toLowerCase());
+    const score = calculateStringSimilarity(
+      cleanName.toLowerCase(),
+      result.schemeName.toLowerCase()
+    );
     if (score > highestScore) {
       highestScore = score;
       bestMatch = result;

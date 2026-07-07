@@ -1,9 +1,9 @@
 "use client";
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
-import { formatCurrency, formatPercent } from '@/lib/formatters';
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { formatCurrency, formatPercent } from "@/lib/formatters";
 
 interface MemberSummary {
   name: string;
@@ -43,10 +43,16 @@ interface MembersTabProps {
 }
 
 function formatPointDelta(delta: number) {
-  return `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} pp`;
+  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
 }
 
-function DeltaBadge({ delta, label = 'vs prev' }: { delta: number | null; label?: string }) {
+function DeltaBadge({
+  delta,
+  label = "vs prev",
+}: {
+  delta: number | null;
+  label?: string;
+}) {
   if (delta === null) {
     return (
       <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
@@ -57,27 +63,44 @@ function DeltaBadge({ delta, label = 'vs prev' }: { delta: number | null; label?
 
   const isUp = delta >= 0;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-      isUp
-        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-        : 'border-red-500/20 bg-red-500/10 text-red-400'
-    }`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+        isUp
+          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+          : "border-red-500/20 bg-red-500/10 text-red-400"
+      }`}
+    >
       {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
       {formatPointDelta(delta)} {label}
     </span>
   );
 }
 
-export default function MembersTab({ memberSummaries, totals, metricDeltas, holdings }: MembersTabProps) {
-  const overallCagr = totals.cagr !== undefined && totals.cagr !== null
-    ? totals.cagr
-    : (holdings.length > 0
-        ? holdings.reduce((acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0), 0) / (totals.invested || 1)
-        : 0);
+export default function MembersTab({
+  memberSummaries,
+  totals,
+  metricDeltas,
+  holdings,
+}: MembersTabProps) {
+  const overallCagr =
+    totals.cagr !== undefined && totals.cagr !== null
+      ? totals.cagr
+      : holdings.length > 0
+        ? holdings.reduce(
+            (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
+            0
+          ) / (totals.invested || 1)
+        : 0;
 
-  const avgHoldingDays = holdings.length > 0
-    ? Math.round(holdings.reduce((acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0), 0) / (totals.invested || 1))
-    : 0;
+  const avgHoldingDays =
+    holdings.length > 0
+      ? Math.round(
+          holdings.reduce(
+            (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+            0
+          ) / (totals.invested || 1)
+        )
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -96,50 +119,98 @@ export default function MembersTab({ memberSummaries, totals, metricDeltas, hold
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-6 font-semibold">
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Invested Value</div>
-              <div className="text-xl font-black text-slate-100 mt-1.5">{formatCurrency(totals.invested)}</div>
-              <div className="text-[10px] text-slate-500 mt-1">Principal Cost</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                Invested Value
+              </div>
+              <div className="text-xl font-black text-slate-100 mt-1.5">
+                {formatCurrency(totals.invested)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                Principal Cost
+              </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Current Value</div>
-              <div className="text-xl font-black text-slate-100 mt-1.5">{formatCurrency(totals.currentValue)}</div>
-              <div className="text-[10px] text-emerald-400 mt-1">In Profit ↑</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                Current Value
+              </div>
+              <div className="text-xl font-black text-slate-100 mt-1.5">
+                {formatCurrency(totals.currentValue)}
+              </div>
+              <div className="text-[10px] text-emerald-400 mt-1">
+                In Profit ↑
+              </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Unrealised Gain</div>
-              <div className={`text-xl font-black mt-1.5 ${totals.gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                Unrealised Gain
+              </div>
+              <div
+                className={`text-xl font-black mt-1.5 ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
                 {formatCurrency(totals.gain)}
               </div>
-              <div className={`text-[10px] mt-1 font-bold ${totals.gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div
+                className={`text-[10px] mt-1 font-bold ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
                 {totals.absoluteReturn.toFixed(2)}% Absolute
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">XIRR</div>
-              <div className="text-xl font-black text-teal-400 mt-1.5">{formatPercent(totals.portfolioXirr)}</div>
-              <div className="mt-1.5"><DeltaBadge delta={metricDeltas.portfolioXirr} /></div>
-              <div className="text-[10px] text-slate-500 mt-1">Annualised XIRR</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">CAGR</div>
-              <div className="text-xl font-black text-teal-400 mt-1.5">{formatPercent(overallCagr)}</div>
-              <div className="mt-1.5"><DeltaBadge delta={metricDeltas.cagr} /></div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                XIRR
+              </div>
+              <div className="text-xl font-black text-teal-400 mt-1.5">
+                {formatPercent(totals.portfolioXirr)}
+              </div>
+              <div className="mt-1.5">
+                <DeltaBadge delta={metricDeltas.portfolioXirr} />
+              </div>
               <div className="text-[10px] text-slate-500 mt-1">
-                {totals.cagr !== undefined && totals.cagr !== null ? 'Excel Reported CAGR' : 'Weighted CAGR'}
+                Annualised XIRR
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Alpha</div>
-              <div className={`text-xl font-black mt-1.5 ${totals.alpha >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                CAGR
+              </div>
+              <div className="text-xl font-black text-teal-400 mt-1.5">
+                {formatPercent(overallCagr)}
+              </div>
+              <div className="mt-1.5">
+                <DeltaBadge delta={metricDeltas.cagr} />
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                {totals.cagr !== undefined && totals.cagr !== null
+                  ? "Excel Reported CAGR"
+                  : "Weighted CAGR"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                Alpha
+              </div>
+              <div
+                className={`text-xl font-black mt-1.5 ${totals.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
                 {formatPercent(totals.alpha)}
               </div>
-              <div className="mt-1.5"><DeltaBadge delta={metricDeltas.alpha} /></div>
-              <div className="text-[10px] text-slate-500 mt-1">Vs Benchmark</div>
+              <div className="mt-1.5">
+                <DeltaBadge delta={metricDeltas.alpha} />
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                Vs Benchmark
+              </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Holding Days</div>
-              <div className="text-xl font-black text-slate-200 mt-1.5">{avgHoldingDays} Days</div>
-              <div className="text-[10px] text-slate-500 mt-1">Weighted Avg</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                Holding Days
+              </div>
+              <div className="text-xl font-black text-slate-200 mt-1.5">
+                {avgHoldingDays} Days
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                Weighted Avg
+              </div>
             </div>
           </div>
         </div>
@@ -162,7 +233,9 @@ export default function MembersTab({ memberSummaries, totals, metricDeltas, hold
           >
             <div className="flex justify-between items-start border-b border-slate-800 pb-4 mb-4">
               <div>
-                <h4 className="font-bold text-lg text-slate-100">{member.name}</h4>
+                <h4 className="font-bold text-lg text-slate-100">
+                  {member.name}
+                </h4>
                 {member.pan && (
                   <span className="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded font-mono mt-1 inline-block">
                     PAN: {member.pan}
@@ -171,39 +244,65 @@ export default function MembersTab({ memberSummaries, totals, metricDeltas, hold
               </div>
               <div className="text-right">
                 <div className="text-sm font-semibold text-slate-400">XIRR</div>
-                <div className="text-2xl font-black text-teal-400">{formatPercent(member.xirr)}</div>
-                <div className="mt-1"><DeltaBadge delta={member.xirrDelta} /></div>
+                <div className="text-2xl font-black text-teal-400">
+                  {formatPercent(member.xirr)}
+                </div>
+                <div className="mt-1">
+                  <DeltaBadge delta={member.xirrDelta} />
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 font-semibold">
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Invested</div>
-                <div className="text-base font-bold text-slate-200 mt-1 truncate">{formatCurrency(member.invested)}</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  Invested
+                </div>
+                <div className="text-base font-bold text-slate-200 mt-1 truncate">
+                  {formatCurrency(member.invested)}
+                </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Current Value</div>
-                <div className="text-base font-bold text-slate-200 mt-1 truncate">{formatCurrency(member.currentValue)}</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                  Current Value
+                </div>
+                <div className="text-base font-bold text-slate-200 mt-1 truncate">
+                  {formatCurrency(member.currentValue)}
+                </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">Net Returns</div>
-                <div className={`text-base font-bold mt-1 truncate ${member.gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                  Net Returns
+                </div>
+                <div
+                  className={`text-base font-bold mt-1 truncate ${member.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                >
                   {formatCurrency(member.gain)}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">CAGR</div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                  CAGR
+                </div>
                 <div className="text-base font-bold mt-1 text-teal-400 truncate">
                   {formatPercent(member.cagr)}
                 </div>
-                <div className="mt-1"><DeltaBadge delta={member.cagrDelta} label="" /></div>
+                <div className="mt-1">
+                  <DeltaBadge delta={member.cagrDelta} label="" />
+                </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">Alpha</div>
-                <div className={`text-base font-bold mt-1 truncate ${member.alpha >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                  Alpha
+                </div>
+                <div
+                  className={`text-base font-bold mt-1 truncate ${member.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                >
                   {formatPercent(member.alpha)}
                 </div>
-                <div className="mt-1"><DeltaBadge delta={member.alphaDelta} label="" /></div>
+                <div className="mt-1">
+                  <DeltaBadge delta={member.alphaDelta} label="" />
+                </div>
               </div>
             </div>
           </Link>

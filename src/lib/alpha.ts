@@ -1,17 +1,25 @@
-import { calculateXIRR, CashFlow } from './xirr';
-import { fetchMfDetails, isSpecializedFundSchemeCode, MfDetailsResponse } from './mfApi';
-import { db } from '@/db/db';
-import { schemeNavCacheMeta, schemeNavHistory } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { calculateXIRR, CashFlow } from "./xirr";
+import {
+  fetchMfDetails,
+  isSpecializedFundSchemeCode,
+  MfDetailsResponse,
+} from "./mfApi";
+import { db } from "@/db/db";
+import { schemeNavCacheMeta, schemeNavHistory } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-function normaliseSchemeCode(schemeCode: string | number | null | undefined): string {
-  return String(schemeCode || '').trim();
+function normaliseSchemeCode(
+  schemeCode: string | number | null | undefined
+): string {
+  return String(schemeCode || "").trim();
 }
 
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
-export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<MfDetailsResponse | null> {
+export async function getSchemeHistoryForDbCode(
+  dbSchemeCode: string
+): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
   if (!schemeCode || isSpecializedFundSchemeCode(schemeCode)) return null;
 
@@ -22,7 +30,10 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
 
   const now = new Date();
   const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
-  const isFresh = cachedMeta && (now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() < cacheAgeLimit);
+  const isFresh =
+    cachedMeta &&
+    now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+      cacheAgeLimit;
 
   if (cachedMeta && isFresh) {
     const history = await db.query.schemeNavHistory.findMany({
@@ -38,7 +49,7 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
           scheme_code: parseInt(cachedMeta.schemeCode),
           scheme_name: cachedMeta.schemeName,
         },
-        data: history.map(h => ({
+        data: history.map((h) => ({
           date: h.date,
           nav: String(h.nav),
         })),
@@ -51,28 +62,29 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
   if (data && data.meta && data.data && data.data.length > 0) {
     try {
       // Upsert scheme cache metadata
-      await db.insert(schemeNavCacheMeta)
+      await db
+        .insert(schemeNavCacheMeta)
         .values({
           schemeCode,
-          fundHouse: data.meta.fund_house || 'Unknown',
-          schemeType: data.meta.scheme_type || 'Unknown',
-          schemeCategory: data.meta.scheme_category || 'Unknown',
-          schemeName: data.meta.scheme_name || 'Unknown',
+          fundHouse: data.meta.fund_house || "Unknown",
+          schemeType: data.meta.scheme_type || "Unknown",
+          schemeCategory: data.meta.scheme_category || "Unknown",
+          schemeName: data.meta.scheme_name || "Unknown",
           lastFetchedAt: new Date().toISOString(),
         })
         .onConflictDoUpdate({
           target: schemeNavCacheMeta.schemeCode,
           set: {
-            fundHouse: data.meta.fund_house || 'Unknown',
-            schemeType: data.meta.scheme_type || 'Unknown',
-            schemeCategory: data.meta.scheme_category || 'Unknown',
-            schemeName: data.meta.scheme_name || 'Unknown',
+            fundHouse: data.meta.fund_house || "Unknown",
+            schemeType: data.meta.scheme_type || "Unknown",
+            schemeCategory: data.meta.scheme_category || "Unknown",
+            schemeName: data.meta.scheme_name || "Unknown",
             lastFetchedAt: new Date().toISOString(),
-          }
+          },
         });
 
       // Prepare history values for insertion
-      const historyValues = data.data.map(p => ({
+      const historyValues = data.data.map((p) => ({
         schemeCode,
         date: p.date,
         nav: parseFloat(p.nav) || 0,
@@ -83,12 +95,10 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
       const chunkSize = 500;
       for (let i = 0; i < historyValues.length; i += chunkSize) {
         const chunk = historyValues.slice(i, i + chunkSize);
-        await db.insert(schemeNavHistory)
-          .values(chunk)
-          .onConflictDoNothing();
+        await db.insert(schemeNavHistory).values(chunk).onConflictDoNothing();
       }
     } catch (e) {
-      console.error('Error writing database NAV cache:', e);
+      console.error("Error writing database NAV cache:", e);
     }
     return data;
   }
@@ -108,7 +118,7 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
           scheme_code: parseInt(cachedMeta.schemeCode),
           scheme_name: cachedMeta.schemeName,
         },
-        data: history.map(h => ({
+        data: history.map((h) => ({
           date: h.date,
           nav: String(h.nav),
         })),
@@ -123,18 +133,21 @@ export async function getSchemeHistoryForDbCode(dbSchemeCode: string): Promise<M
  * Find the closest NAV on or before a given date
  * dateStr format: YYYY-MM-DD
  */
-function findClosestNav(navHistory: { date: string; nav: string }[], targetDateStr: string): number {
+function findClosestNav(
+  navHistory: { date: string; nav: string }[],
+  targetDateStr: string
+): number {
   const targetDate = new Date(targetDateStr);
-  
+
   // Sort NAV history from oldest to newest
   // Input dates from API are DD-MM-YYYY
   const parseApiDate = (apiDateStr: string) => {
-    const [dd, mm, yyyy] = apiDateStr.split('-');
+    const [dd, mm, yyyy] = apiDateStr.split("-");
     return new Date(`${yyyy}-${mm}-${dd}`);
   };
 
   const sortedNavs = [...navHistory]
-    .map(p => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   if (sortedNavs.length === 0) return 10; // Propose a dummy NAV to prevent division by zero
@@ -144,7 +157,7 @@ function findClosestNav(navHistory: { date: string; nav: string }[], targetDateS
 
   for (const point of sortedNavs) {
     const diff = targetDate.getTime() - point.date.getTime();
-    
+
     // We want the closest date that is on or before the target date
     if (diff >= 0 && diff < closestDateDiff) {
       closestDateDiff = diff;
@@ -160,7 +173,9 @@ function findClosestNav(navHistory: { date: string; nav: string }[], targetDateS
     if (inceptionDiff >= 0 && inceptionDiff <= MAX_LOOKBACK_MS) {
       return oldestPoint.nav;
     }
-    console.warn(`[NAV LOOKBACK GAP] Target date ${targetDateStr} is ${Math.round(closestDateDiff / (24*60*60*1000))} days away from nearest NAV. Using closest available.`);
+    console.warn(
+      `[NAV LOOKBACK GAP] Target date ${targetDateStr} is ${Math.round(closestDateDiff / (24 * 60 * 60 * 1000))} days away from nearest NAV. Using closest available.`
+    );
   }
 
   return closestNav;
@@ -168,7 +183,7 @@ function findClosestNav(navHistory: { date: string; nav: string }[], targetDateS
 
 export interface PortfolioTransaction {
   date: string; // YYYY-MM-DD
-  type: 'BUY' | 'SELL';
+  type: "BUY" | "SELL";
   amount: number; // Positive absolute value
   units: number;
 }
@@ -180,7 +195,7 @@ export async function calculateAlpha(
   transactions: PortfolioTransaction[],
   asOfDate: string,
   currentValuation: number,
-  benchmarkSchemeCode: string = '120716' // UTI Nifty 50 Index Fund Direct Growth
+  benchmarkSchemeCode: string = "120716" // UTI Nifty 50 Index Fund Direct Growth
 ): Promise<{
   portfolioXirr: number;
   benchmarkXirr: number;
@@ -190,17 +205,17 @@ export async function calculateAlpha(
   const sortedTxs = [...transactions].sort((a, b) => {
     const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
     if (dateDiff !== 0) return dateDiff;
-    if (a.type === 'BUY' && b.type === 'SELL') return -1;
-    if (a.type === 'SELL' && b.type === 'BUY') return 1;
+    if (a.type === "BUY" && b.type === "SELL") return -1;
+    if (a.type === "SELL" && b.type === "BUY") return 1;
     return 0;
   });
 
   // 1. Calculate Portfolio XIRR
   const portfolioCashFlows: CashFlow[] = [];
-  
+
   for (const tx of sortedTxs) {
     // BUY is cash outflow (negative), SELL is cash inflow (positive)
-    const amount = tx.type === 'BUY' ? -tx.amount : tx.amount;
+    const amount = tx.type === "BUY" ? -tx.amount : tx.amount;
     portfolioCashFlows.push({
       amount,
       date: new Date(tx.date),
@@ -225,7 +240,11 @@ export async function calculateAlpha(
 
   // 2. Fetch Benchmark NAV History
   const benchmarkDetails = await getSchemeHistoryForDbCode(benchmarkSchemeCode);
-  if (!benchmarkDetails || !benchmarkDetails.data || benchmarkDetails.data.length === 0) {
+  if (
+    !benchmarkDetails ||
+    !benchmarkDetails.data ||
+    benchmarkDetails.data.length === 0
+  ) {
     return {
       portfolioXirr,
       benchmarkXirr: 0,
@@ -242,8 +261,8 @@ export async function calculateAlpha(
   for (const tx of sortedTxs) {
     // Find benchmark NAV on the transaction date
     const nav = findClosestNav(navHistory, tx.date);
-    
-    if (tx.type === 'BUY') {
+
+    if (tx.type === "BUY") {
       const unitsBought = tx.amount / nav;
       benchmarkUnitsHeld += unitsBought;
       benchmarkCashFlows.push({
@@ -257,7 +276,7 @@ export async function calculateAlpha(
         unitsSold = benchmarkUnitsHeld;
       }
       benchmarkUnitsHeld -= unitsSold;
-      
+
       // cash inflow reflects simulated redeemed value from index fund
       const simulatedRedeemedAmount = unitsSold * nav;
       benchmarkCashFlows.push({
@@ -321,14 +340,14 @@ export function getFactsheetMetadata(
   profile: FactsheetProfile;
   allocation: AssetAllocation;
 } {
-  const cleanCat = (category || '').toLowerCase();
-  
+  const cleanCat = (category || "").toLowerCase();
+
   // Default values
   let corpusCr = 12500;
   let expenseRatio = 1.25;
-  let exitLoad = '1% for redemption within 365 days';
-  let benchmarkName = 'NSE - Nifty 500 TRI';
-  
+  let exitLoad = "1% for redemption within 365 days";
+  let benchmarkName = "NSE - Nifty 500 TRI";
+
   let allocation: AssetAllocation = {
     equity: 98.2,
     debt: 1.8,
@@ -337,47 +356,95 @@ export function getFactsheetMetadata(
     other: 0.0,
   };
 
-  if (cleanCat.includes('flexi')) {
+  if (cleanCat.includes("flexi")) {
     corpusCr = 26032;
     expenseRatio = 1.37;
-    exitLoad = '1% for redemption within 90 days';
-    benchmarkName = 'NSE - Nifty 500 TRI';
-    allocation = { equity: 99.2, debt: 0.8, gold: 0.0, globalEquity: 0.0, other: 0.0 };
-  } else if (cleanCat.includes('small')) {
+    exitLoad = "1% for redemption within 90 days";
+    benchmarkName = "NSE - Nifty 500 TRI";
+    allocation = {
+      equity: 99.2,
+      debt: 0.8,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
+  } else if (cleanCat.includes("small")) {
     corpusCr = 18450;
     expenseRatio = 1.58;
-    exitLoad = '1% for redemption within 365 days';
-    benchmarkName = 'Nifty Smallcap 250 TRI';
-    allocation = { equity: 96.5, debt: 3.5, gold: 0.0, globalEquity: 0.0, other: 0.0 };
-  } else if (cleanCat.includes('mid')) {
+    exitLoad = "1% for redemption within 365 days";
+    benchmarkName = "Nifty Smallcap 250 TRI";
+    allocation = {
+      equity: 96.5,
+      debt: 3.5,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
+  } else if (cleanCat.includes("mid")) {
     corpusCr = 22100;
     expenseRatio = 1.48;
-    exitLoad = '1% for redemption within 365 days';
-    benchmarkName = 'Nifty Midcap 150 TRI';
-    allocation = { equity: 97.4, debt: 2.6, gold: 0.0, globalEquity: 0.0, other: 0.0 };
-  } else if (cleanCat.includes('large') || cleanCat.includes('index')) {
+    exitLoad = "1% for redemption within 365 days";
+    benchmarkName = "Nifty Midcap 150 TRI";
+    allocation = {
+      equity: 97.4,
+      debt: 2.6,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
+  } else if (cleanCat.includes("large") || cleanCat.includes("index")) {
     corpusCr = 34500;
     expenseRatio = 1.05;
-    exitLoad = '1% for redemption within 30 days';
-    benchmarkName = 'Nifty 50 TRI';
-    allocation = { equity: 98.9, debt: 1.1, gold: 0.0, globalEquity: 0.0, other: 0.0 };
-  } else if (cleanCat.includes('debt') || cleanCat.includes('liquid') || cleanCat.includes('income') || cleanCat.includes('gilt') || cleanCat.includes('bond')) {
+    exitLoad = "1% for redemption within 30 days";
+    benchmarkName = "Nifty 50 TRI";
+    allocation = {
+      equity: 98.9,
+      debt: 1.1,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
+  } else if (
+    cleanCat.includes("debt") ||
+    cleanCat.includes("liquid") ||
+    cleanCat.includes("income") ||
+    cleanCat.includes("gilt") ||
+    cleanCat.includes("bond")
+  ) {
     corpusCr = 8400;
     expenseRatio = 0.42;
-    exitLoad = cleanCat.includes('liquid') ? '0.0070% to Nil depending on redemption day' : 'Nil';
-    benchmarkName = 'Nifty Short Duration Debt Index';
-    allocation = { equity: 0.0, debt: 98.4, gold: 0.0, globalEquity: 0.0, other: 1.6 };
-  } else if (cleanCat.includes('hybrid') || cleanCat.includes('balanced') || cleanCat.includes('alloc')) {
+    exitLoad = cleanCat.includes("liquid")
+      ? "0.0070% to Nil depending on redemption day"
+      : "Nil";
+    benchmarkName = "Nifty Short Duration Debt Index";
+    allocation = {
+      equity: 0.0,
+      debt: 98.4,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 1.6,
+    };
+  } else if (
+    cleanCat.includes("hybrid") ||
+    cleanCat.includes("balanced") ||
+    cleanCat.includes("alloc")
+  ) {
     corpusCr = 14200;
     expenseRatio = 1.18;
-    exitLoad = '1% for redemption within 365 days';
-    benchmarkName = 'Nifty 50 Hybrid Composite debt 65:35 Index';
-    allocation = { equity: 65.5, debt: 31.0, gold: 3.5, globalEquity: 0.0, other: 0.0 };
+    exitLoad = "1% for redemption within 365 days";
+    benchmarkName = "Nifty 50 Hybrid Composite debt 65:35 Index";
+    allocation = {
+      equity: 65.5,
+      debt: 31.0,
+      gold: 3.5,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
   }
 
   return {
     profile: {
-      launchDate: launchDateStr || '27 Aug 1998',
+      launchDate: launchDateStr || "27 Aug 1998",
       corpusCr,
       expenseRatio,
       exitLoad,
@@ -399,12 +466,14 @@ export function calculateVolatilityMeasures(
 
   // Step back weekly for 104 weeks (approx 2 years) to compute stats
   for (let i = 0; i <= 104; i++) {
-    const checkDate = new Date(targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    const checkDateStr = checkDate.toISOString().split('T')[0];
-    
+    const checkDate = new Date(
+      targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
+    );
+    const checkDateStr = checkDate.toISOString().split("T")[0];
+
     const fundNav = findClosestNav(fundNavHistory, checkDateStr);
     const benchNav = findClosestNav(benchNavHistory, checkDateStr);
-    
+
     weeklyFundNavs.push(fundNav);
     weeklyBenchNavs.push(benchNav);
   }
@@ -436,16 +505,21 @@ export function calculateVolatilityMeasures(
   }
 
   const meanFund = fundReturns.reduce((s, r) => s + r, 0) / fundReturns.length;
-  const meanBench = benchReturns.reduce((s, r) => s + r, 0) / benchReturns.length;
+  const meanBench =
+    benchReturns.reduce((s, r) => s + r, 0) / benchReturns.length;
 
   const meanFundAnnual = meanFund * 52 * 100;
   const meanBenchAnnual = meanBench * 52 * 100;
 
-  const varFund = fundReturns.reduce((s, r) => s + Math.pow(r - meanFund, 2), 0) / (fundReturns.length - 1);
+  const varFund =
+    fundReturns.reduce((s, r) => s + Math.pow(r - meanFund, 2), 0) /
+    (fundReturns.length - 1);
   const stdDevWeekly = Math.sqrt(varFund);
   const stdDevAnnual = stdDevWeekly * Math.sqrt(52) * 100;
 
-  const varBench = benchReturns.reduce((s, r) => s + Math.pow(r - meanBench, 2), 0) / (benchReturns.length - 1);
+  const varBench =
+    benchReturns.reduce((s, r) => s + Math.pow(r - meanBench, 2), 0) /
+    (benchReturns.length - 1);
   let cov = 0;
   for (let i = 0; i < fundReturns.length; i++) {
     cov += (fundReturns[i] - meanFund) * (benchReturns[i] - meanBench);
@@ -454,27 +528,35 @@ export function calculateVolatilityMeasures(
   const beta = varBench > 0 ? cov / varBench : 1.0;
 
   const riskFreeWeekly = 0.06 / 52;
-  const excessReturns = fundReturns.map(r => r - riskFreeWeekly);
-  const meanExcess = excessReturns.reduce((s, r) => s + r, 0) / excessReturns.length;
-  const varExcess = excessReturns.reduce((s, r) => s + Math.pow(r - meanExcess, 2), 0) / (excessReturns.length - 1);
+  const excessReturns = fundReturns.map((r) => r - riskFreeWeekly);
+  const meanExcess =
+    excessReturns.reduce((s, r) => s + r, 0) / excessReturns.length;
+  const varExcess =
+    excessReturns.reduce((s, r) => s + Math.pow(r - meanExcess, 2), 0) /
+    (excessReturns.length - 1);
   const stdExcess = Math.sqrt(varExcess);
   const sharpe = stdExcess > 0 ? (meanExcess / stdExcess) * Math.sqrt(52) : 0.0;
 
   const alpha = meanFundAnnual - (6.0 + beta * (meanBenchAnnual - 6.0));
 
-  const cleanCat = (category || '').toLowerCase();
-  const isDebt = cleanCat.includes('debt') || cleanCat.includes('liquid') || cleanCat.includes('income') || cleanCat.includes('gilt') || cleanCat.includes('bond');
-  
+  const cleanCat = (category || "").toLowerCase();
+  const isDebt =
+    cleanCat.includes("debt") ||
+    cleanCat.includes("liquid") ||
+    cleanCat.includes("income") ||
+    cleanCat.includes("gilt") ||
+    cleanCat.includes("bond");
+
   let ytm = 0;
   let modifiedDuration = 0;
   let avgMaturity = 0;
 
   if (isDebt) {
     ytm = 7.15;
-    if (cleanCat.includes('liquid')) {
+    if (cleanCat.includes("liquid")) {
       modifiedDuration = 0.15;
       avgMaturity = 0.18;
-    } else if (cleanCat.includes('short')) {
+    } else if (cleanCat.includes("short")) {
       modifiedDuration = 1.8;
       avgMaturity = 2.2;
     } else {
@@ -509,22 +591,24 @@ export function generateFactsheetChartData(
   fundNavHistory: { date: string; nav: string }[],
   benchNavHistory: { date: string; nav: string }[],
   asOfDate: string,
-  transactions: { date: string; type: 'BUY' | 'SELL'; amount: number }[]
+  transactions: { date: string; type: "BUY" | "SELL"; amount: number }[]
 ): FactsheetChartPoint[] {
   if (fundNavHistory.length === 0 || benchNavHistory.length === 0) return [];
-  
+
   const targetDate = new Date(asOfDate);
   const weeksToFetch = 156; // 3 years of weekly data
-  
+
   const tempPoints: { dateObj: Date; fundNav: number; benchNav: number }[] = [];
-  
+
   for (let i = weeksToFetch; i >= 0; i--) {
-    const checkDate = new Date(targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    const checkDateStr = checkDate.toISOString().split('T')[0];
-    
+    const checkDate = new Date(
+      targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
+    );
+    const checkDateStr = checkDate.toISOString().split("T")[0];
+
     const fundNav = findClosestNav(fundNavHistory, checkDateStr);
     const benchNav = findClosestNav(benchNavHistory, checkDateStr);
-    
+
     tempPoints.push({
       dateObj: checkDate,
       fundNav,
@@ -535,12 +619,15 @@ export function generateFactsheetChartData(
   const baseFundNav = tempPoints[0]?.fundNav || 1;
   const baseBenchNav = tempPoints[0]?.benchNav || 1;
 
-  const chartData: FactsheetChartPoint[] = tempPoints.map(pt => {
+  const chartData: FactsheetChartPoint[] = tempPoints.map((pt) => {
     const fundReturn = ((pt.fundNav - baseFundNav) / baseFundNav) * 100;
     const benchReturn = ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
-    
+
     return {
-      date: pt.dateObj.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+      date: pt.dateObj.toLocaleDateString("en-IN", {
+        month: "short",
+        year: "2-digit",
+      }),
       timestamp: pt.dateObj.getTime(),
       fundNav: pt.fundNav,
       benchNav: pt.benchNav,
@@ -554,7 +641,7 @@ export function generateFactsheetChartData(
     const txDate = new Date(tx.date);
     let closestIdx = 0;
     let minDiff = Infinity;
-    
+
     for (let i = 0; i < tempPoints.length; i++) {
       const diff = Math.abs(txDate.getTime() - tempPoints[i].dateObj.getTime());
       if (diff < minDiff) {

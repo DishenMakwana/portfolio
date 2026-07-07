@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Search, ChevronUp, ChevronDown } from 'lucide-react';
-import { formatCurrency, formatPercent } from '@/lib/formatters';
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { motion } from "framer-motion";
+import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { formatCurrency, formatPercent } from "@/lib/formatters";
 
 interface Holding {
   id: number;
@@ -43,56 +43,58 @@ interface HoldingsTabProps {
 export default function HoldingsTab({
   holdings,
   memberSummaries,
-  initialMember = 'All',
+  initialMember = "All",
 }: HoldingsTabProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   // Read initial states from URL query params
-  const initialSearch = searchParams.get('q') || '';
-  const initialMemberParam = searchParams.get('member') || initialMember;
-  const initialPlan = searchParams.get('plan') || 'All';
-  const initialSort = (searchParams.get('sort') as any) || 'currentValue';
-  const initialOrder = (searchParams.get('order') as any) || 'desc';
+  const initialSearch = searchParams.get("q") || "";
+  const initialMemberParam = searchParams.get("member") || initialMember;
+  const initialPlan = searchParams.get("plan") || "All";
+  const initialSort = (searchParams.get("sort") as any) || "currentValue";
+  const initialOrder = (searchParams.get("order") as any) || "desc";
 
   // Local Search & Filter State
   const [searchVal, setSearchVal] = useState(initialSearch); // For instant input typing
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
-  const [sortField, setSortField] = useState<'currentValue' | 'xirr' | 'alpha' | 'gain' | 'cagr' | 'holdingDays'>(initialSort);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(initialOrder);
+  const [sortField, setSortField] = useState<
+    "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays"
+  >(initialSort);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
 
   // Helper to update query string parameters in the URL
   const updateUrl = (updates: Record<string, string | null>) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
     for (const [key, value] of Object.entries(updates)) {
-      if (value === null || value === '' || value === 'All') {
+      if (value === null || value === "" || value === "All") {
         current.delete(key);
       } else {
         current.set(key, value);
       }
     }
     const query = current.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   };
 
   // Synchronize state when URL query params change (e.g. Back/Forward browser navigation)
   useEffect(() => {
-    const q = searchParams.get('q') || '';
+    const q = searchParams.get("q") || "";
     setSearchVal(q);
     setSearchQuery(q);
-    setMemberFilter(searchParams.get('member') || initialMember);
-    setPlanFilter(searchParams.get('plan') || 'All');
-    setSortField((searchParams.get('sort') as any) || 'currentValue');
-    setSortOrder((searchParams.get('order') as any) || 'desc');
+    setMemberFilter(searchParams.get("member") || initialMember);
+    setPlanFilter(searchParams.get("plan") || "All");
+    setSortField((searchParams.get("sort") as any) || "currentValue");
+    setSortOrder((searchParams.get("order") as any) || "desc");
   }, [searchParams, initialMember]);
 
   // Debounced search query update in URL
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchParams.get('q') !== searchVal) {
+      if (searchParams.get("q") !== searchVal) {
         updateUrl({ q: searchVal });
       }
     }, 300);
@@ -110,9 +112,9 @@ export default function HoldingsTab({
   };
 
   const handleSort = (field: typeof sortField) => {
-    let nextOrder: 'asc' | 'desc' = 'desc';
+    let nextOrder: "asc" | "desc" = "desc";
     if (sortField === field) {
-      nextOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      nextOrder = sortOrder === "asc" ? "desc" : "asc";
     }
     setSortField(field);
     setSortOrder(nextOrder);
@@ -121,7 +123,7 @@ export default function HoldingsTab({
   const renderSortIcon = (field: typeof sortField) => {
     const isActive = sortField === field;
     if (isActive) {
-      return sortOrder === 'asc' ? (
+      return sortOrder === "asc" ? (
         <ChevronUp size={12} className="inline ml-1 text-teal-400" />
       ) : (
         <ChevronDown size={12} className="inline ml-1 text-teal-400" />
@@ -135,26 +137,27 @@ export default function HoldingsTab({
       const matchSearch =
         h.schemeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         h.folioNo.includes(searchQuery);
-      const matchMember = memberFilter === 'All' || h.memberName === memberFilter;
+      const matchMember =
+        memberFilter === "All" || h.memberName === memberFilter;
 
       // Plan type check: SIF vs standard MF
-      const nameUpper = (h.schemeName || '').toUpperCase();
-      const codeUpper = (h.schemeCodeApi || '').toUpperCase();
-      const isSifPlan = nameUpper.includes('SIF') || codeUpper.includes('SIF');
+      const nameUpper = (h.schemeName || "").toUpperCase();
+      const codeUpper = (h.schemeCodeApi || "").toUpperCase();
+      const isSifPlan = nameUpper.includes("SIF") || codeUpper.includes("SIF");
 
       let matchPlan = true;
-      if (planFilter === 'MF') {
+      if (planFilter === "MF") {
         matchPlan = !isSifPlan;
-      } else if (planFilter === 'SIF') {
+      } else if (planFilter === "SIF") {
         matchPlan = isSifPlan;
       }
 
       return matchSearch && matchMember && matchPlan;
     })
     .sort((a, b) => {
-      let valA = a[sortField];
-      let valB = b[sortField];
-      if (sortOrder === 'asc') {
+      const valA = a[sortField];
+      const valB = b[sortField];
+      if (sortOrder === "asc") {
         return valA > valB ? 1 : -1;
       } else {
         return valA < valB ? 1 : -1;
@@ -180,7 +183,10 @@ export default function HoldingsTab({
             onChange={(e) => setSearchVal(e.target.value)}
             className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
-          <Search className="absolute left-3.5 top-2.5 text-slate-500" size={18} />
+          <Search
+            className="absolute left-3.5 top-2.5 text-slate-500"
+            size={18}
+          />
         </div>
 
         {/* Filter dropdowns */}
@@ -224,34 +230,52 @@ export default function HoldingsTab({
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
                 <th className="p-4">Scheme Details</th>
                 <th className="p-4">Holder</th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('currentValue')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                  onClick={() => handleSort("currentValue")}
+                >
                   <div className="flex items-center gap-1">
-                    Valuation {renderSortIcon('currentValue')}
+                    Valuation {renderSortIcon("currentValue")}
                   </div>
                 </th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('gain')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                  onClick={() => handleSort("gain")}
+                >
                   <div className="flex items-center gap-1">
-                    Profit/Loss {renderSortIcon('gain')}
+                    Profit/Loss {renderSortIcon("gain")}
                   </div>
                 </th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap" onClick={() => handleSort('holdingDays')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap"
+                  onClick={() => handleSort("holdingDays")}
+                >
                   <div className="flex items-center gap-1">
-                    Holding Days {renderSortIcon('holdingDays')}
+                    Holding Days {renderSortIcon("holdingDays")}
                   </div>
                 </th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('cagr')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                  onClick={() => handleSort("cagr")}
+                >
                   <div className="flex items-center gap-1">
-                    CAGR {renderSortIcon('cagr')}
+                    CAGR {renderSortIcon("cagr")}
                   </div>
                 </th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('xirr')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                  onClick={() => handleSort("xirr")}
+                >
                   <div className="flex items-center gap-1">
-                    XIRR {renderSortIcon('xirr')}
+                    XIRR {renderSortIcon("xirr")}
                   </div>
                 </th>
-                <th className="p-4 cursor-pointer hover:text-slate-200 select-none" onClick={() => handleSort('alpha')}>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                  onClick={() => handleSort("alpha")}
+                >
                   <div className="flex items-center gap-1">
-                    Alpha {renderSortIcon('alpha')}
+                    Alpha {renderSortIcon("alpha")}
                   </div>
                 </th>
               </tr>
@@ -271,23 +295,35 @@ export default function HoldingsTab({
                     className="transition cursor-pointer select-none hover:bg-slate-950/45"
                   >
                     <td className="p-4">
-                      <div className="font-bold text-slate-100">{h.schemeName}</div>
+                      <div className="font-bold text-slate-100">
+                        {h.schemeName}
+                      </div>
                       <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                        <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">{h.category}</span>
+                        <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                          {h.category}
+                        </span>
                         <span>• Units: {h.balanceUnits.toFixed(3)}</span>
                         <span>• NAV: ₹{h.currentNav.toFixed(2)}</span>
                       </div>
                     </td>
-                    <td className="p-4 font-medium text-slate-200">{h.memberName}</td>
+                    <td className="p-4 font-medium text-slate-200">
+                      {h.memberName}
+                    </td>
                     <td className="p-4 font-bold text-slate-100">
                       <div>{formatCurrency(h.currentValue)}</div>
-                      <div className="text-[11px] text-slate-500 font-normal">Cost: {formatCurrency(h.purchaseValue)}</div>
+                      <div className="text-[11px] text-slate-500 font-normal">
+                        Cost: {formatCurrency(h.purchaseValue)}
+                      </div>
                     </td>
                     <td className="p-4">
-                      <div className={`font-semibold ${h.gain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <div
+                        className={`font-semibold ${h.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                      >
                         {formatCurrency(h.gain)}
                       </div>
-                      <div className={`text-[11px] ${h.gain >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'}`}>
+                      <div
+                        className={`text-[11px] ${h.gain >= 0 ? "text-emerald-500/80" : "text-red-500/80"}`}
+                      >
                         {h.absoluteReturn.toFixed(1)}% Abs
                       </div>
                     </td>
@@ -295,13 +331,19 @@ export default function HoldingsTab({
                       {h.holdingDays}
                     </td>
                     <td className="p-4">
-                      <div className="font-bold text-slate-200">{formatPercent(h.cagr)}</div>
+                      <div className="font-bold text-slate-200">
+                        {formatPercent(h.cagr)}
+                      </div>
                     </td>
                     <td className="p-4">
-                      <div className="font-bold text-teal-400">{formatPercent(h.xirr)}</div>
+                      <div className="font-bold text-teal-400">
+                        {formatPercent(h.xirr)}
+                      </div>
                     </td>
                     <td className="p-4">
-                      <span className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${h.alpha >= 0 ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/40' : 'bg-red-950/80 text-red-400 border border-red-800/40'}`}>
+                      <span
+                        className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${h.alpha >= 0 ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
+                      >
                         {h.alpha.toFixed(2)}%
                       </span>
                     </td>

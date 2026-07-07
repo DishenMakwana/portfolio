@@ -1,8 +1,15 @@
-import { db } from '../db/db';
-import { reports, familyMembers, schemes, holdingsSnapshot, transactions, sipMandates, memberReportCagrs } from '../db/schema';
-import { eq, asc, desc } from 'drizzle-orm';
-import { autoMapScheme } from './mfApi';
-
+import { db } from "../db/db";
+import {
+  reports,
+  familyMembers,
+  schemes,
+  holdingsSnapshot,
+  transactions,
+  sipMandates,
+  memberReportCagrs,
+} from "../db/schema";
+import { eq, asc, desc } from "drizzle-orm";
+import { autoMapScheme } from "./mfApi";
 
 export interface HoldingDetails {
   id: number;
@@ -35,7 +42,7 @@ function subDays(dateStr: string, days: number): string {
     return dateStr;
   }
   date.setDate(date.getDate() - days);
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 }
 
 /**
@@ -43,11 +50,17 @@ function subDays(dateStr: string, days: number): string {
  */
 export async function deleteReport(reportId: number): Promise<void> {
   // 0. Delete member report CAGRs referencing this report
-  await db.delete(memberReportCagrs).where(eq(memberReportCagrs.reportId, reportId));
+  await db
+    .delete(memberReportCagrs)
+    .where(eq(memberReportCagrs.reportId, reportId));
   // 1. Delete transactions referencing this report
-  await db.delete(transactions).where(eq(transactions.sourceReportId, reportId));
+  await db
+    .delete(transactions)
+    .where(eq(transactions.sourceReportId, reportId));
   // 2. Delete holdings snapshots referencing this report
-  await db.delete(holdingsSnapshot).where(eq(holdingsSnapshot.reportId, reportId));
+  await db
+    .delete(holdingsSnapshot)
+    .where(eq(holdingsSnapshot.reportId, reportId));
   // 3. Delete the report row
   await db.delete(reports).where(eq(reports.id, reportId));
   // 4. Rebuild all transactions to update snapshots diff ledger
@@ -74,12 +87,15 @@ export async function saveReportSnapshot(
   }
 
   // 2. Insert new report metadata
-  const [newReport] = await db.insert(reports).values({
-    asOfDate,
-    uploadedAt: new Date().toISOString(),
-    filename,
-    cagr: familyCagr || null,
-  }).returning();
+  const [newReport] = await db
+    .insert(reports)
+    .values({
+      asOfDate,
+      uploadedAt: new Date().toISOString(),
+      filename,
+      cagr: familyCagr || null,
+    })
+    .returning();
 
   // 3. Process family members, schemes and snapshots
   for (const item of parsedHoldings) {
@@ -89,10 +105,13 @@ export async function saveReportSnapshot(
     });
 
     if (!member) {
-      const [inserted] = await db.insert(familyMembers).values({
-        name: item.memberName,
-        pan: item.memberPan || null,
-      }).returning();
+      const [inserted] = await db
+        .insert(familyMembers)
+        .values({
+          name: item.memberName,
+          pan: item.memberPan || null,
+        })
+        .returning();
       member = inserted;
     }
 
@@ -104,12 +123,15 @@ export async function saveReportSnapshot(
     if (!scheme) {
       // Perform auto mapping
       const apiMapping = await autoMapScheme(item.schemeName);
-      const [inserted] = await db.insert(schemes).values({
-        name: item.schemeName,
-        category: item.category,
-        schemeCodeApi: apiMapping ? apiMapping.schemeCode : null,
-        mappedAt: apiMapping ? new Date().toISOString() : null,
-      }).returning();
+      const [inserted] = await db
+        .insert(schemes)
+        .values({
+          name: item.schemeName,
+          category: item.category,
+          schemeCodeApi: apiMapping ? apiMapping.schemeCode : null,
+          mappedAt: apiMapping ? new Date().toISOString() : null,
+        })
+        .returning();
       scheme = inserted;
     }
 
@@ -140,9 +162,12 @@ export async function saveReportSnapshot(
         where: eq(familyMembers.name, mc.memberName),
       });
       if (!member) {
-        const [inserted] = await db.insert(familyMembers).values({
-          name: mc.memberName,
-        }).returning();
+        const [inserted] = await db
+          .insert(familyMembers)
+          .values({
+            name: mc.memberName,
+          })
+          .returning();
         member = inserted;
       }
       await db.insert(memberReportCagrs).values({
@@ -182,12 +207,15 @@ export async function rebuildAllTransactions(): Promise<void> {
     if (rIndex === 0) {
       // First Report: Reconstruct initial buys from holdingDays
       for (const holding of currentHoldings) {
-        const purchaseDate = subDays(currentReport.asOfDate, holding.holdingDays);
+        const purchaseDate = subDays(
+          currentReport.asOfDate,
+          holding.holdingDays
+        );
         await db.insert(transactions).values({
           memberId: holding.memberId,
           schemeId: holding.schemeId,
           date: purchaseDate,
-          type: 'BUY',
+          type: "BUY",
           units: holding.balanceUnits,
           nav: holding.purchaseNav,
           amount: holding.purchaseValue,
@@ -222,15 +250,17 @@ export async function rebuildAllTransactions(): Promise<void> {
 
           if (diffUnits > 0.001) {
             // Units increased (SIP / Lumpsum Buy)
-            const diffAmount = holding.purchaseValue - prevHolding.purchaseValue;
-            const amount = diffAmount > 0 ? diffAmount : (diffUnits * holding.purchaseNav);
+            const diffAmount =
+              holding.purchaseValue - prevHolding.purchaseValue;
+            const amount =
+              diffAmount > 0 ? diffAmount : diffUnits * holding.purchaseNav;
             const nav = amount / diffUnits;
 
             await db.insert(transactions).values({
               memberId: holding.memberId,
               schemeId: holding.schemeId,
               date: currentReport.asOfDate,
-              type: 'BUY',
+              type: "BUY",
               units: diffUnits,
               nav,
               amount,
@@ -245,7 +275,7 @@ export async function rebuildAllTransactions(): Promise<void> {
               memberId: holding.memberId,
               schemeId: holding.schemeId,
               date: currentReport.asOfDate,
-              type: 'SELL',
+              type: "SELL",
               units: unitsSold,
               nav: holding.currentNav,
               amount,
@@ -254,12 +284,15 @@ export async function rebuildAllTransactions(): Promise<void> {
           }
         } else {
           // New Scheme / Folio added in this report snapshot
-          const purchaseDate = subDays(currentReport.asOfDate, holding.holdingDays);
+          const purchaseDate = subDays(
+            currentReport.asOfDate,
+            holding.holdingDays
+          );
           await db.insert(transactions).values({
             memberId: holding.memberId,
             schemeId: holding.schemeId,
             date: purchaseDate,
-            type: 'BUY',
+            type: "BUY",
             units: holding.balanceUnits,
             nav: holding.purchaseNav,
             amount: holding.purchaseValue,
@@ -278,7 +311,7 @@ export async function rebuildAllTransactions(): Promise<void> {
             memberId: prevHolding.memberId,
             schemeId: prevHolding.schemeId,
             date: currentReport.asOfDate,
-            type: 'SELL',
+            type: "SELL",
             units: prevHolding.balanceUnits,
             nav: prevHolding.currentNav,
             amount,
@@ -302,32 +335,35 @@ export async function getReports() {
 /**
  * Get detailed holdings snapshot for a specific report
  */
-export async function getReportHoldings(reportId: number): Promise<HoldingDetails[]> {
-  const snapshots = await db.select({
-    id: holdingsSnapshot.id,
-    schemeId: holdingsSnapshot.schemeId,
-    memberId: holdingsSnapshot.memberId,
-    schemeName: schemes.name,
-    category: schemes.category,
-    schemeCodeApi: schemes.schemeCodeApi,
-    folioNo: holdingsSnapshot.folioNo,
-    balanceUnits: holdingsSnapshot.balanceUnits,
-    purchaseNav: holdingsSnapshot.purchaseNav,
-    purchaseValue: holdingsSnapshot.purchaseValue,
-    currentNav: holdingsSnapshot.currentNav,
-    currentValue: holdingsSnapshot.currentValue,
-    gain: holdingsSnapshot.gain,
-    holdingDays: holdingsSnapshot.holdingDays,
-    absoluteReturn: holdingsSnapshot.absoluteReturn,
-    cagr: holdingsSnapshot.cagr,
-    comments: holdingsSnapshot.comments,
-    memberName: familyMembers.name,
-    memberPan: familyMembers.pan,
-  })
-  .from(holdingsSnapshot)
-  .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
-  .leftJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
-  .where(eq(holdingsSnapshot.reportId, reportId));
+export async function getReportHoldings(
+  reportId: number
+): Promise<HoldingDetails[]> {
+  const snapshots = await db
+    .select({
+      id: holdingsSnapshot.id,
+      schemeId: holdingsSnapshot.schemeId,
+      memberId: holdingsSnapshot.memberId,
+      schemeName: schemes.name,
+      category: schemes.category,
+      schemeCodeApi: schemes.schemeCodeApi,
+      folioNo: holdingsSnapshot.folioNo,
+      balanceUnits: holdingsSnapshot.balanceUnits,
+      purchaseNav: holdingsSnapshot.purchaseNav,
+      purchaseValue: holdingsSnapshot.purchaseValue,
+      currentNav: holdingsSnapshot.currentNav,
+      currentValue: holdingsSnapshot.currentValue,
+      gain: holdingsSnapshot.gain,
+      holdingDays: holdingsSnapshot.holdingDays,
+      absoluteReturn: holdingsSnapshot.absoluteReturn,
+      cagr: holdingsSnapshot.cagr,
+      comments: holdingsSnapshot.comments,
+      memberName: familyMembers.name,
+      memberPan: familyMembers.pan,
+    })
+    .from(holdingsSnapshot)
+    .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
+    .leftJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
+    .where(eq(holdingsSnapshot.reportId, reportId));
 
   return snapshots as HoldingDetails[];
 }
@@ -353,14 +389,18 @@ export async function getSchemes() {
 /**
  * Update scheme API code mapping
  */
-export async function updateSchemeCode(schemeId: number, code: string | null): Promise<void> {
-  await db.update(schemes)
+export async function updateSchemeCode(
+  schemeId: number,
+  code: string | null
+): Promise<void> {
+  await db
+    .update(schemes)
     .set({
       schemeCodeApi: code,
       mappedAt: code ? new Date().toISOString() : null,
     })
     .where(eq(schemes.id, schemeId));
-  
+
   // Re-run transaction rebuild to ensure historical data has fresh maps
   await rebuildAllTransactions();
 }
@@ -413,7 +453,8 @@ export async function saveSipMandates(
       where: eq(familyMembers.name, sip.investorName),
     });
     if (!member) {
-      const [m] = await db.insert(familyMembers)
+      const [m] = await db
+        .insert(familyMembers)
         .values({ name: sip.investorName })
         .returning();
       member = m;
@@ -424,8 +465,9 @@ export async function saveSipMandates(
       where: eq(schemes.name, sip.schemeName),
     });
     if (!scheme) {
-      const [s] = await db.insert(schemes)
-        .values({ name: sip.schemeName, category: 'Equity' })
+      const [s] = await db
+        .insert(schemes)
+        .values({ name: sip.schemeName, category: "Equity" })
         .returning();
       scheme = s;
     }
@@ -477,12 +519,12 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
     .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id))
     .orderBy(asc(familyMembers.name), asc(schemes.name));
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     memberId: r.memberId!,
-    memberName: r.memberName || 'Unknown',
+    memberName: r.memberName || "Unknown",
     schemeId: r.schemeId!,
-    schemeName: r.schemeName || 'Unknown',
+    schemeName: r.schemeName || "Unknown",
     folioNo: r.folioNo,
     monthlyAmount: r.monthlyAmount,
     monthlyHistory: r.monthlyHistory ? JSON.parse(r.monthlyHistory) : {},
@@ -499,4 +541,3 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
 export async function clearSipMandates(): Promise<void> {
   await db.delete(sipMandates);
 }
-

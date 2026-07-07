@@ -1,10 +1,10 @@
-import { getDashboardDataAction } from '@/app/actions';
-import { getSchemes } from '@/lib/portfolioService';
-import HeaderClient from '@/components/HeaderClient';
-import AllocationClient from '@/components/AllocationClient';
+import { getDashboardDataAction } from "@/app/actions";
+import { getSchemes } from "@/lib/portfolioService";
+import HeaderClient from "@/components/HeaderClient";
+import AllocationClient from "@/components/AllocationClient";
 
-export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Asset Allocation — Family Portfolio' };
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Asset Allocation — Family Portfolio" };
 
 interface PageProps {
   searchParams: Promise<{ reportId?: string }>;
@@ -19,7 +19,7 @@ export default async function AllocationPage({ searchParams }: PageProps) {
     getSchemes(),
   ]);
 
-  const unmappedCount = allSchemes.filter(s => !s.schemeCodeApi).length;
+  const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
 
   return (
     <>

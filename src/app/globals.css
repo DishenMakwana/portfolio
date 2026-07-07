@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617; /* slate-950 */
+  --background: #121212; /* Soft Dark Charcoal Gray */
   --foreground: #f8fafc; /* slate-50 */
 }
 
@@ -10,6 +10,32 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Redefine slate palette to soft neutral charcoal grays */
+  --color-slate-50: #f9f9f9;
+  --color-slate-100: #f0f0f0;
+  --color-slate-200: #e5e5e5;
+  --color-slate-300: #d0d0d0;
+  --color-slate-400: #a8a8a8;
+  --color-slate-500: #787878;
+  --color-slate-600: #505050;
+  --color-slate-700: #383838;
+  --color-slate-800: #282828; /* Soft charcoal border */
+  --color-slate-900: #1c1c1c; /* Soft Charcoal Card surface */
+  --color-slate-950: #121212; /* Soft Charcoal Background */
+
+  /* Redefine teal palette to high-vibrancy Neon Emerald/Mint Green */
+  --color-teal-50: #e6fcf5;
+  --color-teal-100: #c3fae8;
+  --color-teal-200: #96f2d7;
+  --color-teal-300: #63e6be;
+  --color-teal-400: #34d399; /* Mint highlight */
+  --color-teal-500: #10b981; /* Neon Emerald brand accent */
+  --color-teal-600: #059669; /* Hover Emerald */
+  --color-teal-700: #047857;
+  --color-teal-800: #065f46;
+  --color-teal-900: #064e3b;
+  --color-teal-950: #022c22;
 }
 
 body {

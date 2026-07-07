@@ -1,7 +1,7 @@
 "use server";
 
-import { revalidatePath } from 'next/cache';
-import { parsePortfolioExcel } from '@/lib/parser';
+import { revalidatePath } from "next/cache";
+import { parsePortfolioExcel } from "@/lib/parser";
 import {
   saveReportSnapshot,
   getReports,
@@ -11,30 +11,36 @@ import {
   getSipMandates,
   saveSipMandates,
   clearSipMandates,
-  HoldingDetails
-} from '@/lib/portfolioService';
-import { calculateAlpha, PortfolioTransaction } from '@/lib/alpha';
-import { searchMutualFund } from '@/lib/mfApi';
-import { db } from '@/db/db';
-import { transactions as txTable, reports, memberReportCagrs } from '@/db/schema';
-import { eq, lte, and } from 'drizzle-orm';
-
+  HoldingDetails,
+} from "@/lib/portfolioService";
+import { calculateAlpha, PortfolioTransaction } from "@/lib/alpha";
+import { searchMutualFund } from "@/lib/mfApi";
+import { db } from "@/db/db";
+import {
+  transactions as txTable,
+  reports,
+  memberReportCagrs,
+} from "@/db/schema";
+import { eq, lte, and } from "drizzle-orm";
 
 /**
  * Upload and parse Excel report
  */
 export async function uploadReportAction(formData: FormData) {
   try {
-    const file = formData.get('file') as File;
+    const file = formData.get("file") as File;
     if (!file) {
-      return { success: false, error: 'No file uploaded' };
+      return { success: false, error: "No file uploaded" };
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = parsePortfolioExcel(buffer);
 
     if (parsed.holdings.length === 0) {
-      return { success: false, error: 'No valid holdings found in sheet "1. Mutual Fund"' };
+      return {
+        success: false,
+        error: 'No valid holdings found in sheet "1. Mutual Fund"',
+      };
     }
 
     // Check if snapshot with this date already exists to prevent duplicate uploads
@@ -43,14 +49,17 @@ export async function uploadReportAction(formData: FormData) {
     });
 
     if (existing) {
-      const formattedDate = new Date(parsed.asOfDate).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
+      const formattedDate = new Date(parsed.asOfDate).toLocaleDateString(
+        "en-IN",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }
+      );
       return {
         success: false,
-        error: `Snapshot for ${formattedDate} already exists. Delete the existing snapshot first if you want to replace it.`
+        error: `Snapshot for ${formattedDate} already exists. Delete the existing snapshot first if you want to replace it.`,
       };
     }
 
@@ -61,12 +70,12 @@ export async function uploadReportAction(formData: FormData) {
       parsed.familyCagr,
       parsed.memberCagrs
     );
-    
-    revalidatePath('/');
+
+    revalidatePath("/");
     return { success: true, reportId };
   } catch (error: any) {
-    console.error('Upload Action Error:', error);
-    return { success: false, error: error.message || 'Failed to parse file' };
+    console.error("Upload Action Error:", error);
+    return { success: false, error: error.message || "Failed to parse file" };
   }
 }
 
@@ -75,13 +84,16 @@ export async function uploadReportAction(formData: FormData) {
  */
 export async function deleteReportAction(reportId: number) {
   try {
-    const { deleteReport } = await import('@/lib/portfolioService');
+    const { deleteReport } = await import("@/lib/portfolioService");
     await deleteReport(reportId);
-    revalidatePath('/');
+    revalidatePath("/");
     return { success: true };
   } catch (error: any) {
-    console.error('Delete Action Error:', error);
-    return { success: false, error: error.message || 'Failed to delete report' };
+    console.error("Delete Action Error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to delete report",
+    };
   }
 }
 
@@ -95,10 +107,13 @@ export async function searchMfApiAction(query: string) {
 /**
  * Update scheme API code mapping
  */
-export async function updateSchemeMappingAction(schemeId: number, code: string | null) {
+export async function updateSchemeMappingAction(
+  schemeId: number,
+  code: string | null
+) {
   try {
     await updateSchemeCode(schemeId, code);
-    revalidatePath('/');
+    revalidatePath("/");
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -108,7 +123,8 @@ export async function updateSchemeMappingAction(schemeId: number, code: string |
 export interface AutoMapResult {
   schemeId: number;
   schemeName: string;
-  status: 'mapped' | 'low_confidence' | 'not_found' | 'already_mapped' | 'api_error';
+  status:
+    "mapped" | "low_confidence" | "not_found" | "already_mapped" | "api_error";
   schemeCode: string | null;
   confidence: number | null;
   topMatches: { schemeCode: number; schemeName: string }[];
@@ -121,11 +137,11 @@ export interface AutoMapResult {
 export async function autoMapAllSchemesAction(
   onlyUnmapped: boolean = true
 ): Promise<{ results: AutoMapResult[]; savedCount: number }> {
-  const { autoMapScheme, searchMutualFund } = await import('@/lib/mfApi');
+  const { autoMapScheme, searchMutualFund } = await import("@/lib/mfApi");
   const allSchemes = await getSchemes();
 
   const targets = onlyUnmapped
-    ? allSchemes.filter(s => !s.schemeCodeApi)
+    ? allSchemes.filter((s) => !s.schemeCodeApi)
     : allSchemes;
 
   const results: AutoMapResult[] = [];
@@ -137,7 +153,7 @@ export async function autoMapAllSchemesAction(
       results.push({
         schemeId: scheme.id,
         schemeName: scheme.name,
-        status: 'already_mapped',
+        status: "already_mapped",
         schemeCode: scheme.schemeCodeApi,
         confidence: null,
         topMatches: [],
@@ -148,11 +164,11 @@ export async function autoMapAllSchemesAction(
     try {
       // Build a clean search query from the scheme name
       const cleanName = scheme.name
-        .replace(/Reg(?:ular)?/gi, '')
-        .replace(/\(G\)/g, 'Growth')
-        .replace(/Growth/gi, '')
-        .replace(/-+/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/Reg(?:ular)?/gi, "")
+        .replace(/\(G\)/g, "Growth")
+        .replace(/Growth/gi, "")
+        .replace(/-+/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
 
       const searchQuery = cleanName.slice(0, 35);
@@ -162,7 +178,7 @@ export async function autoMapAllSchemesAction(
         results.push({
           schemeId: scheme.id,
           schemeName: scheme.name,
-          status: 'not_found',
+          status: "not_found",
           schemeCode: null,
           confidence: null,
           topMatches: [],
@@ -172,7 +188,7 @@ export async function autoMapAllSchemesAction(
 
       const mapped = await autoMapScheme(scheme.name);
 
-      const topMatches = searchResults.slice(0, 5).map(r => ({
+      const topMatches = searchResults.slice(0, 5).map((r) => ({
         schemeCode: r.schemeCode,
         schemeName: r.schemeName,
       }));
@@ -181,7 +197,7 @@ export async function autoMapAllSchemesAction(
         results.push({
           schemeId: scheme.id,
           schemeName: scheme.name,
-          status: 'not_found',
+          status: "not_found",
           schemeCode: null,
           confidence: null,
           topMatches,
@@ -197,7 +213,7 @@ export async function autoMapAllSchemesAction(
         results.push({
           schemeId: scheme.id,
           schemeName: scheme.name,
-          status: 'mapped',
+          status: "mapped",
           schemeCode: mapped.schemeCode,
           confidence: confidencePct,
           topMatches,
@@ -207,7 +223,7 @@ export async function autoMapAllSchemesAction(
         results.push({
           schemeId: scheme.id,
           schemeName: scheme.name,
-          status: 'low_confidence',
+          status: "low_confidence",
           schemeCode: mapped.schemeCode,
           confidence: confidencePct,
           topMatches,
@@ -217,7 +233,7 @@ export async function autoMapAllSchemesAction(
       results.push({
         schemeId: scheme.id,
         schemeName: scheme.name,
-        status: 'api_error',
+        status: "api_error",
         schemeCode: null,
         confidence: null,
         topMatches: [],
@@ -226,12 +242,11 @@ export async function autoMapAllSchemesAction(
   }
 
   if (savedCount > 0) {
-    revalidatePath('/');
+    revalidatePath("/");
   }
 
   return { results, savedCount };
 }
-
 
 export interface DashboardData {
   reportsList: any[];
@@ -284,52 +299,75 @@ export interface DashboardData {
 /**
  * Fetch and calculate all dashboard metrics
  */
-export async function getDashboardDataAction(reportId?: number): Promise<DashboardData> {
+export async function getDashboardDataAction(
+  reportId?: number
+): Promise<DashboardData> {
   const reportsList = await getReports();
   if (reportsList.length === 0) {
     return {
       reportsList: [],
       selectedReport: null,
-      totals: { invested: 0, currentValue: 0, gain: 0, absoluteReturn: 0, portfolioXirr: 0, benchmarkXirr: 0, alpha: 0, cagr: 0 },
+      totals: {
+        invested: 0,
+        currentValue: 0,
+        gain: 0,
+        absoluteReturn: 0,
+        portfolioXirr: 0,
+        benchmarkXirr: 0,
+        alpha: 0,
+        cagr: 0,
+      },
       memberSummaries: [],
       holdings: [],
       categoryAllocation: [],
       capAllocation: [],
       amcAllocation: [],
-      metricDeltas: { previousDate: null, portfolioXirr: null, benchmarkXirr: null, alpha: null, cagr: null },
+      metricDeltas: {
+        previousDate: null,
+        portfolioXirr: null,
+        benchmarkXirr: null,
+        alpha: null,
+        cagr: null,
+      },
       timelineData: [],
     };
   }
 
   // Sort reports oldest to newest for previous-snapshot comparisons and timeline charts.
-  const chronologicalReports = [...reportsList].sort((a, b) => new Date(a.asOfDate).getTime() - new Date(b.asOfDate).getTime());
+  const chronologicalReports = [...reportsList].sort(
+    (a, b) => new Date(a.asOfDate).getTime() - new Date(b.asOfDate).getTime()
+  );
 
   // Find selected report or use latest
-  const selectedReport = reportId 
-    ? reportsList.find(r => r.id === reportId) || reportsList[0] 
+  const selectedReport = reportId
+    ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
-  const selectedReportIndex = chronologicalReports.findIndex(r => r.id === selectedReport.id);
-  const previousReport = selectedReportIndex > 0 ? chronologicalReports[selectedReportIndex - 1] : null;
+  const selectedReportIndex = chronologicalReports.findIndex(
+    (r) => r.id === selectedReport.id
+  );
+  const previousReport =
+    selectedReportIndex > 0
+      ? chronologicalReports[selectedReportIndex - 1]
+      : null;
 
   const holdings = await getReportHoldings(selectedReport.id);
 
   // 1. Fetch transactions up to report date
-  const txHistory = await db.select()
+  const txHistory = await db
+    .select()
     .from(txTable)
     .where(lte(txTable.date, selectedReport.asOfDate));
 
-
-
   // Re-map transactions to format needed for Alpha calculation
-  const getPortfolioTransactions = (filterFn?: (tx: any) => boolean): PortfolioTransaction[] => {
-    return txHistory
-      .filter(filterFn || (() => true))
-      .map(tx => ({
-        date: tx.date,
-        type: tx.type as 'BUY' | 'SELL',
-        amount: tx.amount,
-        units: tx.units,
-      }));
+  const getPortfolioTransactions = (
+    filterFn?: (tx: any) => boolean
+  ): PortfolioTransaction[] => {
+    return txHistory.filter(filterFn || (() => true)).map((tx) => ({
+      date: tx.date,
+      type: tx.type as "BUY" | "SELL",
+      amount: tx.amount,
+      units: tx.units,
+    }));
   };
 
   // Calculate Overall Portfolio Metrics
@@ -343,32 +381,55 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
     overallValuation
   );
 
-  const currentCagr = selectedReport.cagr !== undefined && selectedReport.cagr !== null
-    ? selectedReport.cagr
-    : (holdings.length > 0
-        ? holdings.reduce((acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0), 0) / (overallInvested || 1)
-        : 0);
+  const currentCagr =
+    selectedReport.cagr !== undefined && selectedReport.cagr !== null
+      ? selectedReport.cagr
+      : holdings.length > 0
+        ? holdings.reduce(
+            (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
+            0
+          ) / (overallInvested || 1)
+        : 0;
 
-  let metricDeltas: DashboardData['metricDeltas'] = {
+  let metricDeltas: DashboardData["metricDeltas"] = {
     previousDate: previousReport?.asOfDate || null,
     portfolioXirr: null,
     benchmarkXirr: null,
     alpha: null,
     cagr: null,
   };
-  const previousMemberMetrics = new Map<string, { xirr: number; cagr: number; alpha: number }>();
+  const previousMemberMetrics = new Map<
+    string,
+    { xirr: number; cagr: number; alpha: number }
+  >();
 
   if (previousReport) {
     const previousHoldings = await getReportHoldings(previousReport.id);
-    const previousValuation = previousHoldings.reduce((acc, h) => acc + h.currentValue, 0);
-    const previousInvested = previousHoldings.reduce((acc, h) => acc + h.purchaseValue, 0);
-    const previousTxs = getPortfolioTransactions(tx => tx.date <= previousReport.asOfDate);
-    const previousAlphaMetrics = await calculateAlpha(previousTxs, previousReport.asOfDate, previousValuation);
-    const previousCagr = previousReport.cagr !== undefined && previousReport.cagr !== null
-      ? previousReport.cagr
-      : (previousHoldings.length > 0
-          ? previousHoldings.reduce((acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0), 0) / (previousInvested || 1)
-          : 0);
+    const previousValuation = previousHoldings.reduce(
+      (acc, h) => acc + h.currentValue,
+      0
+    );
+    const previousInvested = previousHoldings.reduce(
+      (acc, h) => acc + h.purchaseValue,
+      0
+    );
+    const previousTxs = getPortfolioTransactions(
+      (tx) => tx.date <= previousReport.asOfDate
+    );
+    const previousAlphaMetrics = await calculateAlpha(
+      previousTxs,
+      previousReport.asOfDate,
+      previousValuation
+    );
+    const previousCagr =
+      previousReport.cagr !== undefined && previousReport.cagr !== null
+        ? previousReport.cagr
+        : previousHoldings.length > 0
+          ? previousHoldings.reduce(
+              (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
+              0
+            ) / (previousInvested || 1)
+          : 0;
 
     metricDeltas = {
       previousDate: previousReport.asOfDate,
@@ -378,30 +439,52 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
       cagr: currentCagr - previousCagr,
     };
 
-    const previousMembers = Array.from(new Set(previousHoldings.map(h => h.memberName)));
+    const previousMembers = Array.from(
+      new Set(previousHoldings.map((h) => h.memberName))
+    );
     for (const name of previousMembers) {
-      const memberHoldings = previousHoldings.filter(h => h.memberName === name);
-      const invested = memberHoldings.reduce((acc, h) => acc + h.purchaseValue, 0);
-      const currentValue = memberHoldings.reduce((acc, h) => acc + h.currentValue, 0);
-      const storedMemberCagr = memberHoldings.length > 0
-        ? await db.query.memberReportCagrs.findFirst({
-            where: and(
-              eq(memberReportCagrs.reportId, previousReport.id),
-              eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
-            )
-          })
-        : null;
+      const memberHoldings = previousHoldings.filter(
+        (h) => h.memberName === name
+      );
+      const invested = memberHoldings.reduce(
+        (acc, h) => acc + h.purchaseValue,
+        0
+      );
+      const currentValue = memberHoldings.reduce(
+        (acc, h) => acc + h.currentValue,
+        0
+      );
+      const storedMemberCagr =
+        memberHoldings.length > 0
+          ? await db.query.memberReportCagrs.findFirst({
+              where: and(
+                eq(memberReportCagrs.reportId, previousReport.id),
+                eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
+              ),
+            })
+          : null;
       const cagr = storedMemberCagr
         ? storedMemberCagr.cagr
-        : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) / (invested || 1);
-      const memberTxs = getPortfolioTransactions(tx => {
-        const dbHolding = memberHoldings.find(h => h.schemeId === tx.schemeId);
-        return !!dbHolding && tx.memberId === dbHolding.memberId && tx.date <= previousReport.asOfDate;
+        : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) /
+          (invested || 1);
+      const memberTxs = getPortfolioTransactions((tx) => {
+        const dbHolding = memberHoldings.find(
+          (h) => h.schemeId === tx.schemeId
+        );
+        return (
+          !!dbHolding &&
+          tx.memberId === dbHolding.memberId &&
+          tx.date <= previousReport.asOfDate
+        );
       });
       let xirr = cagr;
       let alpha = 0;
       if (memberTxs.length >= 1) {
-        const metrics = await calculateAlpha(memberTxs, previousReport.asOfDate, currentValue);
+        const metrics = await calculateAlpha(
+          memberTxs,
+          previousReport.asOfDate,
+          currentValue
+        );
         xirr = metrics.portfolioXirr;
         alpha = metrics.alpha;
       }
@@ -411,40 +494,51 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
   }
 
   // 2. Calculate Family Member Summaries
-  const members = Array.from(new Set(holdings.map(h => h.memberName)));
+  const members = Array.from(new Set(holdings.map((h) => h.memberName)));
   const memberSummaries = [];
 
   for (const name of members) {
-    const memberHoldings = holdings.filter(h => h.memberName === name);
-    const invested = memberHoldings.reduce((acc, h) => acc + h.purchaseValue, 0);
-    const currentValue = memberHoldings.reduce((acc, h) => acc + h.currentValue, 0);
+    const memberHoldings = holdings.filter((h) => h.memberName === name);
+    const invested = memberHoldings.reduce(
+      (acc, h) => acc + h.purchaseValue,
+      0
+    );
+    const currentValue = memberHoldings.reduce(
+      (acc, h) => acc + h.currentValue,
+      0
+    );
     const gain = currentValue - invested;
 
-    
     // Fetch stored member CAGR if available, otherwise fall back to weighted CAGR
-    const storedMemberCagr = memberHoldings.length > 0
-      ? await db.query.memberReportCagrs.findFirst({
-          where: and(
-            eq(memberReportCagrs.reportId, selectedReport.id),
-            eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
-          )
-        })
-      : null;
+    const storedMemberCagr =
+      memberHoldings.length > 0
+        ? await db.query.memberReportCagrs.findFirst({
+            where: and(
+              eq(memberReportCagrs.reportId, selectedReport.id),
+              eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
+            ),
+          })
+        : null;
 
     const cagr = storedMemberCagr
       ? storedMemberCagr.cagr
-      : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) / (invested || 1);
+      : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) /
+        (invested || 1);
 
     // Calculate Member XIRR
-    const memberTxs = getPortfolioTransactions(tx => {
-      const dbHolding = memberHoldings.find(h => h.schemeId === tx.schemeId);
+    const memberTxs = getPortfolioTransactions((tx) => {
+      const dbHolding = memberHoldings.find((h) => h.schemeId === tx.schemeId);
       return !!dbHolding && tx.memberId === dbHolding.memberId;
     });
 
     let mXirr = cagr;
     let mAlpha = 0;
     if (memberTxs.length >= 1) {
-      const memberMetrics = await calculateAlpha(memberTxs, selectedReport.asOfDate, currentValue);
+      const memberMetrics = await calculateAlpha(
+        memberTxs,
+        selectedReport.asOfDate,
+        currentValue
+      );
       mXirr = memberMetrics.portfolioXirr;
       mAlpha = memberMetrics.alpha;
     }
@@ -470,11 +564,13 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
   // 3. Scheme level XIRR
   const detailedHoldings = [];
   for (const h of holdings) {
-    const schemeTxs = getPortfolioTransactions(tx => tx.schemeId === h.schemeId && tx.memberId === h.memberId);
-    
+    const schemeTxs = getPortfolioTransactions(
+      (tx) => tx.schemeId === h.schemeId && tx.memberId === h.memberId
+    );
+
     let schemeXirr = h.cagr;
     let schemeAlpha = 0;
-    
+
     if (schemeTxs.length >= 1) {
       const metrics = await calculateAlpha(
         schemeTxs,
@@ -499,63 +595,113 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
 
   const getSubCategory = (name: string, category: string): string => {
     const n = name.toLowerCase();
-    const cat = (category || '').toLowerCase();
-    if (cat.includes('debt') || n.includes('debt') || n.includes('bond') || n.includes('liquid') || n.includes('gilt') || n.includes('overnight') || n.includes('credit risk')) return 'Debt';
-    if (n.includes('multi asset') || n.includes('multi-asset')) return 'Hybrid: Multi Asset';
-    if (n.includes('balanced advantage') || n.includes('dynamic asset')) return 'Hybrid: Balanced Advantage';
-    if (n.includes('aggressive hybrid') || n.includes('equity & debt')) return 'Hybrid: Aggressive';
-    if (n.includes('hybrid') || n.includes('conservative hybrid')) return 'Hybrid';
-    if (n.includes('long short') || n.includes('long-short')) return cat.includes('equity') ? 'SIF: Equity LS' : 'SIF: Hybrid LS';
-    if (n.includes('flexi cap') || n.includes('flexicap')) return 'Equity: Flexi Cap';
-    if (n.includes('large & mid') || n.includes('large and mid') || n.includes('large & mid cap')) return 'Equity: Large & Mid Cap';
-    if (n.includes('multi cap') || n.includes('multicap')) return 'Equity: Multi Cap';
-    if (n.includes('mid small') || n.includes('mid & small')) return 'Equity: Mid Small Cap';
-    if (n.includes('mid cap') || n.includes('midcap')) return 'Equity: Mid Cap';
-    if (n.includes('small cap') || n.includes('smallcap')) return 'Equity: Small Cap';
-    if (n.includes('large cap') || n.includes('largecap') || n.includes('bluechip')) return 'Equity: Large Cap';
-    if (n.includes('focused')) return 'Equity: Focused';
-    if (n.includes('elss') || n.includes('tax saver') || n.includes('tax saving')) return 'Equity: ELSS';
-    if (n.includes('thematic') || n.includes('opportunities') || n.includes('india opp')) return 'Equity: Thematic';
-    if (n.includes('sectoral') || n.includes('sector')) return 'Equity: Sectoral';
-    if (n.includes('gold') || n.includes('precious')) return 'Gold';
-    if (n.includes('international') || n.includes('global') || n.includes('nasdaq') || n.includes('us ')) return 'Global Equity';
-    if (cat.includes('equity') || n.includes('equity')) return 'Equity';
-    return 'Other';
+    const cat = (category || "").toLowerCase();
+    if (
+      cat.includes("debt") ||
+      n.includes("debt") ||
+      n.includes("bond") ||
+      n.includes("liquid") ||
+      n.includes("gilt") ||
+      n.includes("overnight") ||
+      n.includes("credit risk")
+    )
+      return "Debt";
+    if (n.includes("multi asset") || n.includes("multi-asset"))
+      return "Hybrid: Multi Asset";
+    if (n.includes("balanced advantage") || n.includes("dynamic asset"))
+      return "Hybrid: Balanced Advantage";
+    if (n.includes("aggressive hybrid") || n.includes("equity & debt"))
+      return "Hybrid: Aggressive";
+    if (n.includes("hybrid") || n.includes("conservative hybrid"))
+      return "Hybrid";
+    if (n.includes("long short") || n.includes("long-short"))
+      return cat.includes("equity") ? "SIF: Equity LS" : "SIF: Hybrid LS";
+    if (n.includes("flexi cap") || n.includes("flexicap"))
+      return "Equity: Flexi Cap";
+    if (
+      n.includes("large & mid") ||
+      n.includes("large and mid") ||
+      n.includes("large & mid cap")
+    )
+      return "Equity: Large & Mid Cap";
+    if (n.includes("multi cap") || n.includes("multicap"))
+      return "Equity: Multi Cap";
+    if (n.includes("mid small") || n.includes("mid & small"))
+      return "Equity: Mid Small Cap";
+    if (n.includes("mid cap") || n.includes("midcap")) return "Equity: Mid Cap";
+    if (n.includes("small cap") || n.includes("smallcap"))
+      return "Equity: Small Cap";
+    if (
+      n.includes("large cap") ||
+      n.includes("largecap") ||
+      n.includes("bluechip")
+    )
+      return "Equity: Large Cap";
+    if (n.includes("focused")) return "Equity: Focused";
+    if (
+      n.includes("elss") ||
+      n.includes("tax saver") ||
+      n.includes("tax saving")
+    )
+      return "Equity: ELSS";
+    if (
+      n.includes("thematic") ||
+      n.includes("opportunities") ||
+      n.includes("india opp")
+    )
+      return "Equity: Thematic";
+    if (n.includes("sectoral") || n.includes("sector"))
+      return "Equity: Sectoral";
+    if (n.includes("gold") || n.includes("precious")) return "Gold";
+    if (
+      n.includes("international") ||
+      n.includes("global") ||
+      n.includes("nasdaq") ||
+      n.includes("us ")
+    )
+      return "Global Equity";
+    if (cat.includes("equity") || n.includes("equity")) return "Equity";
+    return "Other";
   };
 
   const getAmcName = (name: string): string => {
     const n = name.trim();
-    if (/^aditya birla/i.test(n)) return 'Aditya Birla Sun Life Mutual Fund';
-    if (/^axis/i.test(n)) return 'Axis Mutual Fund';
-    if (/^bajaj/i.test(n)) return 'Bajaj Finserv Mutual Fund';
-    if (/^bandhan/i.test(n)) return 'Bandhan Mutual Fund';
-    if (/^canara/i.test(n)) return 'Canara Robeco Mutual Fund';
-    if (/^dsp/i.test(n)) return 'DSP Mutual Fund';
-    if (/^edelweiss/i.test(n)) return 'Edelweiss Mutual Fund';
-    if (/^franklin/i.test(n)) return 'Franklin Templeton Mutual Fund';
-    if (/^hdfc/i.test(n)) return 'HDFC Mutual Fund';
-    if (/^hsbc/i.test(n)) return 'HSBC Mutual Fund';
-    if (/^icici pru/i.test(n)) return 'ICICI Prudential Mutual Fund';
-    if (/^invesco/i.test(n)) return 'Invesco Mutual Fund';
-    if (/^kotak/i.test(n)) return 'Kotak Mutual Fund';
-    if (/^lic/i.test(n)) return 'LIC Mutual Fund';
-    if (/^mirae/i.test(n)) return 'Mirae Asset Mutual Fund';
-    if (/^motilal/i.test(n)) return 'Motilal Oswal Mutual Fund';
-    if (/^nippon/i.test(n)) return 'Nippon India Mutual Fund';
-    if (/^pgim/i.test(n)) return 'PGIM India Mutual Fund';
-    if (/^ppfas/i.test(n) || /parag parikh/i.test(n)) return 'PPFAS Mutual Fund';
-    if (/^quant/i.test(n)) return 'Quant Mutual Fund';
-    if (/^sbi/i.test(n)) return 'SBI Mutual Fund';
-    if (/^sundaram/i.test(n)) return 'Sundaram Mutual Fund';
-    if (/^tata/i.test(n)) return 'Tata Mutual Fund';
-    if (/^uti/i.test(n)) return 'UTI Mutual Fund';
-    if (/^whiteoak/i.test(n) || /white oak/i.test(n)) return 'WhiteOak Capital Mutual Fund';
-    return n.split(' ')[0] + ' Mutual Fund';
+    if (/^aditya birla/i.test(n)) return "Aditya Birla Sun Life Mutual Fund";
+    if (/^axis/i.test(n)) return "Axis Mutual Fund";
+    if (/^bajaj/i.test(n)) return "Bajaj Finserv Mutual Fund";
+    if (/^bandhan/i.test(n)) return "Bandhan Mutual Fund";
+    if (/^canara/i.test(n)) return "Canara Robeco Mutual Fund";
+    if (/^dsp/i.test(n)) return "DSP Mutual Fund";
+    if (/^edelweiss/i.test(n)) return "Edelweiss Mutual Fund";
+    if (/^franklin/i.test(n)) return "Franklin Templeton Mutual Fund";
+    if (/^hdfc/i.test(n)) return "HDFC Mutual Fund";
+    if (/^hsbc/i.test(n)) return "HSBC Mutual Fund";
+    if (/^icici pru/i.test(n)) return "ICICI Prudential Mutual Fund";
+    if (/^invesco/i.test(n)) return "Invesco Mutual Fund";
+    if (/^kotak/i.test(n)) return "Kotak Mutual Fund";
+    if (/^lic/i.test(n)) return "LIC Mutual Fund";
+    if (/^mirae/i.test(n)) return "Mirae Asset Mutual Fund";
+    if (/^motilal/i.test(n)) return "Motilal Oswal Mutual Fund";
+    if (/^nippon/i.test(n)) return "Nippon India Mutual Fund";
+    if (/^pgim/i.test(n)) return "PGIM India Mutual Fund";
+    if (/^ppfas/i.test(n) || /parag parikh/i.test(n))
+      return "PPFAS Mutual Fund";
+    if (/^quant/i.test(n)) return "Quant Mutual Fund";
+    if (/^sbi/i.test(n)) return "SBI Mutual Fund";
+    if (/^sundaram/i.test(n)) return "Sundaram Mutual Fund";
+    if (/^tata/i.test(n)) return "Tata Mutual Fund";
+    if (/^uti/i.test(n)) return "UTI Mutual Fund";
+    if (/^whiteoak/i.test(n) || /white oak/i.test(n))
+      return "WhiteOak Capital Mutual Fund";
+    return n.split(" ")[0] + " Mutual Fund";
   };
 
   for (const h of holdings) {
     // Category allocation
-    categoryMap.set(h.category, (categoryMap.get(h.category) || 0) + h.currentValue);
+    categoryMap.set(
+      h.category,
+      (categoryMap.get(h.category) || 0) + h.currentValue
+    );
 
     // Cap Allocation (Sub Category)
     const capCat = getSubCategory(h.schemeName, h.category);
@@ -566,8 +712,13 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
     amcMap.set(amcName, (amcMap.get(amcName) || 0) + h.currentValue);
   }
 
-  const categoryAllocation = Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }));
-  const capAllocation = Array.from(capMap.entries()).map(([name, value]) => ({ name, value }));
+  const categoryAllocation = Array.from(categoryMap.entries()).map(
+    ([name, value]) => ({ name, value })
+  );
+  const capAllocation = Array.from(capMap.entries()).map(([name, value]) => ({
+    name,
+    value,
+  }));
   const amcAllocation = Array.from(amcMap.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
@@ -575,34 +726,44 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
   // 5. Timeline data (invested vs value over time)
   // Retrieve total valuation for each report
   const timelineData = [];
-  const latestTimelineDate = chronologicalReports[chronologicalReports.length - 1]?.asOfDate || selectedReport.asOfDate;
-  const timelineTxHistory = await db.select()
+  const latestTimelineDate =
+    chronologicalReports[chronologicalReports.length - 1]?.asOfDate ||
+    selectedReport.asOfDate;
+  const timelineTxHistory = await db
+    .select()
     .from(txTable)
     .where(lte(txTable.date, latestTimelineDate));
-  
+
   for (const r of chronologicalReports) {
     const snapHoldings = await getReportHoldings(r.id);
-    const snapInvested = snapHoldings.reduce((acc, h) => acc + h.purchaseValue, 0);
+    const snapInvested = snapHoldings.reduce(
+      (acc, h) => acc + h.purchaseValue,
+      0
+    );
     const snapValue = snapHoldings.reduce((acc, h) => acc + h.currentValue, 0);
-    const snapCagr = r.cagr !== undefined && r.cagr !== null
-      ? r.cagr
-      : (snapHoldings.length > 0
-          ? snapHoldings.reduce((acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0), 0) / (snapInvested || 1)
-          : 0);
+    const snapCagr =
+      r.cagr !== undefined && r.cagr !== null
+        ? r.cagr
+        : snapHoldings.length > 0
+          ? snapHoldings.reduce(
+              (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
+              0
+            ) / (snapInvested || 1)
+          : 0;
     const snapTxs: PortfolioTransaction[] = timelineTxHistory
-      .filter(tx => tx.date <= r.asOfDate)
-      .map(tx => ({
+      .filter((tx) => tx.date <= r.asOfDate)
+      .map((tx) => ({
         date: tx.date,
-        type: tx.type as 'BUY' | 'SELL',
+        type: tx.type as "BUY" | "SELL",
         amount: tx.amount,
         units: tx.units,
       }));
     const snapAlpha = await calculateAlpha(snapTxs, r.asOfDate, snapValue);
 
-    const formattedDate = new Date(r.asOfDate).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
+    const formattedDate = new Date(r.asOfDate).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     });
 
     timelineData.push({
@@ -623,7 +784,10 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
       invested: overallInvested,
       currentValue: overallValuation,
       gain: overallValuation - overallInvested,
-      absoluteReturn: overallInvested > 0 ? ((overallValuation - overallInvested) / overallInvested) * 100 : 0,
+      absoluteReturn:
+        overallInvested > 0
+          ? ((overallValuation - overallInvested) / overallInvested) * 100
+          : 0,
       portfolioXirr,
       benchmarkXirr,
       alpha,
@@ -648,25 +812,28 @@ export async function getDashboardDataAction(reportId?: number): Promise<Dashboa
  */
 export async function uploadSipAction(formData: FormData) {
   try {
-    const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'No file uploaded' };
+    const file = formData.get("file") as File;
+    if (!file) return { success: false, error: "No file uploaded" };
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { parseSipExcel } = await import('@/lib/sipParser');
+    const { parseSipExcel } = await import("@/lib/sipParser");
     const parsed = parseSipExcel(buffer, file.name);
 
     if (parsed.sips.length === 0) {
-      return { success: false, error: 'No SIP rows found in the uploaded file' };
+      return {
+        success: false,
+        error: "No SIP rows found in the uploaded file",
+      };
     }
 
     const { inserted, skipped } = await saveSipMandates(parsed.sips, file.name);
 
-    revalidatePath('/sips');
+    revalidatePath("/sips");
     return { success: true, inserted, skipped, total: parsed.sips.length };
   } catch (err: any) {
-    console.error('SIP Upload Error:', err);
-    return { success: false, error: err.message || 'Failed to parse SIP file' };
+    console.error("SIP Upload Error:", err);
+    return { success: false, error: err.message || "Failed to parse SIP file" };
   }
 }
 
@@ -683,9 +850,25 @@ export async function getSipMandatesAction() {
 export async function clearSipMandatesAction() {
   try {
     await clearSipMandates();
-    revalidatePath('/sips');
+    revalidatePath("/sips");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch fresh live rates and chart data by bypassing the in-memory cache
+ */
+export async function refreshBullionDataAction() {
+  const { getBullionData } = await import("@/lib/bullionService");
+  try {
+    const data = await getBullionData(true);
+    return { success: true, data };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || "Failed to refresh bullion rates",
+    };
   }
 }

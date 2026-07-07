@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertTriangle } from 'lucide-react';
-import Link from 'next/link';
+import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
 
 interface HeaderClientProps {
   reportsList?: { id: number; asOfDate: string }[];
@@ -14,7 +14,9 @@ export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
     <>
       <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
         <div className="flex items-center gap-2">
-          <div className="text-sm text-slate-400 font-medium">Family Portfolio</div>
+          <div className="text-sm text-slate-400 font-medium">
+            Family Portfolio
+          </div>
           {unmappedCount > 0 && (
             <Link
               href="/mapping"
@@ -25,8 +27,7 @@ export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
             </Link>
           )}
         </div>
-
-    </header>
+      </header>
     </>
   );
 }
