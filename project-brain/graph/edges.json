@@ -1,0 +1,6 @@
+[
+  { "source": "actions", "target": "db_schema", "type": "imports" },
+  { "source": "actions", "target": "portfolio_service", "type": "calls" },
+  { "source": "actions", "target": "alpha_lib", "type": "calls" },
+  { "source": "pages", "target": "actions", "type": "calls" }
+]

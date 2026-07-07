@@ -1,0 +1,9 @@
+{
+  "indices": [
+    "routes",
+    "components",
+    "actions",
+    "lib",
+    "database"
+  ]
+}

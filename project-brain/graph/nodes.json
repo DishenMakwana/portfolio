@@ -1,0 +1,7 @@
+[
+  { "id": "db_schema", "label": "Database Schema", "path": "src/db/schema.ts" },
+  { "id": "actions", "label": "Server Actions", "path": "src/app/actions.ts" },
+  { "id": "portfolio_service", "label": "Portfolio Service", "path": "src/lib/portfolioService.ts" },
+  { "id": "alpha_lib", "label": "Alpha & Volatility Lib", "path": "src/lib/alpha.ts" },
+  { "id": "pages", "label": "App Pages", "path": "src/app/" }
+]
