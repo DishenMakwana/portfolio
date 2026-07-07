@@ -15,4 +15,4 @@ const pool = new Pool({
       : { rejectUnauthorized: false },
 });
 
-export const db = drizzle(pool, { schema });
+export const db = drizzle(pool, { schema, logger: true });

@@ -5,6 +5,7 @@ import {
   integer,
   doublePrecision,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 
 // Define dynamic schema name based on environment variable
@@ -25,16 +26,23 @@ export const familyMembers = mySchema.table("family_members", {
   pan: text("pan"),
 });
 
-export const memberReportCagrs = mySchema.table("member_report_cagrs", {
-  id: serial("id").primaryKey(),
-  reportId: integer("report_id").references(() => reports.id, {
-    onDelete: "cascade",
-  }),
-  memberId: integer("member_id").references(() => familyMembers.id, {
-    onDelete: "cascade",
-  }),
-  cagr: doublePrecision("cagr").notNull(),
-});
+export const memberReportCagrs = mySchema.table(
+  "member_report_cagrs",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => reports.id, {
+      onDelete: "cascade",
+    }),
+    memberId: integer("member_id").references(() => familyMembers.id, {
+      onDelete: "cascade",
+    }),
+    cagr: doublePrecision("cagr").notNull(),
+  },
+  (table) => [
+    index("member_report_cagrs_report_id_idx").on(table.reportId),
+    index("member_report_cagrs_member_id_idx").on(table.memberId),
+  ]
+);
 
 export const schemes = mySchema.table("schemes", {
   id: serial("id").primaryKey(),
@@ -44,51 +52,74 @@ export const schemes = mySchema.table("schemes", {
   mappedAt: text("mapped_at"),
 });
 
-export const holdingsSnapshot = mySchema.table("holdings_snapshot", {
-  id: serial("id").primaryKey(),
-  reportId: integer("report_id").references(() => reports.id, {
-    onDelete: "cascade",
-  }),
-  memberId: integer("member_id").references(() => familyMembers.id),
-  schemeId: integer("scheme_id").references(() => schemes.id),
-  folioNo: text("folio_no").notNull(),
-  balanceUnits: doublePrecision("balance_units").notNull(),
-  purchaseNav: doublePrecision("purchase_nav").notNull(),
-  purchaseValue: doublePrecision("purchase_value").notNull(),
-  currentNav: doublePrecision("current_nav").notNull(),
-  currentValue: doublePrecision("current_value").notNull(),
-  dividend: doublePrecision("dividend").default(0),
-  gain: doublePrecision("gain").notNull(),
-  holdingDays: integer("holding_days").notNull(),
-  absoluteReturn: doublePrecision("absolute_return").notNull(),
-  cagr: doublePrecision("cagr").notNull(),
-  comments: text("comments"),
-});
+export const holdingsSnapshot = mySchema.table(
+  "holdings_snapshot",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => reports.id, {
+      onDelete: "cascade",
+    }),
+    memberId: integer("member_id").references(() => familyMembers.id),
+    schemeId: integer("scheme_id").references(() => schemes.id),
+    folioNo: text("folio_no").notNull(),
+    balanceUnits: doublePrecision("balance_units").notNull(),
+    purchaseNav: doublePrecision("purchase_nav").notNull(),
+    purchaseValue: doublePrecision("purchase_value").notNull(),
+    currentNav: doublePrecision("current_nav").notNull(),
+    currentValue: doublePrecision("current_value").notNull(),
+    dividend: doublePrecision("dividend").default(0),
+    gain: doublePrecision("gain").notNull(),
+    holdingDays: integer("holding_days").notNull(),
+    absoluteReturn: doublePrecision("absolute_return").notNull(),
+    cagr: doublePrecision("cagr").notNull(),
+    comments: text("comments"),
+  },
+  (table) => [
+    index("holdings_snapshot_report_id_idx").on(table.reportId),
+    index("holdings_snapshot_member_id_idx").on(table.memberId),
+    index("holdings_snapshot_scheme_id_idx").on(table.schemeId),
+  ]
+);
 
-export const transactions = mySchema.table("transactions", {
-  id: serial("id").primaryKey(),
-  memberId: integer("member_id").references(() => familyMembers.id),
-  schemeId: integer("scheme_id").references(() => schemes.id),
-  date: text("date").notNull(),
-  type: text("type").notNull(), // 'BUY', 'SELL'
-  units: doublePrecision("units").notNull(),
-  nav: doublePrecision("nav").notNull(),
-  amount: doublePrecision("amount").notNull(),
-  sourceReportId: integer("source_report_id").references(() => reports.id),
-});
+export const transactions = mySchema.table(
+  "transactions",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id").references(() => familyMembers.id),
+    schemeId: integer("scheme_id").references(() => schemes.id),
+    date: text("date").notNull(),
+    type: text("type").notNull(), // 'BUY', 'SELL'
+    units: doublePrecision("units").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    sourceReportId: integer("source_report_id").references(() => reports.id),
+  },
+  (table) => [
+    index("transactions_member_id_idx").on(table.memberId),
+    index("transactions_scheme_id_idx").on(table.schemeId),
+    index("transactions_source_report_id_idx").on(table.sourceReportId),
+  ]
+);
 
-export const sipMandates = mySchema.table("sip_mandates", {
-  id: serial("id").primaryKey(),
-  memberId: integer("member_id").references(() => familyMembers.id),
-  schemeId: integer("scheme_id").references(() => schemes.id),
-  folioNo: text("folio_no").notNull(),
-  monthlyAmount: doublePrecision("monthly_amount").notNull(),
-  monthlyHistory: text("monthly_history"), // JSON string
-  startMonth: text("start_month"), // e.g. "APR 26"
-  isActive: integer("is_active").default(1), // 1=active 0=paused
-  uploadedAt: text("uploaded_at").notNull(),
-  sourceFile: text("source_file"),
-});
+export const sipMandates = mySchema.table(
+  "sip_mandates",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id").references(() => familyMembers.id),
+    schemeId: integer("scheme_id").references(() => schemes.id),
+    folioNo: text("folio_no").notNull(),
+    monthlyAmount: doublePrecision("monthly_amount").notNull(),
+    monthlyHistory: text("monthly_history"), // JSON string
+    startMonth: text("start_month"), // e.g. "APR 26"
+    isActive: integer("is_active").default(1), // 1=active 0=paused
+    uploadedAt: text("uploaded_at").notNull(),
+    sourceFile: text("source_file"),
+  },
+  (table) => [
+    index("sip_mandates_member_id_idx").on(table.memberId),
+    index("sip_mandates_scheme_id_idx").on(table.schemeId),
+  ]
+);
 
 export const sipTransactions = mySchema.table(
   "sip_transactions",
@@ -104,6 +135,7 @@ export const sipTransactions = mySchema.table(
   },
   (table) => [
     unique("sip_mandate_month_unique").on(table.sipMandateId, table.month),
+    index("sip_transactions_sip_mandate_id_idx").on(table.sipMandateId),
   ]
 );
 

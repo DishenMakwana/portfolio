@@ -10,7 +10,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:migrate-data": "node scripts/migrate-data.js"
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
