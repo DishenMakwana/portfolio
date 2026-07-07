@@ -9,7 +9,7 @@ import {
   memberReportCagrs,
   sipTransactions,
 } from "../db/schema";
-import { eq, asc, desc, and } from "drizzle-orm";
+import { eq, asc, desc, and, sql } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
 
 export interface HoldingDetails {
@@ -445,29 +445,57 @@ export async function saveSipMandates(
   let inserted = 0;
   let skipped = 0;
 
+  // Pre-fetch all family members, schemes, and mandates to avoid repeated queries in loop
+  const allMembers = await db.select().from(familyMembers);
+  const allSchemes = await db.select().from(schemes);
+  const allMandates = await db.select().from(sipMandates);
+
+  // Cache in Maps for fast, in-memory lookups
+  const membersMap = new Map<string, typeof familyMembers.$inferSelect>(
+    allMembers.map((m) => [m.name.trim().toLowerCase(), m])
+  );
+  const schemesMap = new Map<string, typeof schemes.$inferSelect>(
+    allSchemes.map((s) => [s.name.trim().toLowerCase(), s])
+  );
+  const mandatesMap = new Map<string, typeof sipMandates.$inferSelect>(
+    allMandates.map((m) => [
+      `${m.memberId}_${m.schemeId}_${m.folioNo.trim().toLowerCase()}`,
+      m,
+    ])
+  );
+
+  // We will collect all transaction records to upsert in a single bulk query
+  const txsToUpsert: {
+    sipMandateId: number;
+    month: string;
+    amount: number;
+    uploadedAt: string;
+    sourceFile: string | null;
+  }[] = [];
+
   for (const sip of sips) {
-    // Upsert member
-    let member = await db.query.familyMembers.findFirst({
-      where: eq(familyMembers.name, sip.investorName),
-    });
+    // 1. Get or create member in cache/db
+    const memberKey = sip.investorName.trim().toLowerCase();
+    let member = membersMap.get(memberKey);
     if (!member) {
       const [m] = await db
         .insert(familyMembers)
         .values({ name: sip.investorName })
         .returning();
       member = m;
+      membersMap.set(memberKey, m);
     }
 
-    // Upsert scheme (category = 'Unknown' if not already in DB)
-    let scheme = await db.query.schemes.findFirst({
-      where: eq(schemes.name, sip.schemeName),
-    });
+    // 2. Get or create scheme in cache/db
+    const schemeKey = sip.schemeName.trim().toLowerCase();
+    let scheme = schemesMap.get(schemeKey);
     if (!scheme) {
       const [s] = await db
         .insert(schemes)
         .values({ name: sip.schemeName, category: "Equity" })
         .returning();
       scheme = s;
+      schemesMap.set(schemeKey, s);
     }
 
     if (!sip.monthlyAmount || sip.monthlyAmount <= 0) {
@@ -475,14 +503,9 @@ export async function saveSipMandates(
       continue;
     }
 
-    // Check if duplicate exists (same member, scheme, and folio)
-    const existing = await db.query.sipMandates.findFirst({
-      where: and(
-        eq(sipMandates.memberId, member.id),
-        eq(sipMandates.schemeId, scheme.id),
-        eq(sipMandates.folioNo, sip.folioNo)
-      ),
-    });
+    // 3. Get or create mandate
+    const mandateKey = `${member.id}_${scheme.id}_${sip.folioNo.trim().toLowerCase()}`;
+    const existing = mandatesMap.get(mandateKey);
 
     let mandateId: number;
     if (existing) {
@@ -513,38 +536,38 @@ export async function saveSipMandates(
         })
         .returning();
       mandateId = newMandate.id;
+
+      // Update our map to avoid duplicate inserts if the same mandate is processed again in the loop
+      mandatesMap.set(mandateKey, newMandate);
     }
 
-    // Upsert individual monthly payment records in the sip_transactions table
+    // 4. Accumulate transaction records
     for (const [month, amount] of Object.entries(sip.monthlyHistory)) {
-      const existingTx = await db.query.sipTransactions.findFirst({
-        where: and(
-          eq(sipTransactions.sipMandateId, mandateId),
-          eq(sipTransactions.month, month)
-        ),
+      txsToUpsert.push({
+        sipMandateId: mandateId,
+        month,
+        amount,
+        uploadedAt: now,
+        sourceFile,
       });
-
-      if (existingTx) {
-        await db
-          .update(sipTransactions)
-          .set({
-            amount,
-            uploadedAt: now,
-            sourceFile,
-          })
-          .where(eq(sipTransactions.id, existingTx.id));
-      } else {
-        await db.insert(sipTransactions).values({
-          sipMandateId: mandateId,
-          month,
-          amount,
-          uploadedAt: now,
-          sourceFile,
-        });
-      }
     }
 
     inserted++;
+  }
+
+  // 5. Bulk upsert all monthly transaction records in a single query
+  if (txsToUpsert.length > 0) {
+    await db
+      .insert(sipTransactions)
+      .values(txsToUpsert)
+      .onConflictDoUpdate({
+        target: [sipTransactions.sipMandateId, sipTransactions.month],
+        set: {
+          amount: sql`EXCLUDED.amount`,
+          uploadedAt: sql`EXCLUDED.uploaded_at`,
+          sourceFile: sql`EXCLUDED.source_file`,
+        },
+      });
   }
 
   return { inserted, skipped };

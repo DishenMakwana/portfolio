@@ -14,119 +14,133 @@ function normaliseSchemeCode(
   return String(schemeCode || "").trim();
 }
 
+// Cache for scheme histories to avoid duplicate DB queries within the same request lifecycle
+const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
+
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
-export async function getSchemeHistoryForDbCode(
+export function getSchemeHistoryForDbCode(
   dbSchemeCode: string
 ): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
-  if (!schemeCode || isSpecializedFundSchemeCode(schemeCode)) return null;
+  if (!schemeCode || isSpecializedFundSchemeCode(schemeCode))
+    return Promise.resolve(null);
 
-  // 1. Check if we have cached metadata in PostgreSQL
-  const cachedMeta = await db.query.schemeNavCacheMeta.findFirst({
-    where: eq(schemeNavCacheMeta.schemeCode, schemeCode),
-  });
+  let cachedPromise = schemeHistoryCache.get(schemeCode);
+  if (!cachedPromise) {
+    cachedPromise = (async () => {
+      // 1. Check if we have cached metadata in PostgreSQL
+      const cachedMeta = await db.query.schemeNavCacheMeta.findFirst({
+        where: eq(schemeNavCacheMeta.schemeCode, schemeCode),
+      });
 
-  const now = new Date();
-  const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
-  const isFresh =
-    cachedMeta &&
-    now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
-      cacheAgeLimit;
+      const now = new Date();
+      const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+      const isFresh =
+        cachedMeta &&
+        now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+          cacheAgeLimit;
 
-  if (cachedMeta && isFresh) {
-    const history = await db.query.schemeNavHistory.findMany({
-      where: eq(schemeNavHistory.schemeCode, schemeCode),
-    });
-
-    if (history.length > 0) {
-      return {
-        meta: {
-          fund_house: cachedMeta.fundHouse,
-          scheme_type: cachedMeta.schemeType,
-          scheme_category: cachedMeta.schemeCategory,
-          scheme_code: parseInt(cachedMeta.schemeCode),
-          scheme_name: cachedMeta.schemeName,
-        },
-        data: history.map((h) => ({
-          date: h.date,
-          nav: String(h.nav),
-        })),
-      };
-    }
-  }
-
-  // 2. Fetch fresh details from API
-  const data = await fetchMfDetails(schemeCode);
-  if (data && data.meta && data.data && data.data.length > 0) {
-    try {
-      // Upsert scheme cache metadata
-      await db
-        .insert(schemeNavCacheMeta)
-        .values({
-          schemeCode,
-          fundHouse: data.meta.fund_house || "Unknown",
-          schemeType: data.meta.scheme_type || "Unknown",
-          schemeCategory: data.meta.scheme_category || "Unknown",
-          schemeName: data.meta.scheme_name || "Unknown",
-          lastFetchedAt: new Date().toISOString(),
-        })
-        .onConflictDoUpdate({
-          target: schemeNavCacheMeta.schemeCode,
-          set: {
-            fundHouse: data.meta.fund_house || "Unknown",
-            schemeType: data.meta.scheme_type || "Unknown",
-            schemeCategory: data.meta.scheme_category || "Unknown",
-            schemeName: data.meta.scheme_name || "Unknown",
-            lastFetchedAt: new Date().toISOString(),
-          },
+      if (cachedMeta && isFresh) {
+        const history = await db.query.schemeNavHistory.findMany({
+          where: eq(schemeNavHistory.schemeCode, schemeCode),
         });
 
-      // Prepare history values for insertion
-      const historyValues = data.data.map((p) => ({
-        schemeCode,
-        date: p.date,
-        nav: parseFloat(p.nav) || 0,
-        fetchedAt: new Date().toISOString(),
-      }));
-
-      // Batch insert in chunks of 500
-      const chunkSize = 500;
-      for (let i = 0; i < historyValues.length; i += chunkSize) {
-        const chunk = historyValues.slice(i, i + chunkSize);
-        await db.insert(schemeNavHistory).values(chunk).onConflictDoNothing();
+        if (history.length > 0) {
+          return {
+            meta: {
+              fund_house: cachedMeta.fundHouse,
+              scheme_type: cachedMeta.schemeType,
+              scheme_category: cachedMeta.schemeCategory,
+              scheme_code: parseInt(cachedMeta.schemeCode),
+              scheme_name: cachedMeta.schemeName,
+            },
+            data: history.map((h) => ({
+              date: h.date,
+              nav: String(h.nav),
+            })),
+          };
+        }
       }
-    } catch (e) {
-      console.error("Error writing database NAV cache:", e);
-    }
-    return data;
+
+      // 2. Fetch fresh details from API
+      const data = await fetchMfDetails(schemeCode);
+      if (data && data.meta && data.data && data.data.length > 0) {
+        try {
+          // Upsert scheme cache metadata
+          await db
+            .insert(schemeNavCacheMeta)
+            .values({
+              schemeCode,
+              fundHouse: data.meta.fund_house || "Unknown",
+              schemeType: data.meta.scheme_type || "Unknown",
+              schemeCategory: data.meta.scheme_category || "Unknown",
+              schemeName: data.meta.scheme_name || "Unknown",
+              lastFetchedAt: new Date().toISOString(),
+            })
+            .onConflictDoUpdate({
+              target: schemeNavCacheMeta.schemeCode,
+              set: {
+                fundHouse: data.meta.fund_house || "Unknown",
+                schemeType: data.meta.scheme_type || "Unknown",
+                schemeCategory: data.meta.scheme_category || "Unknown",
+                schemeName: data.meta.scheme_name || "Unknown",
+                lastFetchedAt: new Date().toISOString(),
+              },
+            });
+
+          // Prepare history values for insertion
+          const historyValues = data.data.map((p) => ({
+            schemeCode,
+            date: p.date,
+            nav: parseFloat(p.nav) || 0,
+            fetchedAt: new Date().toISOString(),
+          }));
+
+          // Batch insert in chunks of 500
+          const chunkSize = 500;
+          for (let i = 0; i < historyValues.length; i += chunkSize) {
+            const chunk = historyValues.slice(i, i + chunkSize);
+            await db
+              .insert(schemeNavHistory)
+              .values(chunk)
+              .onConflictDoNothing();
+          }
+        } catch (e) {
+          console.error("Error writing database NAV cache:", e);
+        }
+        return data;
+      }
+
+      // 3. Fallback to expired database cache if API fetch fails
+      if (cachedMeta) {
+        const history = await db.query.schemeNavHistory.findMany({
+          where: eq(schemeNavHistory.schemeCode, schemeCode),
+        });
+
+        if (history.length > 0) {
+          return {
+            meta: {
+              fund_house: cachedMeta.fundHouse,
+              scheme_type: cachedMeta.schemeType,
+              scheme_category: cachedMeta.schemeCategory,
+              scheme_code: parseInt(cachedMeta.schemeCode),
+              scheme_name: cachedMeta.schemeName,
+            },
+            data: history.map((h) => ({
+              date: h.date,
+              nav: String(h.nav),
+            })),
+          };
+        }
+      }
+
+      return null;
+    })();
+    schemeHistoryCache.set(schemeCode, cachedPromise);
   }
-
-  // 3. Fallback to expired database cache if API fetch fails
-  if (cachedMeta) {
-    const history = await db.query.schemeNavHistory.findMany({
-      where: eq(schemeNavHistory.schemeCode, schemeCode),
-    });
-
-    if (history.length > 0) {
-      return {
-        meta: {
-          fund_house: cachedMeta.fundHouse,
-          scheme_type: cachedMeta.schemeType,
-          scheme_category: cachedMeta.schemeCategory,
-          scheme_code: parseInt(cachedMeta.schemeCode),
-          scheme_name: cachedMeta.schemeName,
-        },
-        data: history.map((h) => ({
-          date: h.date,
-          nav: String(h.nav),
-        })),
-      };
-    }
-  }
-
-  return null;
+  return cachedPromise;
 }
 
 /**

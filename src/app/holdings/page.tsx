@@ -14,8 +14,10 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
   const reportId = params.reportId ? parseInt(params.reportId, 10) : undefined;
   const initialMember = params.member || "All";
 
-  const data = await getDashboardDataAction(reportId);
-  const allSchemes = await getSchemes();
+  const [data, allSchemes] = await Promise.all([
+    getDashboardDataAction(reportId),
+    getSchemes(),
+  ]);
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
 
   return (

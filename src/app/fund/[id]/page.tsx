@@ -68,18 +68,24 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  // 2. Fetch transaction history for this fund
-  const fundTxs = await db
-    .select()
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.schemeId, holding.schemeId),
-        eq(transactions.memberId, holding.memberId),
-        lte(transactions.date, holding.asOfDate)
+  // 2. Fetch transaction history and NAV histories in parallel
+  const [fundTxs, fundDetails, benchDetails] = await Promise.all([
+    db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.schemeId, holding.schemeId),
+          eq(transactions.memberId, holding.memberId),
+          lte(transactions.date, holding.asOfDate)
+        )
       )
-    )
-    .orderBy(asc(transactions.date));
+      .orderBy(asc(transactions.date)),
+    holding.schemeCodeApi
+      ? getSchemeHistoryForDbCode(holding.schemeCodeApi)
+      : Promise.resolve(null),
+    getSchemeHistoryForDbCode("120716"),
+  ]);
 
   // 3. Format transactions for XIRR/Alpha calculation
   const mappedTxs = fundTxs.map((tx) => ({
@@ -96,13 +102,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     holding.currentValue
   );
 
-  // 5. Fetch Scheme own NAV history and Nifty 50 NAV history
-  const fundDetails = holding.schemeCodeApi
-    ? await getSchemeHistoryForDbCode(holding.schemeCodeApi)
-    : null;
   const fundNavHistory = fundDetails?.data || [];
-
-  const benchDetails = await getSchemeHistoryForDbCode("120716");
   const benchNavHistory = benchDetails?.data || [];
 
   // 6. Calculate Volatility Stats

@@ -21,7 +21,7 @@ import {
   reports,
   memberReportCagrs,
 } from "@/db/schema";
-import { eq, lte, and } from "drizzle-orm";
+import { eq, lte, and, inArray } from "drizzle-orm";
 
 /**
  * Upload and parse Excel report
@@ -352,6 +352,20 @@ export async function getDashboardDataAction(
 
   const holdings = await getReportHoldings(selectedReport.id);
 
+  // Pre-fetch all member CAGRs for selected and previous reports to avoid N+1 queries in loop
+  const reportIdsToCheck = [selectedReport.id];
+  if (previousReport) {
+    reportIdsToCheck.push(previousReport.id);
+  }
+  const allMemberCagrs = await db
+    .select()
+    .from(memberReportCagrs)
+    .where(inArray(memberReportCagrs.reportId, reportIdsToCheck));
+  const memberCagrMap = new Map<string, number>();
+  allMemberCagrs.forEach((c) => {
+    memberCagrMap.set(`${c.reportId}_${c.memberId}`, c.cagr);
+  });
+
   // 1. Fetch transactions up to report date
   const txHistory = await db
     .select()
@@ -442,10 +456,64 @@ export async function getDashboardDataAction(
     const previousMembers = Array.from(
       new Set(previousHoldings.map((h) => h.memberName))
     );
-    for (const name of previousMembers) {
-      const memberHoldings = previousHoldings.filter(
-        (h) => h.memberName === name
-      );
+    await Promise.all(
+      previousMembers.map(async (name) => {
+        const memberHoldings = previousHoldings.filter(
+          (h) => h.memberName === name
+        );
+        const invested = memberHoldings.reduce(
+          (acc, h) => acc + h.purchaseValue,
+          0
+        );
+        const currentValue = memberHoldings.reduce(
+          (acc, h) => acc + h.currentValue,
+          0
+        );
+        const storedMemberCagrVal =
+          memberHoldings.length > 0
+            ? memberCagrMap.get(
+                `${previousReport.id}_${memberHoldings[0].memberId}`
+              )
+            : null;
+        const cagr =
+          storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
+            ? storedMemberCagrVal
+            : memberHoldings.reduce(
+                (acc, h) => acc + h.cagr * h.purchaseValue,
+                0
+              ) / (invested || 1);
+        const memberTxs = getPortfolioTransactions((tx) => {
+          const dbHolding = memberHoldings.find(
+            (h) => h.schemeId === tx.schemeId
+          );
+          return (
+            !!dbHolding &&
+            tx.memberId === dbHolding.memberId &&
+            tx.date <= previousReport.asOfDate
+          );
+        });
+        let xirr = cagr;
+        let alpha = 0;
+        if (memberTxs.length >= 1) {
+          const metrics = await calculateAlpha(
+            memberTxs,
+            previousReport.asOfDate,
+            currentValue
+          );
+          xirr = metrics.portfolioXirr;
+          alpha = metrics.alpha;
+        }
+
+        previousMemberMetrics.set(name, { xirr, cagr, alpha });
+      })
+    );
+  }
+
+  // 2. Calculate Family Member Summaries in parallel
+  const members = Array.from(new Set(holdings.map((h) => h.memberName)));
+  const memberSummaries = await Promise.all(
+    members.map(async (name) => {
+      const memberHoldings = holdings.filter((h) => h.memberName === name);
       const invested = memberHoldings.reduce(
         (acc, h) => acc + h.purchaseValue,
         0
@@ -454,139 +522,89 @@ export async function getDashboardDataAction(
         (acc, h) => acc + h.currentValue,
         0
       );
-      const storedMemberCagr =
+      const gain = currentValue - invested;
+
+      const storedMemberCagrVal =
         memberHoldings.length > 0
-          ? await db.query.memberReportCagrs.findFirst({
-              where: and(
-                eq(memberReportCagrs.reportId, previousReport.id),
-                eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
-              ),
-            })
+          ? memberCagrMap.get(
+              `${selectedReport.id}_${memberHoldings[0].memberId}`
+            )
           : null;
-      const cagr = storedMemberCagr
-        ? storedMemberCagr.cagr
-        : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) /
-          (invested || 1);
+
+      const cagr =
+        storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
+          ? storedMemberCagrVal
+          : memberHoldings.reduce(
+              (acc, h) => acc + h.cagr * h.purchaseValue,
+              0
+            ) / (invested || 1);
+
+      // Calculate Member XIRR
       const memberTxs = getPortfolioTransactions((tx) => {
         const dbHolding = memberHoldings.find(
           (h) => h.schemeId === tx.schemeId
         );
-        return (
-          !!dbHolding &&
-          tx.memberId === dbHolding.memberId &&
-          tx.date <= previousReport.asOfDate
-        );
+        return !!dbHolding && tx.memberId === dbHolding.memberId;
       });
-      let xirr = cagr;
-      let alpha = 0;
+
+      let mXirr = cagr;
+      let mAlpha = 0;
       if (memberTxs.length >= 1) {
-        const metrics = await calculateAlpha(
+        const memberMetrics = await calculateAlpha(
           memberTxs,
-          previousReport.asOfDate,
+          selectedReport.asOfDate,
           currentValue
         );
-        xirr = metrics.portfolioXirr;
-        alpha = metrics.alpha;
+        mXirr = memberMetrics.portfolioXirr;
+        mAlpha = memberMetrics.alpha;
       }
 
-      previousMemberMetrics.set(name, { xirr, cagr, alpha });
-    }
-  }
+      const pan = memberHoldings[0]?.memberPan || null;
+      const previousMember = previousMemberMetrics.get(name);
 
-  // 2. Calculate Family Member Summaries
-  const members = Array.from(new Set(holdings.map((h) => h.memberName)));
-  const memberSummaries = [];
+      return {
+        name,
+        pan,
+        invested,
+        currentValue,
+        gain,
+        cagr,
+        xirr: mXirr,
+        alpha: mAlpha,
+        cagrDelta: previousMember ? cagr - previousMember.cagr : null,
+        xirrDelta: previousMember ? mXirr - previousMember.xirr : null,
+        alphaDelta: previousMember ? mAlpha - previousMember.alpha : null,
+      };
+    })
+  );
 
-  for (const name of members) {
-    const memberHoldings = holdings.filter((h) => h.memberName === name);
-    const invested = memberHoldings.reduce(
-      (acc, h) => acc + h.purchaseValue,
-      0
-    );
-    const currentValue = memberHoldings.reduce(
-      (acc, h) => acc + h.currentValue,
-      0
-    );
-    const gain = currentValue - invested;
-
-    // Fetch stored member CAGR if available, otherwise fall back to weighted CAGR
-    const storedMemberCagr =
-      memberHoldings.length > 0
-        ? await db.query.memberReportCagrs.findFirst({
-            where: and(
-              eq(memberReportCagrs.reportId, selectedReport.id),
-              eq(memberReportCagrs.memberId, memberHoldings[0].memberId)
-            ),
-          })
-        : null;
-
-    const cagr = storedMemberCagr
-      ? storedMemberCagr.cagr
-      : memberHoldings.reduce((acc, h) => acc + h.cagr * h.purchaseValue, 0) /
-        (invested || 1);
-
-    // Calculate Member XIRR
-    const memberTxs = getPortfolioTransactions((tx) => {
-      const dbHolding = memberHoldings.find((h) => h.schemeId === tx.schemeId);
-      return !!dbHolding && tx.memberId === dbHolding.memberId;
-    });
-
-    let mXirr = cagr;
-    let mAlpha = 0;
-    if (memberTxs.length >= 1) {
-      const memberMetrics = await calculateAlpha(
-        memberTxs,
-        selectedReport.asOfDate,
-        currentValue
+  // 3. Scheme level XIRR in parallel
+  const detailedHoldings = await Promise.all(
+    holdings.map(async (h) => {
+      const schemeTxs = getPortfolioTransactions(
+        (tx) => tx.schemeId === h.schemeId && tx.memberId === h.memberId
       );
-      mXirr = memberMetrics.portfolioXirr;
-      mAlpha = memberMetrics.alpha;
-    }
 
-    const pan = memberHoldings[0]?.memberPan || null;
-    const previousMember = previousMemberMetrics.get(name);
+      let schemeXirr = h.cagr;
+      let schemeAlpha = 0;
 
-    memberSummaries.push({
-      name,
-      pan,
-      invested,
-      currentValue,
-      gain,
-      cagr,
-      xirr: mXirr,
-      alpha: mAlpha,
-      cagrDelta: previousMember ? cagr - previousMember.cagr : null,
-      xirrDelta: previousMember ? mXirr - previousMember.xirr : null,
-      alphaDelta: previousMember ? mAlpha - previousMember.alpha : null,
-    });
-  }
+      if (schemeTxs.length >= 1) {
+        const metrics = await calculateAlpha(
+          schemeTxs,
+          selectedReport.asOfDate,
+          h.currentValue
+        );
+        schemeXirr = metrics.portfolioXirr;
+        schemeAlpha = metrics.alpha;
+      }
 
-  // 3. Scheme level XIRR
-  const detailedHoldings = [];
-  for (const h of holdings) {
-    const schemeTxs = getPortfolioTransactions(
-      (tx) => tx.schemeId === h.schemeId && tx.memberId === h.memberId
-    );
-
-    let schemeXirr = h.cagr;
-    let schemeAlpha = 0;
-
-    if (schemeTxs.length >= 1) {
-      const metrics = await calculateAlpha(
-        schemeTxs,
-        selectedReport.asOfDate,
-        h.currentValue
-      );
-      schemeXirr = metrics.portfolioXirr;
-      schemeAlpha = metrics.alpha;
-    }
-
-    detailedHoldings.push({
-      ...h,
-      xirr: schemeXirr,
-      alpha: schemeAlpha,
-    });
-  }
+      return {
+        ...h,
+        xirr: schemeXirr,
+        alpha: schemeAlpha,
+      };
+    })
+  );
 
   // 4. Asset Allocations
   const categoryMap = new Map<string, number>();

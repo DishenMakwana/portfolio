@@ -14,8 +14,10 @@ export default async function OverviewPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const reportId = params.reportId ? parseInt(params.reportId, 10) : undefined;
 
-  const data = await getDashboardDataAction(reportId);
-  const allSchemes = await getSchemes();
+  const [data, allSchemes] = await Promise.all([
+    getDashboardDataAction(reportId),
+    getSchemes(),
+  ]);
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
 
   return (

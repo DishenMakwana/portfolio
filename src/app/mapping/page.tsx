@@ -6,8 +6,10 @@ import HeaderClient from "@/components/HeaderClient";
 export const dynamic = "force-dynamic";
 
 export default async function MappingPage() {
-  const allSchemes = await getSchemes();
-  const reportsList = await getReports();
+  const [allSchemes, reportsList] = await Promise.all([
+    getSchemes(),
+    getReports(),
+  ]);
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
 
   // Get latest report as selected for header display
