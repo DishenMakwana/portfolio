@@ -883,7 +883,7 @@ export default function OverviewTab({
               return (
                 <div
                   key={cat.name}
-                  className="flex items-center justify-between text-xs"
+                  className="flex items-center justify-between text-xs py-1"
                 >
                   <div className="flex items-center gap-2">
                     <span
@@ -893,9 +893,14 @@ export default function OverviewTab({
                       {cat.name}
                     </span>
                   </div>
-                  <span className="text-slate-400 font-semibold ml-2">
-                    {pct.toFixed(1)}%
-                  </span>
+                  <div className="flex flex-col items-end ml-2">
+                    <span className="text-slate-400 font-semibold">
+                      {pct.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-normal mt-0.5">
+                      {formatCurrency(cat.value)}
+                    </span>
+                  </div>
                 </div>
               );
             })}

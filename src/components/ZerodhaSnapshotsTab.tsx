@@ -34,7 +34,7 @@ export default function ZerodhaSnapshotsTab({
       <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl h-fit">
         <h3 className="text-sm font-bold text-slate-100 mb-3 flex items-center gap-2">
           <Upload size={16} className="text-teal-400" /> Upload Holdings
-          Snapshot
+          Statement
         </h3>
         <p className="text-slate-400 text-xs mb-5 leading-relaxed">
           Add historical or updated holdings statements here. Uploading a file
@@ -95,7 +95,7 @@ export default function ZerodhaSnapshotsTab({
                     <button
                       onClick={() => handleDeleteReport(rep.id)}
                       className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-950/20 border border-red-900/30 hover:bg-red-950/50 hover:border-red-900/60 cursor-pointer transition"
-                      title="Delete snapshot"
+                      title="Delete upload"
                     >
                       <Trash2 size={13} />
                     </button>
