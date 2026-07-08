@@ -1,8 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { PieChart as PieIcon, BarChart2 } from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { PieChart as PieIcon, BarChart2, Activity } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
@@ -24,10 +35,59 @@ interface ZerodhaOverviewTabProps {
       fundsCurrentValue: number;
       fundsGain: number;
     };
+    timelineData: {
+      date: string;
+      equity: number;
+      mutualFunds: number;
+      nifty50: number;
+      equityReturn: number;
+      fundsReturn: number;
+      niftyReturn: number;
+    }[];
   };
   holdings: ZerodhaHolding[];
   COLORS: string[];
 }
+
+const CustomPerformanceTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs space-y-1.5 shadow-2xl">
+        <p className="font-bold text-slate-100 border-b border-slate-800 pb-1 mb-1">
+          {data.date}
+        </p>
+        <div className="space-y-1">
+          <p className="text-emerald-400 font-semibold flex justify-between gap-4">
+            <span>Equity:</span>
+            <span>
+              {data.equity.toLocaleString()} (
+              {data.equityReturn >= 0 ? "+" : ""}
+              {data.equityReturn}%)
+            </span>
+          </p>
+          <p className="text-violet-400 font-semibold flex justify-between gap-4">
+            <span>Mutual Funds:</span>
+            <span>
+              {data.mutualFunds.toLocaleString()} (
+              {data.fundsReturn >= 0 ? "+" : ""}
+              {data.fundsReturn}%)
+            </span>
+          </p>
+          <p className="text-amber-400 font-semibold flex justify-between gap-4">
+            <span>Nifty 50:</span>
+            <span>
+              {data.nifty50.toLocaleString()} (
+              {data.niftyReturn >= 0 ? "+" : ""}
+              {data.niftyReturn}%)
+            </span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function ZerodhaOverviewTab({
   data,
@@ -108,18 +168,23 @@ export default function ZerodhaOverviewTab({
                 return (
                   <div
                     key={index}
-                    className="flex items-center justify-between text-xs"
+                    className="flex items-center justify-between text-xs py-1"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span
                         className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
                         style={{
                           backgroundColor: COLORS[index % COLORS.length],
                         }}
                       />
-                      <span className="text-slate-300 font-medium">
-                        {entry.name}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-slate-300 font-medium">
+                          {entry.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-normal mt-0.5">
+                          {formatCurrency(entry.value)}
+                        </span>
+                      </div>
                     </div>
                     <span className="text-slate-400 font-bold">
                       {pct.toFixed(1)}%
@@ -192,18 +257,23 @@ export default function ZerodhaOverviewTab({
                 return (
                   <div
                     key={index}
-                    className="flex items-center justify-between text-xs"
+                    className="flex items-center justify-between text-xs py-1"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span
                         className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
                         style={{
                           backgroundColor: COLORS[(index + 2) % COLORS.length],
                         }}
                       />
-                      <span className="text-slate-300 font-medium truncate max-w-[140px]">
-                        {entry.name}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-slate-300 font-medium truncate max-w-[140px]">
+                          {entry.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-normal mt-0.5">
+                          {formatCurrency(entry.value)}
+                        </span>
+                      </div>
                     </div>
                     <span className="text-slate-400 font-bold">
                       {pct.toFixed(1)}%
@@ -299,6 +369,103 @@ export default function ZerodhaOverviewTab({
             </table>
           </div>
         </div>
+
+        {/* Portfolio Performance Chart */}
+        <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Activity className="text-teal-400" size={18} />
+                Portfolio Performance
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Growth comparison of Equity, Mutual Funds, and Nifty 50 Index
+                (Base 1,000)
+              </p>
+            </div>
+            {/* Legend */}
+            <div className="flex items-center gap-4 text-xs font-semibold">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                <span className="text-slate-400">Equity</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                <span className="text-slate-400">Mutual Funds</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-400 inline-block" />
+                <span
+                  className="text-slate-400"
+                  title="UTI Nifty 50 Index Fund Direct Growth"
+                >
+                  Nifty 50
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="h-72 w-full">
+            {data.timelineData.length < 2 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3">
+                <BarChart2 size={40} className="opacity-25" />
+                <p className="text-sm">
+                  Upload more reports over time to view performance history.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={data.timelineData}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#475569"
+                    fontSize={11}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="#475569"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(tick) => `${Number(tick).toLocaleString()}`}
+                  />
+                  <Tooltip content={<CustomPerformanceTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="equity"
+                    name="Equity"
+                    stroke="#10b981"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#10b981" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mutualFunds"
+                    name="Mutual Funds"
+                    stroke="#f59e0b"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#f59e0b", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#f59e0b" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="nifty50"
+                    name="Nifty 50"
+                    stroke="#8b5cf6"
+                    strokeWidth={2.5}
+                    strokeDasharray="6 4"
+                    dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#8b5cf6" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Side summary details */}
@@ -323,7 +490,7 @@ export default function ZerodhaOverviewTab({
                         {cat.name}
                       </span>
                       <span className="text-slate-400">
-                        {formatCurrency(cat.value)} ({pct.toFixed(0)}%)
+                        {formatCurrency(cat.value)} ({pct.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
@@ -361,7 +528,7 @@ export default function ZerodhaOverviewTab({
                         {sec.name}
                       </span>
                       <span className="text-slate-400">
-                        {formatCurrency(sec.value)} ({pct.toFixed(0)}%)
+                        {formatCurrency(sec.value)} ({pct.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">

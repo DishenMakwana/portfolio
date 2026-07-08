@@ -133,6 +133,14 @@ export default function ZerodhaFundsTab({
                   Return % {renderFundSortIcon("unrealizedPnlPct")}
                 </div>
               </th>
+              <th
+                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
+                onClick={() => toggleFundSort("xirr")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  XIRR {renderFundSortIcon("xirr")}
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
@@ -191,11 +199,16 @@ export default function ZerodhaFundsTab({
                       {f.unrealizedPnlPct.toFixed(2)}%
                     </span>
                   </td>
+                  <td className="p-4 text-right font-bold text-teal-400">
+                    {f.xirr !== null && f.xirr !== undefined
+                      ? formatPercent(f.xirr)
+                      : "-"}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-slate-500">
+                <td colSpan={10} className="p-8 text-center text-slate-500">
                   No mutual funds found matching search.
                 </td>
               </tr>

@@ -8,6 +8,7 @@ import {
 } from "../db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { ZerodhaHoldingParsed } from "./zerodhaParser";
+import { getSchemeHistoryForDbCode, findClosestNav } from "./alpha";
 
 import {
   autoMapScheme,
@@ -60,6 +61,15 @@ export interface ZerodhaDashboardData {
   sectorAllocation: { name: string; value: number }[];
   categoryAllocation: { name: string; value: number }[];
   assetSplit: { name: string; value: number }[];
+  timelineData: {
+    date: string;
+    equity: number;
+    mutualFunds: number;
+    nifty50: number;
+    equityReturn: number;
+    fundsReturn: number;
+    niftyReturn: number;
+  }[];
 }
 
 export async function saveZerodhaHoldingsReport(
@@ -141,6 +151,57 @@ export async function getZerodhaReports() {
   });
 }
 
+function calculateFundMetrics(
+  purchaseNav: number,
+  currentNav: number,
+  asOfDate: string,
+  fundNavHistory: { date: string; nav: string }[]
+): { xirr: number; cagr: number } {
+  if (
+    !fundNavHistory.length ||
+    !purchaseNav ||
+    !currentNav ||
+    purchaseNav <= 0 ||
+    currentNav <= 0
+  ) {
+    return { xirr: 0, cagr: 0 };
+  }
+
+  const parseApiDate = (s: string) => {
+    const [dd, mm, yyyy] = s.split("-");
+    return new Date(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const sorted = [...fundNavHistory]
+    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let bestEntry = sorted[0];
+  let bestDiff = Math.abs(sorted[0].nav - purchaseNav);
+  for (const entry of sorted) {
+    const diff = Math.abs(entry.nav - purchaseNav);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestEntry = entry;
+    }
+  }
+
+  const investDate = bestEntry.date;
+  const exitDate = new Date(asOfDate);
+  const msDiff = exitDate.getTime() - investDate.getTime();
+  const years = msDiff / (365.25 * 24 * 60 * 60 * 1000);
+
+  if (years <= 0) {
+    return { xirr: 0, cagr: 0 };
+  }
+
+  const cagrValue = (Math.pow(currentNav / purchaseNav, 1 / years) - 1) * 100;
+  return {
+    xirr: cagrValue,
+    cagr: cagrValue,
+  };
+}
+
 export async function getZerodhaDashboardData(
   reportId?: number
 ): Promise<ZerodhaDashboardData> {
@@ -165,6 +226,7 @@ export async function getZerodhaDashboardData(
       sectorAllocation: [],
       categoryAllocation: [],
       assetSplit: [],
+      timelineData: [],
     };
   }
 
@@ -172,10 +234,42 @@ export async function getZerodhaDashboardData(
     ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
 
-  const holdings = await db
+  const rawHoldings = await db
     .select()
     .from(zerodhaHoldings)
     .where(eq(zerodhaHoldings.reportId, selectedReport.id));
+
+  const schemesList = await db.select().from(zerodhaSchemes);
+
+  const enrichedHoldings = await Promise.all(
+    rawHoldings.map(async (h) => {
+      if (h.holdingType !== "mutual_fund") {
+        return { ...h, xirr: null, cagr: null };
+      }
+      const scheme = schemesList.find((s) => s.name === h.symbol);
+      if (scheme && scheme.schemeCodeApi) {
+        const fundDetails = await getSchemeHistoryForDbCode(
+          scheme.schemeCodeApi
+        );
+        if (fundDetails && fundDetails.data && fundDetails.data.length > 0) {
+          const metrics = calculateFundMetrics(
+            h.averagePrice,
+            h.currentPrice,
+            selectedReport.asOfDate,
+            fundDetails.data
+          );
+          return {
+            ...h,
+            xirr: metrics.xirr,
+            cagr: metrics.cagr,
+          };
+        }
+      }
+      return { ...h, xirr: null, cagr: null };
+    })
+  );
+
+  const holdings = enrichedHoldings;
 
   // Compute totals
   let stocksInvested = 0;
@@ -225,6 +319,91 @@ export async function getZerodhaDashboardData(
     { name: "Mutual Funds", value: fundsCurrentValue },
   ].filter((item) => item.value > 0);
 
+  // Compute timeline data
+  const timelineData = [];
+  const chronologicalReports = [...reportsList].reverse();
+
+  // Fetch Nifty 50 history (use main db code)
+  const niftyDetails = await getSchemeHistoryForDbCode("120716");
+  const niftyHistory = niftyDetails?.data || [];
+
+  let niftyStartNav = 0;
+  let niftyBase = 1000;
+
+  for (const r of chronologicalReports) {
+    const snapHoldings = await db
+      .select()
+      .from(zerodhaHoldings)
+      .where(eq(zerodhaHoldings.reportId, r.id));
+
+    let snapStocksInvested = 0;
+    let snapStocksCurrentValue = 0;
+    let snapFundsInvested = 0;
+    let snapFundsCurrentValue = 0;
+
+    for (const h of snapHoldings) {
+      if (h.holdingType === "equity") {
+        snapStocksInvested += h.investedValue;
+        snapStocksCurrentValue += h.currentValue;
+      } else {
+        snapFundsInvested += h.investedValue;
+        snapFundsCurrentValue += h.currentValue;
+      }
+    }
+
+    const eqReturn =
+      snapStocksInvested > 0
+        ? ((snapStocksCurrentValue - snapStocksInvested) / snapStocksInvested) *
+          100
+        : 0;
+    const mfReturn =
+      snapFundsInvested > 0
+        ? ((snapFundsCurrentValue - snapFundsInvested) / snapFundsInvested) *
+          100
+        : 0;
+
+    const totalVal = snapStocksCurrentValue + snapFundsCurrentValue;
+    const totalInv = snapStocksInvested + snapFundsInvested;
+    const totalReturn =
+      totalInv > 0 ? ((totalVal - totalInv) / totalInv) * 105 : 0;
+
+    const eqIndex = 1000 * (1 + eqReturn / 100);
+    const mfIndex = 1000 * (1 + mfReturn / 100);
+
+    let niftyNav = 10;
+    if (niftyHistory.length > 0) {
+      niftyNav = findClosestNav(niftyHistory, r.asOfDate);
+    }
+
+    if (niftyStartNav === 0 && niftyHistory.length > 0) {
+      niftyStartNav = niftyNav;
+      // Align start level with the baseline return index of the portfolio
+      niftyBase = 1000 * (1 + totalReturn / 100);
+    }
+
+    const niftyIndex =
+      niftyStartNav > 0 ? niftyBase * (niftyNav / niftyStartNav) : niftyBase;
+    const niftyRetPercent =
+      niftyStartNav > 0
+        ? ((niftyNav - niftyStartNav) / niftyStartNav) * 100
+        : 0;
+
+    const formattedDate = new Date(r.asOfDate).toLocaleDateString("en-IN", {
+      month: "short",
+      year: "2-digit",
+    });
+
+    timelineData.push({
+      date: formattedDate,
+      equity: Math.round(eqIndex * 10) / 10,
+      mutualFunds: Math.round(mfIndex * 10) / 10,
+      nifty50: Math.round(niftyIndex * 10) / 10,
+      equityReturn: Math.round(eqReturn * 10) / 10,
+      fundsReturn: Math.round(mfReturn * 10) / 10,
+      niftyReturn: Math.round(niftyRetPercent * 10) / 10,
+    });
+  }
+
   return {
     reportsList,
     selectedReport,
@@ -244,6 +423,7 @@ export async function getZerodhaDashboardData(
     sectorAllocation,
     categoryAllocation,
     assetSplit,
+    timelineData,
   };
 }
 

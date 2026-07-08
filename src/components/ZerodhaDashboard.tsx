@@ -45,6 +45,8 @@ export interface ZerodhaHolding {
   currentValue: number;
   unrealizedPnl: number;
   unrealizedPnlPct: number;
+  xirr?: number | null;
+  cagr?: number | null;
 }
 
 export interface ZerodhaScheme {
@@ -84,6 +86,15 @@ interface ZerodhaDashboardProps {
     sectorAllocation: { name: string; value: number }[];
     categoryAllocation: { name: string; value: number }[];
     assetSplit: { name: string; value: number }[];
+    timelineData: {
+      date: string;
+      equity: number;
+      mutualFunds: number;
+      nifty50: number;
+      equityReturn: number;
+      fundsReturn: number;
+      niftyReturn: number;
+    }[];
   };
   allSchemes: ZerodhaScheme[];
 }

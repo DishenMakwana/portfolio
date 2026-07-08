@@ -180,7 +180,7 @@ export function getSchemeHistoryForDbCode(
  * Find the closest NAV on or before a given date
  * dateStr format: YYYY-MM-DD
  */
-function findClosestNav(
+export function findClosestNav(
   navHistory: { date: string; nav: string }[],
   targetDateStr: string
 ): number {
