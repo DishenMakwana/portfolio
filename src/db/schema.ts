@@ -161,3 +161,70 @@ export const schemeNavHistory = mySchema.table(
     unique("scheme_nav_history_code_date_uq").on(table.schemeCode, table.date),
   ]
 );
+
+export const zerodhaReports = mySchema.table("zerodha_reports", {
+  id: serial("id").primaryKey(),
+  asOfDate: text("as_of_date").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  filename: text("filename").notNull(),
+});
+
+export const zerodhaHoldings = mySchema.table(
+  "zerodha_holdings",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => zerodhaReports.id, {
+      onDelete: "cascade",
+    }),
+    holdingType: text("holding_type").notNull(), // 'equity' or 'mutual_fund'
+    symbol: text("symbol").notNull(),
+    isin: text("isin").notNull(),
+    sector: text("sector"), // null for mutual funds
+    instrumentType: text("instrument_type"), // null for stocks
+    quantity: doublePrecision("quantity").notNull(),
+    averagePrice: doublePrecision("average_price").notNull(),
+    currentPrice: doublePrecision("current_price").notNull(),
+    investedValue: doublePrecision("invested_value").notNull(),
+    currentValue: doublePrecision("current_value").notNull(),
+    unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
+    unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+  },
+  (table) => [index("zerodha_holdings_report_id_idx").on(table.reportId)]
+);
+
+export const zerodhaSchemes = mySchema.table("zerodha_schemes", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category").notNull(),
+  schemeCodeApi: text("scheme_code_api"),
+  mappedAt: text("mapped_at"),
+});
+
+export const zerodhaSchemeNavCacheMeta = mySchema.table(
+  "zerodha_scheme_nav_cache_meta",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    fundHouse: text("fund_house").notNull(),
+    schemeType: text("scheme_type").notNull(),
+    schemeCategory: text("scheme_category").notNull(),
+    schemeName: text("scheme_name").notNull(),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+  }
+);
+
+export const zerodhaSchemeNavHistory = mySchema.table(
+  "zerodha_scheme_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("zerodha_scheme_nav_history_code_date_uq").on(
+      table.schemeCode,
+      table.date
+    ),
+  ]
+);

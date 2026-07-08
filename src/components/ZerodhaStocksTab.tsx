@@ -1,0 +1,221 @@
+"use client";
+
+import { useState } from "react";
+import { Search } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
+import type { ZerodhaHolding } from "./ZerodhaDashboard";
+
+interface ZerodhaStocksTabProps {
+  stocks: ZerodhaHolding[];
+  renderStockSortIcon: (field: any) => React.ReactNode;
+  toggleStockSort: (field: any) => void;
+  stockSortField: string;
+  stockSortOrder: "asc" | "desc";
+  formatPrice: (v: number) => string;
+}
+
+export default function ZerodhaStocksTab({
+  stocks,
+  renderStockSortIcon,
+  toggleStockSort,
+  stockSortField,
+  stockSortOrder,
+  formatPrice,
+}: ZerodhaStocksTabProps) {
+  const [stockSearch, setStockSearch] = useState("");
+
+  const filteredStocks = stocks
+    .filter((s) => s.symbol.toLowerCase().includes(stockSearch.toLowerCase()))
+    .sort((a, b) => {
+      let valA: any = a[stockSortField as keyof ZerodhaHolding];
+      let valB: any = b[stockSortField as keyof ZerodhaHolding];
+      if (typeof valA === "string") {
+        return stockSortOrder === "asc"
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      }
+      return stockSortOrder === "asc"
+        ? (valA || 0) - (valB || 0)
+        : (valB || 0) - (valA || 0);
+    });
+
+  return (
+    <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
+      {/* Search bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-800/60">
+        <div className="relative max-w-sm w-full">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+          />
+          <input
+            type="text"
+            placeholder="Search stock symbol..."
+            value={stockSearch}
+            onChange={(e) => setStockSearch(e.target.value)}
+            className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full transition"
+          />
+        </div>
+        <div className="text-xs text-slate-500 font-bold pr-1">
+          Showing {filteredStocks.length} of {stocks.length} stocks
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                onClick={() => toggleStockSort("symbol")}
+              >
+                <div className="flex items-center gap-1">
+                  Stock Details {renderStockSortIcon("symbol")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("quantity")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Qty {renderStockSortIcon("quantity")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("averagePrice")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Avg Cost {renderStockSortIcon("averagePrice")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("currentPrice")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  LTP {renderStockSortIcon("currentPrice")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("investedValue")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Invested {renderStockSortIcon("investedValue")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("currentValue")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Valuation {renderStockSortIcon("currentValue")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("unrealizedPnl")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Profit / Loss {renderStockSortIcon("unrealizedPnl")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("unrealizedPnlPct")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Return % {renderStockSortIcon("unrealizedPnlPct")}
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
+            {filteredStocks.length > 0 ? (
+              filteredStocks.map((s, idx) => (
+                <tr
+                  key={idx}
+                  className="transition cursor-default select-none hover:bg-slate-950/45"
+                >
+                  {/* Stock name + ISIN */}
+                  <td className="p-4">
+                    <div className="font-bold text-slate-100">{s.symbol}</div>
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                        {s.instrumentType || "EQ"}
+                      </span>
+                      <span className="font-mono">{s.isin}</span>
+                    </div>
+                  </td>
+                  {/* Quantity */}
+                  <td className="p-4 text-right font-bold text-slate-100">
+                    {s.quantity}
+                  </td>
+                  {/* Avg cost */}
+                  <td className="p-4 text-right font-medium text-slate-300">
+                    {formatPrice(s.averagePrice)}
+                  </td>
+                  {/* LTP */}
+                  <td className="p-4 text-right font-medium text-slate-200">
+                    {formatPrice(s.currentPrice)}
+                  </td>
+                  {/* Invested */}
+                  <td className="p-4 text-right font-medium text-slate-400">
+                    {formatCurrency(s.investedValue)}
+                  </td>
+                  {/* Valuation */}
+                  <td className="p-4 text-right font-bold text-slate-100">
+                    {formatCurrency(s.currentValue)}
+                  </td>
+                  {/* P&L + abs return sub-line */}
+                  <td className="p-4 text-right">
+                    <div
+                      className={`font-semibold ${
+                        s.unrealizedPnl >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {formatCurrency(s.unrealizedPnl)}
+                    </div>
+                    <div
+                      className={`text-[11px] ${
+                        s.unrealizedPnl >= 0
+                          ? "text-emerald-500/80"
+                          : "text-red-500/80"
+                      }`}
+                    >
+                      {s.unrealizedPnlPct >= 0 ? "+" : ""}
+                      {s.unrealizedPnlPct.toFixed(1)}% Abs
+                    </div>
+                  </td>
+                  {/* Return % badge */}
+                  <td className="p-4 text-right">
+                    <span
+                      className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
+                        s.unrealizedPnl >= 0
+                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                          : "bg-red-950/80 text-red-400 border border-red-800/40"
+                      }`}
+                    >
+                      {s.unrealizedPnlPct >= 0 ? "+" : ""}
+                      {s.unrealizedPnlPct.toFixed(2)}%
+                    </span>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="p-8 text-center text-slate-500">
+                  No stocks found matching search.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -20,6 +20,55 @@ const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
+async function triggerNavCacheUpdate(schemeCode: string) {
+  try {
+    const data = await fetchMfDetails(schemeCode);
+    if (data && data.meta && data.data && data.data.length > 0) {
+      // Upsert scheme cache metadata
+      await db
+        .insert(schemeNavCacheMeta)
+        .values({
+          schemeCode,
+          fundHouse: data.meta.fund_house || "Unknown",
+          schemeType: data.meta.scheme_type || "Unknown",
+          schemeCategory: data.meta.scheme_category || "Unknown",
+          schemeName: data.meta.scheme_name || "Unknown",
+          lastFetchedAt: new Date().toISOString(),
+        })
+        .onConflictDoUpdate({
+          target: schemeNavCacheMeta.schemeCode,
+          set: {
+            fundHouse: data.meta.fund_house || "Unknown",
+            schemeType: data.meta.scheme_type || "Unknown",
+            schemeCategory: data.meta.scheme_category || "Unknown",
+            schemeName: data.meta.scheme_name || "Unknown",
+            lastFetchedAt: new Date().toISOString(),
+          },
+        });
+
+      // Prepare history values for insertion
+      const historyValues = data.data.map((p) => ({
+        schemeCode,
+        date: p.date,
+        nav: parseFloat(p.nav) || 0,
+        fetchedAt: new Date().toISOString(),
+      }));
+
+      // Batch insert in chunks of 500
+      const chunkSize = 500;
+      for (let i = 0; i < historyValues.length; i += chunkSize) {
+        const chunk = historyValues.slice(i, i + chunkSize);
+        await db.insert(schemeNavHistory).values(chunk).onConflictDoNothing();
+      }
+    }
+  } catch (err) {
+    console.error(
+      `Failed background cache update for family scheme ${schemeCode}:`,
+      err
+    );
+  }
+}
+
 export function getSchemeHistoryForDbCode(
   dbSchemeCode: string
 ): Promise<MfDetailsResponse | null> {
@@ -42,7 +91,14 @@ export function getSchemeHistoryForDbCode(
         now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
           cacheAgeLimit;
 
-      if (cachedMeta && isFresh) {
+      if (cachedMeta) {
+        // If cache is stale, trigger background update
+        if (!isFresh) {
+          triggerNavCacheUpdate(schemeCode).catch((e) =>
+            console.error("[SWR BACKGROUND ERROR]", e)
+          );
+        }
+
         const history = await db.query.schemeNavHistory.findMany({
           where: eq(schemeNavHistory.schemeCode, schemeCode),
         });
@@ -64,7 +120,7 @@ export function getSchemeHistoryForDbCode(
         }
       }
 
-      // 2. Fetch fresh details from API
+      // 2. Fetch fresh details from API (Sync fallback because no cache exists)
       const data = await fetchMfDetails(schemeCode);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
@@ -111,29 +167,6 @@ export function getSchemeHistoryForDbCode(
           console.error("Error writing database NAV cache:", e);
         }
         return data;
-      }
-
-      // 3. Fallback to expired database cache if API fetch fails
-      if (cachedMeta) {
-        const history = await db.query.schemeNavHistory.findMany({
-          where: eq(schemeNavHistory.schemeCode, schemeCode),
-        });
-
-        if (history.length > 0) {
-          return {
-            meta: {
-              fund_house: cachedMeta.fundHouse,
-              scheme_type: cachedMeta.schemeType,
-              scheme_category: cachedMeta.schemeCategory,
-              scheme_code: parseInt(cachedMeta.schemeCode),
-              scheme_name: cachedMeta.schemeName,
-            },
-            data: history.map((h) => ({
-              date: h.date,
-              nav: String(h.nav),
-            })),
-          };
-        }
       }
 
       return null;
@@ -200,6 +233,92 @@ export interface PortfolioTransaction {
   type: "BUY" | "SELL";
   amount: number; // Positive absolute value
   units: number;
+}
+
+/**
+ * Computes NAV-based XIRR and benchmark XIRR for Zerodha holdings that have
+ * no explicit transaction history. Uses the date in the fund's own NAV history
+ * that is closest to the purchase NAV as the synthetic investment date.
+ */
+export function calculateXirrFromNav(
+  purchaseNav: number,
+  currentNav: number,
+  asOfDate: string,
+  fundNavHistory: { date: string; nav: string }[],
+  benchNavHistory: { date: string; nav: string }[]
+): { portfolioXirr: number; benchmarkXirr: number; alpha: number } {
+  const parseApiDate = (s: string) => {
+    const [dd, mm, yyyy] = s.split("-");
+    return new Date(`${yyyy}-${mm}-${dd}`);
+  };
+
+  if (
+    !fundNavHistory.length ||
+    !benchNavHistory.length ||
+    !purchaseNav ||
+    !currentNav
+  ) {
+    return { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
+  }
+
+  // Find the NAV entry in fund history closest to purchaseNav as investment date
+  const sorted = [...fundNavHistory]
+    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  let bestEntry = sorted[0];
+  let bestDiff = Math.abs(sorted[0].nav - purchaseNav);
+  for (const entry of sorted) {
+    const diff = Math.abs(entry.nav - purchaseNav);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestEntry = entry;
+    }
+  }
+  const investDate = bestEntry.date;
+  const exitDate = new Date(asOfDate);
+
+  // Synthetic cash flows: -₹100 invested, +₹100*(currentNav/purchaseNav) redeemed
+  const invested = 100;
+  const redeemed = invested * (currentNav / purchaseNav);
+  const portfolioXirr = calculateXIRR([
+    { amount: -invested, date: investDate },
+    { amount: redeemed, date: exitDate },
+  ]);
+
+  // Benchmark: how much would ₹100 grow in UTI Nifty 50 over same period?
+  const benchSorted = [...benchNavHistory]
+    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const benchAtBuy = benchSorted.reduce((prev, cur) =>
+    Math.abs(cur.date.getTime() - investDate.getTime()) <
+    Math.abs(prev.date.getTime() - investDate.getTime())
+      ? cur
+      : prev
+  );
+  const benchAtSell = benchSorted.reduce((prev, cur) =>
+    Math.abs(cur.date.getTime() - exitDate.getTime()) <
+    Math.abs(prev.date.getTime() - exitDate.getTime())
+      ? cur
+      : prev
+  );
+
+  const benchRedeemed =
+    benchAtBuy.nav > 0
+      ? invested * (benchAtSell.nav / benchAtBuy.nav)
+      : invested;
+
+  const benchmarkXirr = calculateXIRR([
+    { amount: -invested, date: investDate },
+    { amount: benchRedeemed, date: exitDate },
+  ]);
+
+  return {
+    portfolioXirr,
+    benchmarkXirr,
+    alpha: portfolioXirr - benchmarkXirr,
+  };
 }
 
 /**
