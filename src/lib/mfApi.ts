@@ -15,6 +15,8 @@ export interface MfDetailsResponse {
     scheme_category: string;
     scheme_code: number;
     scheme_name: string;
+    isin_growth?: string | null;
+    isin_div_reinvestment?: string | null;
   };
   data: NavDataPoint[];
 }
@@ -75,15 +77,24 @@ export async function searchMutualFund(
 /**
  * Fetch scheme details and historical NAVs by scheme code
  */
+
 export async function fetchMfDetails(
-  schemeCode: string
+  schemeCode: string,
+  startDate?: string,
+  endDate?: string
 ): Promise<MfDetailsResponse | null> {
   if (!schemeCode) return null;
   if (isSpecializedFundSchemeCode(schemeCode)) return null;
 
   try {
     await throttleRequest();
-    const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const queryString = params.toString();
+    const url = `https://api.mfapi.in/mf/${schemeCode}${queryString ? `?${queryString}` : ""}`;
+
+    const res = await fetch(url, {
       headers: {
         Accept: "application/json",
       },

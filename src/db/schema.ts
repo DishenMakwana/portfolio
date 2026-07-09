@@ -145,6 +145,8 @@ export const schemeNavCacheMeta = mySchema.table("scheme_nav_cache_meta", {
   schemeType: text("scheme_type").notNull(),
   schemeCategory: text("scheme_category").notNull(),
   schemeName: text("scheme_name").notNull(),
+  isinGrowth: text("isin_growth"),
+  isinDivReinvestment: text("isin_div_reinvestment"),
   lastFetchedAt: text("last_fetched_at").notNull(),
 });
 
@@ -208,6 +210,8 @@ export const zerodhaSchemeNavCacheMeta = mySchema.table(
     schemeType: text("scheme_type").notNull(),
     schemeCategory: text("scheme_category").notNull(),
     schemeName: text("scheme_name").notNull(),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
     lastFetchedAt: text("last_fetched_at").notNull(),
   }
 );
@@ -224,6 +228,32 @@ export const zerodhaSchemeNavHistory = mySchema.table(
   (table) => [
     unique("zerodha_scheme_nav_history_code_date_uq").on(
       table.schemeCode,
+      table.date
+    ),
+  ]
+);
+
+export const benchmarkNavCacheMeta = mySchema.table(
+  "benchmark_nav_cache_meta",
+  {
+    benchmarkCode: text("benchmark_code").primaryKey(),
+    benchmarkName: text("benchmark_name").notNull(),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+  }
+);
+
+export const benchmarkNavHistory = mySchema.table(
+  "benchmark_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    benchmarkCode: text("benchmark_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("benchmark_nav_history_code_date_uq").on(
+      table.benchmarkCode,
       table.date
     ),
   ]

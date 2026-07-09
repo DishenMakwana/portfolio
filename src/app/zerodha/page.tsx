@@ -8,12 +8,14 @@ import { Briefcase } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ reportId?: string }>;
+  searchParams: Promise<{ zerodhaReportId?: string }>;
 }
 
 export default async function ZerodhaPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const reportId = params.reportId ? parseInt(params.reportId, 10) : undefined;
+  const reportId = params.zerodhaReportId
+    ? parseInt(params.zerodhaReportId, 10)
+    : undefined;
 
   const [data, allSchemes] = await Promise.all([
     getZerodhaDashboardData(reportId),

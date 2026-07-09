@@ -1,6 +1,13 @@
 "use client";
 
-import { Upload, FileSpreadsheet, CheckCircle, Trash2 } from "lucide-react";
+import {
+  Upload,
+  FileSpreadsheet,
+  CheckCircle,
+  Trash2,
+  ExternalLink,
+} from "lucide-react";
+import Link from "next/link";
 
 interface SnapshotReport {
   id: number;
@@ -92,13 +99,22 @@ export default function ZerodhaSnapshotsTab({
                     })}
                   </td>
                   <td className="py-3.5 text-center">
-                    <button
-                      onClick={() => handleDeleteReport(rep.id)}
-                      className="text-red-400 hover:text-red-300 p-1.5 rounded bg-red-950/20 border border-red-900/30 hover:bg-red-950/50 hover:border-red-900/60 cursor-pointer transition"
-                      title="Delete upload"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Link
+                        href={`/zerodha?zerodhaReportId=${rep.id}`}
+                        title="View report"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 hover:bg-teal-500/20 hover:text-teal-300 transition"
+                      >
+                        <ExternalLink size={12} />
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteReport(rep.id)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition cursor-pointer"
+                        title="Delete upload"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

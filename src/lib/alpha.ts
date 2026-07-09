@@ -5,7 +5,12 @@ import {
   MfDetailsResponse,
 } from "./mfApi";
 import { db } from "@/db/db";
-import { schemeNavCacheMeta, schemeNavHistory } from "@/db/schema";
+import {
+  schemeNavCacheMeta,
+  schemeNavHistory,
+  benchmarkNavCacheMeta,
+  benchmarkNavHistory,
+} from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 function normaliseSchemeCode(
@@ -20,9 +25,9 @@ const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
-async function triggerNavCacheUpdate(schemeCode: string) {
+async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
   try {
-    const data = await fetchMfDetails(schemeCode);
+    const data = await fetchMfDetails(schemeCode, startDate);
     if (data && data.meta && data.data && data.data.length > 0) {
       // Upsert scheme cache metadata
       await db
@@ -33,6 +38,8 @@ async function triggerNavCacheUpdate(schemeCode: string) {
           schemeType: data.meta.scheme_type || "Unknown",
           schemeCategory: data.meta.scheme_category || "Unknown",
           schemeName: data.meta.scheme_name || "Unknown",
+          isinGrowth: data.meta.isin_growth || null,
+          isinDivReinvestment: data.meta.isin_div_reinvestment || null,
           lastFetchedAt: new Date().toISOString(),
         })
         .onConflictDoUpdate({
@@ -42,6 +49,8 @@ async function triggerNavCacheUpdate(schemeCode: string) {
             schemeType: data.meta.scheme_type || "Unknown",
             schemeCategory: data.meta.scheme_category || "Unknown",
             schemeName: data.meta.scheme_name || "Unknown",
+            isinGrowth: data.meta.isin_growth || null,
+            isinDivReinvestment: data.meta.isin_div_reinvestment || null,
             lastFetchedAt: new Date().toISOString(),
           },
         });
@@ -69,6 +78,174 @@ async function triggerNavCacheUpdate(schemeCode: string) {
   }
 }
 
+const benchmarkHistoryCache = new Map<
+  string,
+  Promise<MfDetailsResponse | null>
+>();
+
+async function triggerBenchmarkCacheUpdate(
+  benchmarkCode: string,
+  startDate?: string
+) {
+  try {
+    const data = await fetchMfDetails(benchmarkCode, startDate);
+    if (data && data.meta && data.data && data.data.length > 0) {
+      await db
+        .insert(benchmarkNavCacheMeta)
+        .values({
+          benchmarkCode,
+          benchmarkName: data.meta.scheme_name || "Unknown",
+          lastFetchedAt: new Date().toISOString(),
+        })
+        .onConflictDoUpdate({
+          target: benchmarkNavCacheMeta.benchmarkCode,
+          set: {
+            benchmarkName: data.meta.scheme_name || "Unknown",
+            lastFetchedAt: new Date().toISOString(),
+          },
+        });
+
+      const historyValues = data.data.map((p) => ({
+        benchmarkCode,
+        date: p.date,
+        nav: parseFloat(p.nav) || 0,
+        fetchedAt: new Date().toISOString(),
+      }));
+
+      const chunkSize = 500;
+      for (let i = 0; i < historyValues.length; i += chunkSize) {
+        const chunk = historyValues.slice(i, i + chunkSize);
+        await db
+          .insert(benchmarkNavHistory)
+          .values(chunk)
+          .onConflictDoNothing();
+      }
+    }
+  } catch (err) {
+    console.error(
+      `Failed background cache update for benchmark ${benchmarkCode}:`,
+      err
+    );
+  }
+}
+
+export function getBenchmarkHistory(
+  dbBenchmarkCode: string
+): Promise<MfDetailsResponse | null> {
+  const benchmarkCode = normaliseSchemeCode(dbBenchmarkCode);
+  if (!benchmarkCode || isSpecializedFundSchemeCode(benchmarkCode))
+    return Promise.resolve(null);
+
+  let cachedPromise = benchmarkHistoryCache.get(benchmarkCode);
+  if (!cachedPromise) {
+    cachedPromise = (async () => {
+      const cachedMeta = await db.query.benchmarkNavCacheMeta.findFirst({
+        where: eq(benchmarkNavCacheMeta.benchmarkCode, benchmarkCode),
+      });
+
+      const now = new Date();
+      const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+      const isFresh =
+        cachedMeta &&
+        now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+          cacheAgeLimit;
+
+      if (cachedMeta) {
+        const history = await db.query.benchmarkNavHistory.findMany({
+          where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+        });
+
+        // Find latest date in cache to fetch from that date onwards
+        let latestDateStr: string | undefined = undefined;
+        if (history.length > 0) {
+          let latest = new Date(0);
+          for (const pt of history) {
+            const [d, m, y] = pt.date.split("-");
+            const date = new Date(`${y}-${m}-${d}`);
+            if (date.getTime() > latest.getTime()) {
+              latest = date;
+              latestDateStr = `${y}-${m}-${d}`;
+            }
+          }
+        }
+
+        if (!isFresh) {
+          triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr).catch((e) =>
+            console.error("[SWR BACKGROUND ERROR]", e)
+          );
+        }
+
+        if (history.length > 0) {
+          return {
+            meta: {
+              fund_house: "Benchmark",
+              scheme_type: "Index",
+              scheme_category: "Benchmark Index",
+              scheme_code: parseInt(cachedMeta.benchmarkCode),
+              scheme_name: cachedMeta.benchmarkName,
+            },
+            data: history.map((h) => ({
+              date: h.date,
+              nav: String(h.nav),
+            })),
+          };
+        }
+      }
+
+      // Fetch last 5 years for benchmark comparison
+      const nowTime = new Date();
+      const fiveYearsAgo = new Date(
+        nowTime.getFullYear() - 5,
+        nowTime.getMonth(),
+        nowTime.getDate()
+      );
+      const fiveYearsAgoStr = fiveYearsAgo.toISOString().split("T")[0];
+
+      const data = await fetchMfDetails(benchmarkCode, fiveYearsAgoStr);
+      if (data && data.meta && data.data && data.data.length > 0) {
+        try {
+          await db
+            .insert(benchmarkNavCacheMeta)
+            .values({
+              benchmarkCode,
+              benchmarkName: data.meta.scheme_name || "Unknown",
+              lastFetchedAt: new Date().toISOString(),
+            })
+            .onConflictDoUpdate({
+              target: benchmarkNavCacheMeta.benchmarkCode,
+              set: {
+                benchmarkName: data.meta.scheme_name || "Unknown",
+                lastFetchedAt: new Date().toISOString(),
+              },
+            });
+
+          const historyValues = data.data.map((p) => ({
+            benchmarkCode,
+            date: p.date,
+            nav: parseFloat(p.nav) || 0,
+            fetchedAt: new Date().toISOString(),
+          }));
+
+          const chunkSize = 500;
+          for (let i = 0; i < historyValues.length; i += chunkSize) {
+            const chunk = historyValues.slice(i, i + chunkSize);
+            await db
+              .insert(benchmarkNavHistory)
+              .values(chunk)
+              .onConflictDoNothing();
+          }
+        } catch (e) {
+          console.error("Error writing benchmark NAV cache:", e);
+        }
+        return data;
+      }
+      return null;
+    })();
+    benchmarkHistoryCache.set(benchmarkCode, cachedPromise);
+  }
+  return cachedPromise;
+}
+
 export function getSchemeHistoryForDbCode(
   dbSchemeCode: string
 ): Promise<MfDetailsResponse | null> {
@@ -92,16 +269,30 @@ export function getSchemeHistoryForDbCode(
           cacheAgeLimit;
 
       if (cachedMeta) {
-        // If cache is stale, trigger background update
-        if (!isFresh) {
-          triggerNavCacheUpdate(schemeCode).catch((e) =>
-            console.error("[SWR BACKGROUND ERROR]", e)
-          );
-        }
-
         const history = await db.query.schemeNavHistory.findMany({
           where: eq(schemeNavHistory.schemeCode, schemeCode),
         });
+
+        // Find latest date in cache to fetch from that date onwards
+        let latestDateStr: string | undefined = undefined;
+        if (history.length > 0) {
+          let latest = new Date(0);
+          for (const pt of history) {
+            const [d, m, y] = pt.date.split("-");
+            const date = new Date(`${y}-${m}-${d}`);
+            if (date.getTime() > latest.getTime()) {
+              latest = date;
+              latestDateStr = `${y}-${m}-${d}`;
+            }
+          }
+        }
+
+        // If cache is stale, trigger background update
+        if (!isFresh) {
+          triggerNavCacheUpdate(schemeCode, latestDateStr).catch((e) =>
+            console.error("[SWR BACKGROUND ERROR]", e)
+          );
+        }
 
         if (history.length > 0) {
           return {
@@ -121,7 +312,16 @@ export function getSchemeHistoryForDbCode(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      const data = await fetchMfDetails(schemeCode);
+      // If no data exists, fetch only the last 3 years to keep payload fast and prevent timeouts
+      const nowTime = new Date();
+      const threeYearsAgo = new Date(
+        nowTime.getFullYear() - 3,
+        nowTime.getMonth(),
+        nowTime.getDate()
+      );
+      const threeYearsAgoStr = threeYearsAgo.toISOString().split("T")[0];
+
+      const data = await fetchMfDetails(schemeCode, threeYearsAgoStr);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
           // Upsert scheme cache metadata
@@ -133,6 +333,8 @@ export function getSchemeHistoryForDbCode(
               schemeType: data.meta.scheme_type || "Unknown",
               schemeCategory: data.meta.scheme_category || "Unknown",
               schemeName: data.meta.scheme_name || "Unknown",
+              isinGrowth: data.meta.isin_growth || null,
+              isinDivReinvestment: data.meta.isin_div_reinvestment || null,
               lastFetchedAt: new Date().toISOString(),
             })
             .onConflictDoUpdate({
@@ -142,6 +344,8 @@ export function getSchemeHistoryForDbCode(
                 schemeType: data.meta.scheme_type || "Unknown",
                 schemeCategory: data.meta.scheme_category || "Unknown",
                 schemeName: data.meta.scheme_name || "Unknown",
+                isinGrowth: data.meta.isin_growth || null,
+                isinDivReinvestment: data.meta.isin_div_reinvestment || null,
                 lastFetchedAt: new Date().toISOString(),
               },
             });
@@ -213,6 +417,10 @@ export function findClosestNav(
   }
 
   const MAX_LOOKBACK_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+  if (closestDateDiff === Infinity) {
+    // Target date is before fund inception. Use oldest available NAV.
+    return sortedNavs[0].nav;
+  }
   if (closestDateDiff > MAX_LOOKBACK_MS) {
     // Check if targetDate is slightly before first NAV (inception fallback)
     const oldestPoint = sortedNavs[0];
@@ -372,7 +580,7 @@ export async function calculateAlpha(
   }
 
   // 2. Fetch Benchmark NAV History
-  const benchmarkDetails = await getSchemeHistoryForDbCode(benchmarkSchemeCode);
+  const benchmarkDetails = await getBenchmarkHistory(benchmarkSchemeCode);
   if (
     !benchmarkDetails ||
     !benchmarkDetails.data ||
@@ -549,7 +757,9 @@ export function getFactsheetMetadata(
     exitLoad = cleanCat.includes("liquid")
       ? "0.0070% to Nil depending on redemption day"
       : "Nil";
-    benchmarkName = "Nifty Short Duration Debt Index";
+    benchmarkName = cleanCat.includes("ultra short")
+      ? "NIFTY Ultra Short Duration Debt Index A-I"
+      : "Nifty Short Duration Debt Index";
     allocation = {
       equity: 0.0,
       debt: 98.4,
@@ -836,12 +1046,31 @@ export function getBenchmarkCodeForCategory(category: string | null): string {
   if (cat.includes("mid")) {
     return "147622"; // Nifty Midcap 150
   }
+  if (
+    cat.includes("hybrid") ||
+    cat.includes("balanced") ||
+    cat.includes("alloc")
+  ) {
+    return "120251"; // Nifty 50 Hybrid Composite debt 65:35 Index (proxy ICICI Pru Equity & Debt Fund Direct)
+  }
+  if (
+    cat.includes("debt") ||
+    cat.includes("liquid") ||
+    cat.includes("short") ||
+    cat.includes("duration") ||
+    cat.includes("gilt") ||
+    cat.includes("bond")
+  ) {
+    return "120197"; // ICICI Prudential Liquid Fund Direct Growth (proxy for Nifty Short/Ultra Short Duration indices)
+  }
   return "120716"; // Nifty 50
 }
 
 export function getBenchmarkNameForCode(code: string): string {
   if (code === "147623") return "Nifty Smallcap 250 Index";
   if (code === "147622") return "Nifty Midcap 150 Index";
+  if (code === "120251") return "Nifty 50 Hybrid Composite debt 65:35 Index";
+  if (code === "120197") return "Nifty Short/Ultra Short Duration Debt Index";
   return "Nifty 50 Index";
 }
 
@@ -850,5 +1079,8 @@ export function getBenchmarkFundNameForCode(code: string): string {
     return "Motilal Oswal Nifty Smallcap 250 Index Fund Direct";
   if (code === "147622")
     return "Motilal Oswal Nifty Midcap 150 Index Fund Direct";
+  if (code === "120251")
+    return "ICICI Prudential Equity & Debt Fund Direct Growth";
+  if (code === "120197") return "ICICI Prudential Liquid Fund Direct Growth";
   return "UTI Nifty 50 Index Fund Direct";
 }

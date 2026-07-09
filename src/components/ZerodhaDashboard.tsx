@@ -238,7 +238,7 @@ export default function ZerodhaDashboard({
 
   const handleReportChange = (reportId: string) => {
     startTransition(() => {
-      router.push(`/zerodha?reportId=${reportId}`);
+      router.push(`/zerodha?zerodhaReportId=${reportId}`);
     });
   };
 
@@ -253,7 +253,7 @@ export default function ZerodhaDashboard({
     setIsUploading(false);
     if (res.success) {
       router.refresh();
-      router.push(`/zerodha?reportId=${res.reportId}`);
+      router.push(`/zerodha?zerodhaReportId=${res.reportId}`);
       setActiveTab("overview");
     } else {
       setUploadError(res.error || "Upload failed");

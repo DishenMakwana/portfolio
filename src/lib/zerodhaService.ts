@@ -8,7 +8,11 @@ import {
 } from "../db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { ZerodhaHoldingParsed } from "./zerodhaParser";
-import { getSchemeHistoryForDbCode, findClosestNav } from "./alpha";
+import {
+  getSchemeHistoryForDbCode,
+  getBenchmarkHistory,
+  findClosestNav,
+} from "./alpha";
 import { fetchStockHistory } from "./stockApi";
 
 import {
@@ -354,7 +358,7 @@ export async function getZerodhaDashboardData(
   const chronologicalReports = [...reportsList].reverse();
 
   // Fetch Nifty 50 history (use main db code)
-  const niftyDetails = await getSchemeHistoryForDbCode("120716");
+  const niftyDetails = await getBenchmarkHistory("120716");
   const niftyHistory = niftyDetails?.data || [];
 
   let niftyStartNav = 0;
@@ -471,9 +475,12 @@ export function normaliseSchemeCode(
   return match ? match[0] : null;
 }
 
-async function triggerZerodhaNavCacheUpdate(schemeCode: string) {
+async function triggerZerodhaNavCacheUpdate(
+  schemeCode: string,
+  startDate?: string
+) {
   try {
-    const data = await fetchMfDetails(schemeCode);
+    const data = await fetchMfDetails(schemeCode, startDate);
     if (data && data.meta && data.data && data.data.length > 0) {
       await db
         .insert(zerodhaSchemeNavCacheMeta)
@@ -483,6 +490,8 @@ async function triggerZerodhaNavCacheUpdate(schemeCode: string) {
           schemeType: data.meta.scheme_type || "Unknown",
           schemeCategory: data.meta.scheme_category || "Unknown",
           schemeName: data.meta.scheme_name || "Unknown",
+          isinGrowth: data.meta.isin_growth || null,
+          isinDivReinvestment: data.meta.isin_div_reinvestment || null,
           lastFetchedAt: new Date().toISOString(),
         })
         .onConflictDoUpdate({
@@ -492,6 +501,8 @@ async function triggerZerodhaNavCacheUpdate(schemeCode: string) {
             schemeType: data.meta.scheme_type || "Unknown",
             schemeCategory: data.meta.scheme_category || "Unknown",
             schemeName: data.meta.scheme_name || "Unknown",
+            isinGrowth: data.meta.isin_growth || null,
+            isinDivReinvestment: data.meta.isin_div_reinvestment || null,
             lastFetchedAt: new Date().toISOString(),
           },
         });
@@ -503,14 +514,13 @@ async function triggerZerodhaNavCacheUpdate(schemeCode: string) {
         fetchedAt: new Date().toISOString(),
       }));
 
-      await db
-        .delete(zerodhaSchemeNavHistory)
-        .where(eq(zerodhaSchemeNavHistory.schemeCode, schemeCode));
-
       const chunkSize = 100;
       for (let i = 0; i < historyValues.length; i += chunkSize) {
         const chunk = historyValues.slice(i, i + chunkSize);
-        await db.insert(zerodhaSchemeNavHistory).values(chunk);
+        await db
+          .insert(zerodhaSchemeNavHistory)
+          .values(chunk)
+          .onConflictDoNothing();
       }
     }
   } catch (err) {
@@ -541,16 +551,30 @@ export function getZerodhaSchemeHistoryForDbCode(
           cacheAgeLimit;
 
       if (cachedMeta) {
-        // If not fresh, trigger background SWR fetch
-        if (!isFresh) {
-          triggerZerodhaNavCacheUpdate(schemeCode).catch((e) =>
-            console.error("[SWR BACKGROUND ERROR]", e)
-          );
-        }
-
         const history = await db.query.zerodhaSchemeNavHistory.findMany({
           where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
         });
+
+        // Find latest date in cache to fetch from that date onwards
+        let latestDateStr: string | undefined = undefined;
+        if (history.length > 0) {
+          let latest = new Date(0);
+          for (const pt of history) {
+            const [d, m, y] = pt.date.split("-");
+            const date = new Date(`${y}-${m}-${d}`);
+            if (date.getTime() > latest.getTime()) {
+              latest = date;
+              latestDateStr = `${y}-${m}-${d}`;
+            }
+          }
+        }
+
+        // If not fresh, trigger background SWR fetch
+        if (!isFresh) {
+          triggerZerodhaNavCacheUpdate(schemeCode, latestDateStr).catch((e) =>
+            console.error("[SWR BACKGROUND ERROR]", e)
+          );
+        }
 
         if (history.length > 0) {
           return {
@@ -570,7 +594,16 @@ export function getZerodhaSchemeHistoryForDbCode(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      const data = await fetchMfDetails(schemeCode);
+      // If no data exists, fetch only the last 3 years to keep payload fast and prevent timeouts
+      const nowTime = new Date();
+      const threeYearsAgo = new Date(
+        nowTime.getFullYear() - 3,
+        nowTime.getMonth(),
+        nowTime.getDate()
+      );
+      const threeYearsAgoStr = threeYearsAgo.toISOString().split("T")[0];
+
+      const data = await fetchMfDetails(schemeCode, threeYearsAgoStr);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
           // Upsert scheme cache metadata starting with zerodha_
@@ -582,6 +615,8 @@ export function getZerodhaSchemeHistoryForDbCode(
               schemeType: data.meta.scheme_type || "Unknown",
               schemeCategory: data.meta.scheme_category || "Unknown",
               schemeName: data.meta.scheme_name || "Unknown",
+              isinGrowth: data.meta.isin_growth || null,
+              isinDivReinvestment: data.meta.isin_div_reinvestment || null,
               lastFetchedAt: new Date().toISOString(),
             })
             .onConflictDoUpdate({
@@ -591,6 +626,8 @@ export function getZerodhaSchemeHistoryForDbCode(
                 schemeType: data.meta.scheme_type || "Unknown",
                 schemeCategory: data.meta.scheme_category || "Unknown",
                 schemeName: data.meta.scheme_name || "Unknown",
+                isinGrowth: data.meta.isin_growth || null,
+                isinDivReinvestment: data.meta.isin_div_reinvestment || null,
                 lastFetchedAt: new Date().toISOString(),
               },
             });
@@ -603,15 +640,13 @@ export function getZerodhaSchemeHistoryForDbCode(
             fetchedAt: new Date().toISOString(),
           }));
 
-          // Clear history and batch insert to avoid PG parameter limits
-          await db
-            .delete(zerodhaSchemeNavHistory)
-            .where(eq(zerodhaSchemeNavHistory.schemeCode, schemeCode));
-
           const chunkSize = 100;
           for (let i = 0; i < historyValues.length; i += chunkSize) {
             const chunk = historyValues.slice(i, i + chunkSize);
-            await db.insert(zerodhaSchemeNavHistory).values(chunk);
+            await db
+              .insert(zerodhaSchemeNavHistory)
+              .values(chunk)
+              .onConflictDoNothing();
           }
 
           return data;

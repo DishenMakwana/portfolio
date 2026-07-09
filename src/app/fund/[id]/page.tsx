@@ -14,6 +14,7 @@ import { eq, and, lte, asc } from "drizzle-orm";
 import {
   calculateAlpha,
   getSchemeHistoryForDbCode,
+  getBenchmarkHistory,
   calculateVolatilityMeasures,
   getFactsheetMetadata,
   generateFactsheetChartData,
@@ -174,9 +175,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
         : getSchemeHistoryForDbCode(holding.schemeCodeApi)
       : Promise.resolve(null),
-    isZerodha
-      ? getZerodhaSchemeHistoryForDbCode(benchmarkCode)
-      : getSchemeHistoryForDbCode(benchmarkCode),
+    getBenchmarkHistory(benchmarkCode),
   ]);
 
   // 3. Format transactions for XIRR/Alpha calculation

@@ -31,6 +31,16 @@ interface ZerodhaMappingTabProps {
   allSchemes: ZerodhaScheme[];
 }
 
+const isStockScheme = (scheme: ZerodhaScheme) => {
+  if (scheme.category.toLowerCase().includes("stock")) return true;
+  if (
+    scheme.schemeCodeApi &&
+    (scheme.schemeCodeApi.includes(".") || isNaN(Number(scheme.schemeCodeApi)))
+  )
+    return true;
+  return !scheme.name.includes(" ");
+};
+
 export default function ZerodhaMappingTab({
   allSchemes,
 }: ZerodhaMappingTabProps) {
@@ -40,6 +50,9 @@ export default function ZerodhaMappingTab({
   // Filter & Search states
   const [mappingFilter, setMappingFilter] = useState<
     "all" | "mapped" | "unmapped"
+  >("all");
+  const [assetTypeFilter, setAssetTypeFilter] = useState<
+    "all" | "mf" | "stocks"
   >("all");
   const [localSearch, setLocalSearch] = useState("");
 
@@ -99,8 +112,13 @@ export default function ZerodhaMappingTab({
       .includes(localSearch.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (mappingFilter === "mapped") return !!scheme.schemeCodeApi;
-    if (mappingFilter === "unmapped") return !scheme.schemeCodeApi;
+    if (mappingFilter === "mapped" && !scheme.schemeCodeApi) return false;
+    if (mappingFilter === "unmapped" && scheme.schemeCodeApi) return false;
+
+    const isStock = isStockScheme(scheme);
+    if (assetTypeFilter === "mf" && isStock) return false;
+    if (assetTypeFilter === "stocks" && !isStock) return false;
+
     return true;
   });
 
@@ -152,21 +170,45 @@ export default function ZerodhaMappingTab({
       </div>
 
       {/* Filter and Search controls */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-1.5 bg-slate-950/80 border border-slate-800/60 p-1 rounded-xl w-full md:w-auto">
-          {(["all", "mapped", "unmapped"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setMappingFilter(tab)}
-              className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${
-                mappingFilter === tab
-                  ? "bg-slate-800 text-slate-100 shadow-md"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {tab === "all" ? "All Funds" : tab}
-            </button>
-          ))}
+      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-3 w-full lg:w-auto">
+          {/* Status Filter */}
+          <div className="flex gap-1.5 bg-slate-950/80 border border-slate-800/60 p-1 rounded-xl w-full md:w-auto">
+            {(["all", "mapped", "unmapped"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMappingFilter(tab)}
+                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${
+                  mappingFilter === tab
+                    ? "bg-slate-800 text-slate-100 shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {tab === "all" ? "All Status" : tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Asset Type Filter */}
+          <div className="flex gap-1.5 bg-slate-950/80 border border-slate-800/60 p-1 rounded-xl w-full md:w-auto">
+            {(["all", "mf", "stocks"] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setAssetTypeFilter(type)}
+                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${
+                  assetTypeFilter === type
+                    ? "bg-slate-800 text-slate-100 shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {type === "all"
+                  ? "All Assets"
+                  : type === "mf"
+                    ? "Mutual Funds"
+                    : "Stocks"}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="relative w-full md:w-72">
