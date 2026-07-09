@@ -18,8 +18,14 @@ import {
   getFactsheetMetadata,
   generateFactsheetChartData,
   calculateXirrFromNav,
+  getBenchmarkCodeForCategory,
+  getBenchmarkNameForCode,
+  getBenchmarkFundNameForCode,
 } from "@/lib/alpha";
-import { getZerodhaSchemeHistoryForDbCode } from "@/lib/zerodhaService";
+import {
+  getZerodhaSchemeHistoryForDbCode,
+  getZerodhaStockHistoryForSymbol,
+} from "@/lib/zerodhaService";
 import FundDetailsClient from "./FundDetailsClient";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +64,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         absoluteReturn: zerodhaHoldings.unrealizedPnlPct,
         asOfDate: zerodhaReports.asOfDate,
         reportId: zerodhaReports.id,
+        holdingType: zerodhaHoldings.holdingType,
       })
       .from(zerodhaHoldings)
       .leftJoin(zerodhaReports, eq(zerodhaHoldings.reportId, zerodhaReports.id))
@@ -65,23 +72,43 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       .then((res) => res[0]);
 
     if (zHolding) {
-      // Find matching scheme in DB to fetch API mapping code
-      const scheme = await db.query.zerodhaSchemes.findFirst({
-        where: eq(zerodhaSchemes.name, zHolding.schemeName),
-      });
+      if (zHolding.holdingType === "equity") {
+        const scheme = await db.query.zerodhaSchemes.findFirst({
+          where: eq(zerodhaSchemes.name, zHolding.schemeName),
+        });
 
-      holding = {
-        ...zHolding,
-        schemeId: scheme ? scheme.id : null,
-        memberId: null,
-        dividend: 0,
-        holdingDays: 0,
-        cagr: 0,
-        comments: null,
-        memberName: "Zerodha Account",
-        memberPan: null,
-        schemeCodeApi: scheme ? scheme.schemeCodeApi : null,
-      };
+        holding = {
+          ...zHolding,
+          schemeId: scheme ? scheme.id : null,
+          memberId: null,
+          dividend: 0,
+          holdingDays: 0,
+          cagr: 0,
+          comments: null,
+          memberName: "Zerodha Account",
+          memberPan: null,
+          schemeCodeApi: scheme ? scheme.schemeCodeApi : zHolding.schemeName,
+          category: scheme ? scheme.category : "Equity Stock",
+        };
+      } else {
+        // Find matching scheme in DB to fetch API mapping code
+        const scheme = await db.query.zerodhaSchemes.findFirst({
+          where: eq(zerodhaSchemes.name, zHolding.schemeName),
+        });
+
+        holding = {
+          ...zHolding,
+          schemeId: scheme ? scheme.id : null,
+          memberId: null,
+          dividend: 0,
+          holdingDays: 0,
+          cagr: 0,
+          comments: null,
+          memberName: "Zerodha Account",
+          memberPan: null,
+          schemeCodeApi: scheme ? scheme.schemeCodeApi : null,
+        };
+      }
     }
   } else {
     // Fetch standard family holdings snapshot details
@@ -122,6 +149,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
+  const benchmarkCode = getBenchmarkCodeForCategory(holding.category);
+  const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
+
   // 2. Fetch transaction history and NAV histories in parallel
   const [fundTxs, fundDetails, benchDetails] = await Promise.all([
     isZerodha || !holding.schemeId || !holding.memberId
@@ -139,12 +169,14 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           .orderBy(asc(transactions.date)),
     holding.schemeCodeApi
       ? isZerodha
-        ? getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
+        ? holding.holdingType === "equity"
+          ? getZerodhaStockHistoryForSymbol(holding.schemeCodeApi)
+          : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
         : getSchemeHistoryForDbCode(holding.schemeCodeApi)
       : Promise.resolve(null),
     isZerodha
-      ? getZerodhaSchemeHistoryForDbCode("120716")
-      : getSchemeHistoryForDbCode("120716"),
+      ? getZerodhaSchemeHistoryForDbCode(benchmarkCode)
+      : getSchemeHistoryForDbCode(benchmarkCode),
   ]);
 
   // 3. Format transactions for XIRR/Alpha calculation
@@ -161,7 +193,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     metrics = await calculateAlpha(
       mappedTxs,
       holding.asOfDate,
-      holding.currentValue
+      holding.currentValue,
+      benchmarkCode
     );
   } else if (isZerodha && fundDetails?.data && benchDetails?.data) {
     // For Zerodha funds: compute NAV-based XIRR using purchase/current NAV
@@ -193,10 +226,25 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     });
   }
 
-  const factsheetMeta = getFactsheetMetadata(
-    holding.category,
-    formattedLaunchDate
-  );
+  const factsheetMeta =
+    holding.holdingType === "equity"
+      ? {
+          profile: {
+            launchDate: formattedLaunchDate || "N/A",
+            corpusCr: 0,
+            expenseRatio: 0,
+            exitLoad: "Nil",
+            benchmarkName: `${benchmarkName} TRI`,
+          },
+          allocation: {
+            equity: 100,
+            debt: 0,
+            gold: 0,
+            globalEquity: 0,
+            other: 0,
+          },
+        }
+      : getFactsheetMetadata(holding.category, formattedLaunchDate);
 
   const volatilityStats =
     fundNavHistory.length > 0 && benchNavHistory.length > 0

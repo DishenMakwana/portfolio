@@ -159,3 +159,25 @@ export async function autoMapAllZerodhaSchemesAction(
     return [];
   }
 }
+
+export async function updateZerodhaSchemeCategoryAction(
+  schemeId: number,
+  category: string
+) {
+  try {
+    const { db } = await import("@/db/db");
+    const { zerodhaSchemes } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db
+      .update(zerodhaSchemes)
+      .set({ category })
+      .where(eq(zerodhaSchemes.id, schemeId));
+
+    revalidatePath("/zerodha");
+    return { success: true };
+  } catch (error: any) {
+    console.error("updateZerodhaSchemeCategoryAction Error:", error);
+    return { success: false, error: error.message };
+  }
+}

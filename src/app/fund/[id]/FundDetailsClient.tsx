@@ -156,9 +156,9 @@ export default function FundDetailsClient({
               </span>
             </div>
             <div className="flex justify-between items-center gap-6">
-              <span className="flex items-center gap-1.5 text-indigo-400">
+              <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
-                Nifty 50 Return:
+                {factsheetMeta.profile.benchmarkName} Return:
               </span>
               <span className="font-mono text-indigo-300 font-bold">
                 {formatPercent(benchVal)}
@@ -309,7 +309,10 @@ export default function FundDetailsClient({
         {/* Card 5: Benchmark XIRR */}
         <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
           <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-            Nifty 50 XIRR
+            {factsheetMeta.profile.benchmarkName
+              .replace("Index Fund Direct", "")
+              .trim()}{" "}
+            XIRR
             <span title="Benchmark return on same cash flow dates">
               <Info size={12} className="text-slate-500 cursor-pointer" />
             </span>
@@ -353,18 +356,19 @@ export default function FundDetailsClient({
               <TrendingUp size={20} className="text-teal-400" />
               <span>Historical Returns Analysis</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-1 font-medium">
-              Growth Comparison of Fund vs Nifty 50 Index over the last 3 years
+            <p className="text-xs text-slate-400 mt-1 font-medium text-wrap">
+              Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}{" "}
+              over the last 3 years
             </p>
           </div>
-          <div className="flex items-center gap-4 text-xs font-semibold">
+          <div className="flex items-center gap-4 text-xs font-semibold shrink-0">
             <span className="flex items-center gap-1.5 text-teal-400">
               <span className="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
               Fund Return
             </span>
             <span className="flex items-center gap-1.5 text-indigo-400">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
-              Nifty 50
+              {factsheetMeta.profile.benchmarkName}
             </span>
           </div>
         </div>
@@ -719,7 +723,7 @@ export default function FundDetailsClient({
 
           <div className="text-[10px] text-slate-500 border-t border-slate-850 pt-4 mt-6 leading-relaxed">
             Note: Volatility metrics are calculated weekly over a rolling 2-year
-            period against the Nifty 50 Index.
+            period against the {factsheetMeta.profile.benchmarkName}.
           </div>
         </div>
       </div>
@@ -760,7 +764,11 @@ export default function FundDetailsClient({
                   <p>
                     Measures risk-adjusted outperformance (CAPM model).
                     Represents the value added by the fund manager relative to
-                    the benchmark Nifty 50 after accounting for risk.
+                    the benchmark{" "}
+                    {factsheetMeta.profile.benchmarkName
+                      .replace("Index Fund Direct", "")
+                      .trim()}{" "}
+                    after accounting for risk.
                   </p>
                   <p className="text-[10px] text-slate-500 font-semibold mt-1">
                     Where: Rₚ = Portfolio XIRR, R_f = Risk-free rate (6.0%), R_m
@@ -812,8 +820,8 @@ export default function FundDetailsClient({
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
                   <p>
                     Measures sensitivity to market movements. A Beta of 1.0
-                    means the fund moves in line with Nifty 50. Beta of 0.95
-                    means it fluctuates 5% less than the market.
+                    means the fund moves in line with the benchmark. Beta of
+                    0.95 means it fluctuates 5% less than the market.
                   </p>
                   <p className="text-[10px] text-slate-500 font-semibold mt-1">
                     Where: Rₚ = Weekly returns of fund, R_m = Weekly returns of

@@ -17,6 +17,7 @@ import { searchMfApiAction } from "@/app/actions";
 import {
   updateZerodhaSchemeMappingAction,
   autoMapAllZerodhaSchemesAction,
+  updateZerodhaSchemeCategoryAction,
 } from "@/app/zerodha/actions";
 
 interface ZerodhaScheme {
@@ -296,6 +297,85 @@ export default function ZerodhaMappingTab({
                     onChange={(e) => handleApiSearch(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500/50 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-200 outline-none transition"
                   />
+                </div>
+
+                {/* Manual Ticker Entry for Stocks or Custom Indices */}
+                <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                    Or Enter Custom Yahoo Ticker (e.g., 539574.BO, RELIANCE.NS)
+                  </span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter code (e.g. 539574.BO)"
+                      id="custom-ticker-input"
+                      className="flex-1 bg-slate-950 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none transition uppercase"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById(
+                          "custom-ticker-input"
+                        ) as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          handleMapScheme(
+                            mappingSchemeId!,
+                            input.value.trim().toUpperCase()
+                          );
+                        }
+                      }}
+                      className="bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition cursor-pointer"
+                    >
+                      Apply Code
+                    </button>
+                  </div>
+                </div>
+
+                {/* Classification Category for Benchmark */}
+                <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-3.5 space-y-3">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                    Choose Classification (for Benchmark Index selection)
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      id="custom-category-select"
+                      defaultValue={
+                        allSchemes.find((s) => s.id === mappingSchemeId)
+                          ?.category || "Equity Stock"
+                      }
+                      className="flex-1 bg-slate-950 border border-slate-800 focus:border-teal-500/50 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none transition"
+                    >
+                      <option value="Equity: Large Cap">
+                        Large Cap (Nifty 50)
+                      </option>
+                      <option value="Equity: Mid Cap">
+                        Mid Cap (Nifty Midcap 150)
+                      </option>
+                      <option value="Equity: Small Cap">
+                        Small Cap (Nifty Smallcap 250)
+                      </option>
+                      <option value="Debt">Debt (Fixed Income)</option>
+                      <option value="Mutual Fund">Other / Mutual Fund</option>
+                    </select>
+                    <button
+                      onClick={async () => {
+                        const select = document.getElementById(
+                          "custom-category-select"
+                        ) as HTMLSelectElement;
+                        if (select) {
+                          startTransition(async () => {
+                            await updateZerodhaSchemeCategoryAction(
+                              mappingSchemeId!,
+                              select.value
+                            );
+                            router.refresh();
+                          });
+                        }
+                      }}
+                      className="bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs transition cursor-pointer"
+                    >
+                      Apply Class
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

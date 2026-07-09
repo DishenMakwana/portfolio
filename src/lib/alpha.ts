@@ -731,9 +731,40 @@ export function generateFactsheetChartData(
   const targetDate = new Date(asOfDate);
   const weeksToFetch = 156; // 3 years of weekly data
 
+  // Find earliest date when fund has history data
+  let earliestFundDate = new Date(0);
+  if (fundNavHistory.length > 0) {
+    const earliestStr = fundNavHistory[fundNavHistory.length - 1].date;
+    const parts = earliestStr.split("-");
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        earliestFundDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+      } else {
+        earliestFundDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      }
+    } else {
+      earliestFundDate = new Date(earliestStr);
+    }
+  }
+
+  // Align start date to either the target 3-years ago, or the earliest fund listing date (whichever is later)
+  const targetStartDate = new Date(
+    targetDate.getTime() - weeksToFetch * 7 * 24 * 60 * 60 * 1000
+  );
+  const finalStartDate =
+    earliestFundDate.getTime() > targetStartDate.getTime()
+      ? earliestFundDate
+      : targetStartDate;
+
+  const diffTime = targetDate.getTime() - finalStartDate.getTime();
+  const weeksToGenerate = Math.max(
+    0,
+    Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000))
+  );
+
   const tempPoints: { dateObj: Date; fundNav: number; benchNav: number }[] = [];
 
-  for (let i = weeksToFetch; i >= 0; i--) {
+  for (let i = weeksToGenerate; i >= 0; i--) {
     const checkDate = new Date(
       targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
     );
@@ -795,4 +826,29 @@ export function generateFactsheetChartData(
   }
 
   return chartData;
+}
+
+export function getBenchmarkCodeForCategory(category: string | null): string {
+  const cat = (category || "").toLowerCase();
+  if (cat.includes("small")) {
+    return "147623"; // Nifty Smallcap 250
+  }
+  if (cat.includes("mid")) {
+    return "147622"; // Nifty Midcap 150
+  }
+  return "120716"; // Nifty 50
+}
+
+export function getBenchmarkNameForCode(code: string): string {
+  if (code === "147623") return "Nifty Smallcap 250 Index";
+  if (code === "147622") return "Nifty Midcap 150 Index";
+  return "Nifty 50 Index";
+}
+
+export function getBenchmarkFundNameForCode(code: string): string {
+  if (code === "147623")
+    return "Motilal Oswal Nifty Smallcap 250 Index Fund Direct";
+  if (code === "147622")
+    return "Motilal Oswal Nifty Midcap 150 Index Fund Direct";
+  return "UTI Nifty 50 Index Fund Direct";
 }

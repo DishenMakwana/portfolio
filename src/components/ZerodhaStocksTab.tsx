@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { useRouter } from "next/navigation";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
 
 interface ZerodhaStocksTabProps {
@@ -22,6 +23,7 @@ export default function ZerodhaStocksTab({
   stockSortOrder,
   formatPrice,
 }: ZerodhaStocksTabProps) {
+  const router = useRouter();
   const [stockSearch, setStockSearch] = useState("");
 
   const filteredStocks = stocks
@@ -130,6 +132,14 @@ export default function ZerodhaStocksTab({
                   Return % {renderStockSortIcon("unrealizedPnlPct")}
                 </div>
               </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("xirr")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  XIRR {renderStockSortIcon("xirr")}
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
@@ -137,7 +147,8 @@ export default function ZerodhaStocksTab({
               filteredStocks.map((s, idx) => (
                 <tr
                   key={idx}
-                  className="transition cursor-default select-none hover:bg-slate-950/45"
+                  onClick={() => router.push(`/fund/z_${s.id}`)}
+                  className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                 >
                   {/* Stock name + ISIN */}
                   <td className="p-4">
@@ -204,11 +215,17 @@ export default function ZerodhaStocksTab({
                       {s.unrealizedPnlPct.toFixed(2)}%
                     </span>
                   </td>
+                  {/* XIRR */}
+                  <td className="p-4 text-right font-bold text-teal-400">
+                    {s.xirr !== null && s.xirr !== undefined
+                      ? formatPercent(s.xirr)
+                      : "-"}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-500">
+                <td colSpan={9} className="p-8 text-center text-slate-500">
                   No stocks found matching search.
                 </td>
               </tr>

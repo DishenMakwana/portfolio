@@ -171,6 +171,8 @@ export default function ZerodhaDashboard({
     | "currentValue"
     | "unrealizedPnl"
     | "unrealizedPnlPct"
+    | "xirr"
+    | "cagr"
   >("currentValue");
   const [stockSortOrder, setStockSortOrder] = useState<"asc" | "desc">("desc");
 
