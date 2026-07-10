@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Coins,
   Briefcase,
+  Lightbulb,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/uploads", label: "Upload Tracker", icon: CalendarDays },
   { href: "/bullion", label: "Gold & Silver", icon: Coins },
   { href: "/mapping", label: "Fund Mapping", icon: GitMerge },
+  { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/zerodha", label: "Zerodha Portfolio", icon: Briefcase },
 ];
 

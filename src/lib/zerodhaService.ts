@@ -50,6 +50,8 @@ export interface ZerodhaDashboardData {
     currentValue: number;
     unrealizedPnl: number;
     unrealizedPnlPct: number;
+    xirr?: number | null;
+    cagr?: number | null;
   }[];
   totals: {
     invested: number;
@@ -75,6 +77,75 @@ export interface ZerodhaDashboardData {
     fundsReturn: number;
     niftyReturn: number;
   }[];
+  insights: ZerodhaInsightsData;
+}
+
+export interface ZerodhaBenchmarkReturns {
+  benchmarkCode: string;
+  benchmarkName: string;
+  endDate: string;
+  endNav: number;
+  return1Y: number | null;
+  cagr3Y: number | null;
+  cagr5Y: number | null;
+}
+
+export interface ZerodhaInsightsData {
+  reportDate: string | null;
+  benchmarkReturns: ZerodhaBenchmarkReturns;
+  weightedCagr: number | null;
+  stockWeight: number;
+  fundWeight: number;
+  concentration: {
+    topHoldingPct: number;
+    top3Pct: number;
+    top5Pct: number;
+  };
+  movers: {
+    topGainers: Array<{ symbol: string; returnPct: number; gain: number }>;
+    laggards: Array<{ symbol: string; returnPct: number; gain: number }>;
+  };
+  previousSnapshot: {
+    date: string | null;
+    investedChange: number;
+    currentValueChange: number;
+    gainChange: number;
+    returnPctChange: number;
+  };
+}
+
+function emptyZerodhaInsightsData(): ZerodhaInsightsData {
+  return {
+    reportDate: null,
+    benchmarkReturns: {
+      benchmarkCode: "120716",
+      benchmarkName: "UTI Nifty 50 Index Fund Direct Growth",
+      endDate: "N/A",
+      endNav: 0,
+      return1Y: null,
+      cagr3Y: null,
+      cagr5Y: null,
+    },
+    weightedCagr: null,
+    stockWeight: 0,
+    fundWeight: 0,
+    concentration: {
+      topHoldingPct: 0,
+      top3Pct: 0,
+      top5Pct: 0,
+    },
+    movers: {
+      topGainers: [],
+      laggards: [],
+    },
+    previousSnapshot: {
+      date: null,
+      investedChange: 0,
+      currentValueChange: 0,
+      gainChange: 0,
+      returnPctChange: 0,
+    },
+  };
 }
 
 export async function saveZerodhaHoldingsReport(
@@ -220,6 +291,95 @@ function calculateFundMetrics(
   };
 }
 
+function parseApiDate(s: string): Date {
+  const [dd, mm, yyyy] = s.split("-");
+  return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+}
+
+function parseIsoDate(s: string): Date {
+  const [yyyy, mm, dd] = s.split("-");
+  return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function calculateBenchmarkReturns(
+  reportDate: string,
+  history: { date: string; nav: string }[]
+): ZerodhaBenchmarkReturns {
+  const benchmarkCode = "120716";
+  const benchmarkName = "UTI Nifty 50 Index Fund Direct Growth";
+  const rows = history
+    .map((point) => ({ date: point.date, nav: Number(point.nav) }))
+    .filter((point) => Number.isFinite(point.nav) && point.nav > 0)
+    .sort(
+      (a, b) => parseApiDate(a.date).getTime() - parseApiDate(b.date).getTime()
+    );
+
+  if (rows.length === 0) {
+    return {
+      benchmarkCode,
+      benchmarkName,
+      endDate: "N/A",
+      endNav: 0,
+      return1Y: null,
+      cagr3Y: null,
+      cagr5Y: null,
+    };
+  }
+
+  const reportEndDate = parseIsoDate(reportDate);
+  const end =
+    [...rows]
+      .reverse()
+      .find((point) => parseApiDate(point.date) <= reportEndDate) ??
+    rows[rows.length - 1];
+  const endDate = parseApiDate(end.date);
+
+  function navAtYearsAgo(years: number) {
+    const cutoff = new Date(endDate);
+    cutoff.setFullYear(cutoff.getFullYear() - years);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (parseApiDate(rows[i].date) <= cutoff) return rows[i];
+    }
+    return null;
+  }
+
+  function cagrPct(oldNav: number, newNav: number, years: number) {
+    return (Math.pow(newNav / oldNav, 1 / years) - 1) * 100;
+  }
+
+  const y1 = navAtYearsAgo(1);
+  const y3 = navAtYearsAgo(3);
+  const y5 = navAtYearsAgo(5);
+
+  return {
+    benchmarkCode,
+    benchmarkName,
+    endDate: end.date,
+    endNav: end.nav,
+    return1Y: y1 ? round2(((end.nav - y1.nav) / y1.nav) * 100) : null,
+    cagr3Y: y3 ? round2(cagrPct(y3.nav, end.nav, 3)) : null,
+    cagr5Y: y5 ? round2(cagrPct(y5.nav, end.nav, 5)) : null,
+  };
+}
+
+async function getZerodhaSnapshotTotals(reportId: number) {
+  const rows = await db
+    .select()
+    .from(zerodhaHoldings)
+    .where(eq(zerodhaHoldings.reportId, reportId));
+
+  const invested = rows.reduce((sum, row) => sum + row.investedValue, 0);
+  const currentValue = rows.reduce((sum, row) => sum + row.currentValue, 0);
+  const gain = currentValue - invested;
+  const absoluteReturn = invested > 0 ? (gain / invested) * 100 : 0;
+
+  return { invested, currentValue, gain, absoluteReturn };
+}
+
 export async function getZerodhaDashboardData(
   reportId?: number
 ): Promise<ZerodhaDashboardData> {
@@ -245,6 +405,7 @@ export async function getZerodhaDashboardData(
       categoryAllocation: [],
       assetSplit: [],
       timelineData: [],
+      insights: emptyZerodhaInsightsData(),
     };
   }
 
@@ -438,6 +599,107 @@ export async function getZerodhaDashboardData(
     });
   }
 
+  const holdingsByValue = [...holdings].sort(
+    (a, b) => b.currentValue - a.currentValue
+  );
+  const topHoldingPct =
+    totalCurrentValue > 0
+      ? ((holdingsByValue[0]?.currentValue ?? 0) / totalCurrentValue) * 100
+      : 0;
+  const top3Pct =
+    totalCurrentValue > 0
+      ? (holdingsByValue
+          .slice(0, 3)
+          .reduce((sum, holding) => sum + holding.currentValue, 0) /
+          totalCurrentValue) *
+        100
+      : 0;
+  const top5Pct =
+    totalCurrentValue > 0
+      ? (holdingsByValue
+          .slice(0, 5)
+          .reduce((sum, holding) => sum + holding.currentValue, 0) /
+          totalCurrentValue) *
+        100
+      : 0;
+
+  const cagrHoldings = holdings.filter(
+    (holding) => typeof holding.cagr === "number" && holding.currentValue > 0
+  );
+  const weightedCagr =
+    cagrHoldings.length > 0
+      ? cagrHoldings.reduce(
+          (sum, holding) => sum + (holding.cagr ?? 0) * holding.currentValue,
+          0
+        ) / cagrHoldings.reduce((sum, holding) => sum + holding.currentValue, 0)
+      : null;
+
+  const selectedReportIndex = chronologicalReports.findIndex(
+    (report) => report.id === selectedReport.id
+  );
+  const previousReport =
+    selectedReportIndex > 0
+      ? chronologicalReports[selectedReportIndex - 1]
+      : null;
+  const previousTotals = previousReport
+    ? await getZerodhaSnapshotTotals(previousReport.id)
+    : null;
+
+  const insights: ZerodhaInsightsData = {
+    reportDate: selectedReport.asOfDate,
+    benchmarkReturns: calculateBenchmarkReturns(
+      selectedReport.asOfDate,
+      niftyHistory
+    ),
+    weightedCagr: weightedCagr !== null ? round2(weightedCagr) : null,
+    stockWeight:
+      totalCurrentValue > 0
+        ? round2((stocksCurrentValue / totalCurrentValue) * 100)
+        : 0,
+    fundWeight:
+      totalCurrentValue > 0
+        ? round2((fundsCurrentValue / totalCurrentValue) * 100)
+        : 0,
+    concentration: {
+      topHoldingPct: round2(topHoldingPct),
+      top3Pct: round2(top3Pct),
+      top5Pct: round2(top5Pct),
+    },
+    movers: {
+      topGainers: [...holdings]
+        .sort((a, b) => b.unrealizedPnlPct - a.unrealizedPnlPct)
+        .slice(0, 5)
+        .map((holding) => ({
+          symbol: holding.symbol,
+          returnPct: round2(holding.unrealizedPnlPct),
+          gain: Math.round(holding.unrealizedPnl),
+        })),
+      laggards: [...holdings]
+        .sort((a, b) => a.unrealizedPnlPct - b.unrealizedPnlPct)
+        .slice(0, 5)
+        .map((holding) => ({
+          symbol: holding.symbol,
+          returnPct: round2(holding.unrealizedPnlPct),
+          gain: Math.round(holding.unrealizedPnl),
+        })),
+    },
+    previousSnapshot: {
+      date: previousReport?.asOfDate ?? null,
+      investedChange: previousTotals
+        ? Math.round(totalInvested - previousTotals.invested)
+        : 0,
+      currentValueChange: previousTotals
+        ? Math.round(totalCurrentValue - previousTotals.currentValue)
+        : 0,
+      gainChange: previousTotals
+        ? Math.round(totalGain - previousTotals.gain)
+        : 0,
+      returnPctChange: previousTotals
+        ? round2(totalAbsoluteReturn - previousTotals.absoluteReturn)
+        : 0,
+    },
+  };
+
   return {
     reportsList,
     selectedReport,
@@ -458,6 +720,7 @@ export async function getZerodhaDashboardData(
     categoryAllocation,
     assetSplit,
     timelineData,
+    insights,
   };
 }
 

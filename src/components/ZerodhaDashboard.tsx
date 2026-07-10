@@ -29,6 +29,7 @@ import ZerodhaOverviewTab from "./ZerodhaOverviewTab";
 import ZerodhaStocksTab from "./ZerodhaStocksTab";
 import ZerodhaFundsTab from "./ZerodhaFundsTab";
 import ZerodhaSnapshotsTab from "./ZerodhaSnapshotsTab";
+import ZerodhaInsightsTab from "./ZerodhaInsightsTab";
 
 export interface ZerodhaHolding {
   id: number;
@@ -95,6 +96,37 @@ interface ZerodhaDashboardProps {
       fundsReturn: number;
       niftyReturn: number;
     }[];
+    insights: {
+      reportDate: string | null;
+      benchmarkReturns: {
+        benchmarkCode: string;
+        benchmarkName: string;
+        endDate: string;
+        endNav: number;
+        return1Y: number | null;
+        cagr3Y: number | null;
+        cagr5Y: number | null;
+      };
+      weightedCagr: number | null;
+      stockWeight: number;
+      fundWeight: number;
+      concentration: {
+        topHoldingPct: number;
+        top3Pct: number;
+        top5Pct: number;
+      };
+      movers: {
+        topGainers: Array<{ symbol: string; returnPct: number; gain: number }>;
+        laggards: Array<{ symbol: string; returnPct: number; gain: number }>;
+      };
+      previousSnapshot: {
+        date: string | null;
+        investedChange: number;
+        currentValueChange: number;
+        gainChange: number;
+        returnPctChange: number;
+      };
+    };
   };
   allSchemes: ZerodhaScheme[];
 }
@@ -146,12 +178,15 @@ export default function ZerodhaDashboard({
   const rawTab = searchParams.get("tab");
   const activeTab =
     rawTab &&
-    ["overview", "stocks", "funds", "mapping", "files"].includes(rawTab)
-      ? (rawTab as "overview" | "stocks" | "funds" | "mapping" | "files")
+    ["overview", "insights", "stocks", "funds", "mapping", "files"].includes(
+      rawTab
+    )
+      ? (rawTab as
+          "overview" | "insights" | "stocks" | "funds" | "mapping" | "files")
       : "overview";
 
   const setActiveTab = (
-    tab: "overview" | "stocks" | "funds" | "mapping" | "files"
+    tab: "overview" | "insights" | "stocks" | "funds" | "mapping" | "files"
   ) => {
     const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
@@ -238,7 +273,9 @@ export default function ZerodhaDashboard({
 
   const handleReportChange = (reportId: string) => {
     startTransition(() => {
-      router.push(`/zerodha?zerodhaReportId=${reportId}`);
+      const params = new URLSearchParams(window.location.search);
+      params.set("zerodhaReportId", reportId);
+      router.push(`/zerodha?${params.toString()}`);
     });
   };
 
@@ -620,6 +657,20 @@ export default function ZerodhaDashboard({
             />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab("insights")}
+          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
+            activeTab === "insights" ? "text-teal-400" : ""
+          }`}
+        >
+          Insights
+          {activeTab === "insights" && (
+            <motion.div
+              layoutId="zerodhaActiveTab"
+              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
+            />
+          )}
+        </button>
       </div>
 
       {/* TAB CONTENT */}
@@ -627,6 +678,8 @@ export default function ZerodhaDashboard({
         {activeTab === "overview" && (
           <ZerodhaOverviewTab data={data} holdings={holdings} COLORS={COLORS} />
         )}
+
+        {activeTab === "insights" && <ZerodhaInsightsTab data={data} />}
 
         {activeTab === "stocks" && (
           <ZerodhaStocksTab
