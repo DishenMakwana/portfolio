@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -15,9 +15,6 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronUp,
-  TrendingDown,
-  DollarSign,
-  Sparkles,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -27,7 +24,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
+  ReferenceDot,
+  ReferenceLine,
 } from "recharts";
 
 interface FundDetailsClientProps {
@@ -107,6 +105,132 @@ export default function FundDetailsClient({
 }: FundDetailsClientProps) {
   const router = useRouter();
   const [showExplanation, setShowExplanation] = useState(false);
+  const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
+    "3y"
+  );
+
+  const filteredChartData = useMemo(() => {
+    if (!chartData.length) return [];
+
+    const now = new Date(holding.asOfDate);
+    let cutoffTime = 0;
+
+    if (timeframe === "3m") {
+      cutoffTime = now.getTime() - 90 * 24 * 60 * 60 * 1000;
+    } else if (timeframe === "6m") {
+      cutoffTime = now.getTime() - 180 * 24 * 60 * 60 * 1000;
+    } else if (timeframe === "1y") {
+      cutoffTime = now.getTime() - 365 * 24 * 60 * 60 * 1000;
+    } else if (timeframe === "3y") {
+      cutoffTime = now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000;
+    } else {
+      cutoffTime = 0; // MAX
+    }
+
+    // Filter points
+    const points = chartData.filter((pt) => pt.timestamp >= cutoffTime);
+    if (!points.length) return [];
+
+    // Recalculate returns based on the first point in the selected timeframe
+    const baseFundNav = points[0].fundNav || 1;
+    const baseBenchNav = points[0].benchNav || 1;
+
+    return points.map((pt) => {
+      const fundReturn = ((pt.fundNav - baseFundNav) / baseFundNav) * 100;
+      const benchReturn = ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
+      return {
+        ...pt,
+        fundReturn,
+        benchReturn,
+      };
+    });
+  }, [chartData, timeframe, holding.asOfDate]);
+
+  // Find the entry point to display as a marker on the chart (only if it falls within the selected timeline)
+  const entryPoint = useMemo(() => {
+    if (!filteredChartData.length || !chartData.length) return null;
+
+    // 1. For standard funds with transactions:
+    // Find the very first buy transaction in all history
+    const allBuyTxs = transactions.filter((t) => t.type === "BUY");
+    if (allBuyTxs.length > 0) {
+      const firstBuyTx = allBuyTxs.reduce((oldest, current) =>
+        new Date(current.date).getTime() < new Date(oldest.date).getTime()
+          ? current
+          : oldest
+      );
+      const firstBuyTime = new Date(firstBuyTx.date).getTime();
+
+      // Check if this first buy transaction falls within the currently filtered timeframe
+      const isVisible = filteredChartData.some(
+        (pt) => Math.abs(pt.timestamp - firstBuyTime) < 7 * 24 * 60 * 60 * 1000
+      );
+      if (isVisible) {
+        // Find the closest point in the filtered view
+        const txPoint = filteredChartData.reduce((prev, cur) =>
+          Math.abs(cur.timestamp - firstBuyTime) <
+          Math.abs(prev.timestamp - firstBuyTime)
+            ? cur
+            : prev
+        );
+        return {
+          timestamp: txPoint.timestamp,
+          fundReturn: txPoint.fundReturn,
+          nav: txPoint.fundNav,
+          label: `Bought: ₹${txPoint.fundNav.toFixed(2)}`,
+        };
+      }
+      return null;
+    }
+
+    // 2. For Zerodha/MSFL (using purchaseNav fallback):
+    const targetNav = holding.purchaseNav || 0;
+    if (targetNav <= 0) {
+      // Fallback: earliest point in full chart history is listing/allotment date
+      const firstPt = chartData[0];
+      if (firstPt) {
+        // Only show if the listing date is within the active filtered range
+        const visibleFirstPt = filteredChartData.find(
+          (pt) => pt.timestamp === firstPt.timestamp
+        );
+        if (visibleFirstPt) {
+          return {
+            timestamp: visibleFirstPt.timestamp,
+            fundReturn: visibleFirstPt.fundReturn,
+            nav: visibleFirstPt.fundNav,
+            label: `Allotment: ₹${visibleFirstPt.fundNav.toFixed(2)}`,
+          };
+        }
+      }
+      return null;
+    }
+
+    // Find the point in full chartData closest to purchaseNav (the absolute entry point)
+    let bestFullPt = chartData[0];
+    let bestFullDiff = Math.abs(chartData[0].fundNav - targetNav);
+    for (const pt of chartData) {
+      const diff = Math.abs(pt.fundNav - targetNav);
+      if (diff < bestFullDiff) {
+        bestFullDiff = diff;
+        bestFullPt = pt;
+      }
+    }
+
+    // Only render if this absolute entry point falls inside the filtered range
+    const visiblePt = filteredChartData.find(
+      (pt) => pt.timestamp === bestFullPt.timestamp
+    );
+    if (visiblePt) {
+      return {
+        timestamp: visiblePt.timestamp,
+        fundReturn: visiblePt.fundReturn,
+        nav: visiblePt.fundNav,
+        label: `Avg Cost: ₹${targetNav.toLocaleString("en-IN")}`,
+      };
+    }
+
+    return null;
+  }, [filteredChartData, chartData, holding.purchaseNav, transactions]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -152,7 +276,12 @@ export default function FundDetailsClient({
                 Fund NAV Return:
               </span>
               <span className="font-mono text-teal-300 font-bold">
-                {formatPercent(fundVal)}
+                ₹
+                {dataPoint.fundNav.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                ({formatPercent(fundVal)})
               </span>
             </div>
             <div className="flex justify-between items-center gap-6">
@@ -161,7 +290,12 @@ export default function FundDetailsClient({
                 {factsheetMeta.profile.benchmarkName} Return:
               </span>
               <span className="font-mono text-indigo-300 font-bold">
-                {formatPercent(benchVal)}
+                ₹
+                {dataPoint.benchNav.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                ({formatPercent(benchVal)})
               </span>
             </div>
           </div>
@@ -350,35 +484,55 @@ export default function FundDetailsClient({
 
       {/* CHART COMPARISON CARD */}
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-5">
           <div>
             <h3 className="text-lg font-black text-slate-100 tracking-tight flex items-center gap-2">
               <TrendingUp size={20} className="text-teal-400" />
               <span>Historical Returns Analysis</span>
             </h3>
             <p className="text-xs text-slate-400 mt-1 font-medium text-wrap">
-              Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}{" "}
-              over the last 3 years
+              Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}
             </p>
           </div>
-          <div className="flex items-center gap-4 text-xs font-semibold shrink-0">
-            <span className="flex items-center gap-1.5 text-teal-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
-              Fund Return
-            </span>
-            <span className="flex items-center gap-1.5 text-indigo-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
-              {factsheetMeta.profile.benchmarkName}
-            </span>
+
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Timeline Filter Segmented Control */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800/80">
+              {(["3M", "6M", "1Y", "3Y", "MAX"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTimeframe(t.toLowerCase() as any)}
+                  className={`px-3 py-1 rounded-md text-[10px] font-extrabold uppercase transition-all duration-200 ${
+                    timeframe === t.toLowerCase()
+                      ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"
+                      : "text-slate-400 hover:text-slate-200 border border-transparent"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 text-xs font-semibold shrink-0">
+              <span className="flex items-center gap-1.5 text-teal-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
+                Fund Return
+              </span>
+              <span className="flex items-center gap-1.5 text-indigo-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 font-bold"></span>
+                {factsheetMeta.profile.benchmarkName}
+              </span>
+            </div>
           </div>
         </div>
 
-        {chartData.length > 0 ? (
-          <div className="h-80 w-full">
+        {filteredChartData.length > 0 ? (
+          <div className="h-80 w-full outline-none focus:outline-none">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={chartData}
+                data={filteredChartData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                style={{ outline: "none" }}
               >
                 <defs>
                   <linearGradient id="colorFund" x1="0" y1="0" x2="0" y2="1">
@@ -435,6 +589,32 @@ export default function FundDetailsClient({
                   fill="url(#colorBench)"
                   strokeDasharray="4 4"
                 />
+                {entryPoint && (
+                  <ReferenceLine
+                    x={entryPoint.timestamp}
+                    stroke="#14b8a6"
+                    strokeDasharray="3 3"
+                    opacity={0.4}
+                  />
+                )}
+                {entryPoint && (
+                  <ReferenceDot
+                    x={entryPoint.timestamp}
+                    y={entryPoint.fundReturn}
+                    r={6}
+                    fill="#14b8a6"
+                    stroke="#0f172a"
+                    strokeWidth={2}
+                    label={{
+                      value: entryPoint.label,
+                      position: "top",
+                      fill: "#34d399",
+                      fontSize: 10,
+                      fontWeight: "bold",
+                      offset: 10,
+                    }}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>

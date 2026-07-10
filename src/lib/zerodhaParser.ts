@@ -41,6 +41,15 @@ function extractAsOfDate(rows: any[][]): string | null {
   return null;
 }
 
+function subtractOneDay(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  date.setDate(date.getDate() - 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function parseZerodhaHoldings(
   fileBuffer: Buffer,
   filename: string
@@ -279,6 +288,7 @@ export function parseZerodhaHoldings(
   if (!asOfDate) {
     asOfDate = new Date().toISOString().split("T")[0];
   }
+  asOfDate = subtractOneDay(asOfDate);
 
   return {
     asOfDate,

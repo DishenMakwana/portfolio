@@ -59,6 +59,7 @@ export interface ZerodhaScheme {
 
 interface ZerodhaDashboardProps {
   data: {
+    firstCasReportDate: string | null;
     reportsList: {
       id: number;
       asOfDate: string;
@@ -708,6 +709,7 @@ export default function ZerodhaDashboard({
             reportsList={reportsList}
             handleFileUpload={handleFileUpload}
             handleDeleteReport={handleDeleteReport}
+            firstCasReportDate={data.firstCasReportDate}
           />
         )}
 

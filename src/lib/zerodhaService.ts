@@ -5,6 +5,7 @@ import {
   zerodhaSchemes,
   zerodhaSchemeNavCacheMeta,
   zerodhaSchemeNavHistory,
+  reports,
 } from "../db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { ZerodhaHoldingParsed } from "./zerodhaParser";
@@ -12,6 +13,9 @@ import {
   getSchemeHistoryForDbCode,
   getBenchmarkHistory,
   findClosestNav,
+  parseAndSortNavHistory,
+  findSyntheticInvestmentEntry,
+  calculateCagr,
 } from "./alpha";
 import { fetchStockHistory } from "./stockApi";
 
@@ -23,6 +27,7 @@ import {
 } from "./mfApi";
 
 export interface ZerodhaDashboardData {
+  firstCasReportDate: string | null;
   reportsList: {
     id: number;
     asOfDate: string;
@@ -246,13 +251,7 @@ function calculateFundMetrics(
   asOfDate: string,
   fundNavHistory: { date: string; nav: string }[]
 ): { xirr: number; cagr: number } {
-  if (
-    !fundNavHistory.length ||
-    !purchaseNav ||
-    !currentNav ||
-    purchaseNav <= 0 ||
-    currentNav <= 0
-  ) {
+  if (!fundNavHistory.length || !currentNav || currentNav <= 0) {
     return { xirr: 0, cagr: 0 };
   }
 
@@ -261,21 +260,15 @@ function calculateFundMetrics(
     return new Date(`${yyyy}-${mm}-${dd}`);
   };
 
-  const sorted = [...fundNavHistory]
-    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const sorted = parseAndSortNavHistory(fundNavHistory, parseApiDate);
+  const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
 
-  let bestEntry = sorted[0];
-  let bestDiff = Math.abs(sorted[0].nav - purchaseNav);
-  for (const entry of sorted) {
-    const diff = Math.abs(entry.nav - purchaseNav);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestEntry = entry;
-    }
+  if (!entry) {
+    return { xirr: 0, cagr: 0 };
   }
 
-  const investDate = bestEntry.date;
+  const investDate = entry.date;
+  const actualPurchaseNav = entry.nav;
   const exitDate = new Date(asOfDate);
   const msDiff = exitDate.getTime() - investDate.getTime();
   const years = msDiff / (365.25 * 24 * 60 * 60 * 1000);
@@ -284,7 +277,7 @@ function calculateFundMetrics(
     return { xirr: 0, cagr: 0 };
   }
 
-  const cagrValue = (Math.pow(currentNav / purchaseNav, 1 / years) - 1) * 100;
+  const cagrValue = calculateCagr(currentNav, actualPurchaseNav, years);
   return {
     xirr: cagrValue,
     cagr: cagrValue,
@@ -383,9 +376,17 @@ async function getZerodhaSnapshotTotals(reportId: number) {
 export async function getZerodhaDashboardData(
   reportId?: number
 ): Promise<ZerodhaDashboardData> {
-  const reportsList = await getZerodhaReports();
+  const [reportsList, oldestCasReport] = await Promise.all([
+    getZerodhaReports(),
+    db.query.reports.findFirst({
+      orderBy: [asc(reports.asOfDate)],
+    }),
+  ]);
+  const firstCasReportDate = oldestCasReport?.asOfDate ?? null;
+
   if (reportsList.length === 0) {
     return {
+      firstCasReportDate,
       reportsList: [],
       selectedReport: null,
       holdings: [],
@@ -701,6 +702,7 @@ export async function getZerodhaDashboardData(
   };
 
   return {
+    firstCasReportDate,
     reportsList,
     selectedReport,
     holdings,

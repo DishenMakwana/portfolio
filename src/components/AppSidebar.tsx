@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { href: "/mapping", label: "Fund Mapping", icon: GitMerge },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/zerodha", label: "Zerodha Portfolio", icon: Briefcase },
+  { href: "/msfl", label: "MSFL Stocks", icon: TrendingUp },
 ];
 
 function SidebarNav({ collapsed }: { collapsed: boolean }) {

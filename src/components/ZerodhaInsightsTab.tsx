@@ -619,7 +619,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
         </h3>
         {mfHoldingsWithCagr.length > 0 ? (
           <MfLeaderboardChart
-            mfHoldings={mfHoldingsWithCagr}
+            mfHoldings={mfHoldingsWithCagr.slice(0, 10)}
             niftyBenchmark={benchmark}
           />
         ) : (

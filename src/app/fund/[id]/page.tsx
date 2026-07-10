@@ -9,6 +9,9 @@ import {
   zerodhaHoldings,
   zerodhaReports,
   zerodhaSchemes,
+  msflHoldings,
+  msflReports,
+  msflSchemes,
 } from "@/db/schema";
 import { eq, and, lte, asc } from "drizzle-orm";
 import {
@@ -27,6 +30,7 @@ import {
   getZerodhaSchemeHistoryForDbCode,
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
+import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
 import FundDetailsClient from "./FundDetailsClient";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +41,13 @@ interface FundPageProps {
 
 export default async function FundDetailsPage({ params }: FundPageProps) {
   const { id } = await params;
+  const isMsfl = id.startsWith("msfl_");
   const isZerodha = id.startsWith("z_");
-  const holdingId = isZerodha
-    ? parseInt(id.substring(2), 10)
-    : parseInt(id, 10);
+  const holdingId = isMsfl
+    ? parseInt(id.substring(5), 10)
+    : isZerodha
+      ? parseInt(id.substring(2), 10)
+      : parseInt(id, 10);
 
   if (isNaN(holdingId)) {
     notFound();
@@ -48,7 +55,50 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   let holding: any = null;
 
-  if (isZerodha) {
+  if (isMsfl) {
+    const mHolding = await db
+      .select({
+        id: msflHoldings.id,
+        schemeName: msflHoldings.symbol,
+        category: msflHoldings.symbol,
+        balanceUnits: msflHoldings.quantity,
+        purchaseNav: msflHoldings.averagePrice,
+        purchaseValue: msflHoldings.investedValue,
+        currentNav: msflHoldings.currentPrice,
+        currentValue: msflHoldings.currentValue,
+        gain: msflHoldings.unrealizedPnl,
+        absoluteReturn: msflHoldings.unrealizedPnlPct,
+        asOfDate: msflReports.asOfDate,
+        reportId: msflReports.id,
+      })
+      .from(msflHoldings)
+      .leftJoin(msflReports, eq(msflHoldings.reportId, msflReports.id))
+      .where(eq(msflHoldings.id, holdingId))
+      .then((res) => res[0]);
+
+    if (mHolding) {
+      const scheme = await db.query.msflSchemes.findFirst({
+        where: eq(msflSchemes.name, mHolding.schemeName),
+      });
+
+      holding = {
+        ...mHolding,
+        schemeId: scheme ? scheme.id : null,
+        memberId: null,
+        dividend: 0,
+        holdingDays: 0,
+        cagr: 0,
+        comments: null,
+        memberName: "MSFL Stock Portfolio",
+        memberPan: null,
+        schemeCodeApi: scheme
+          ? scheme.schemeCodeApi
+          : `${mHolding.schemeName}.NS`,
+        category: "Stock",
+        holdingType: "equity",
+      };
+    }
+  } else if (isZerodha) {
     // Fetch personal Zerodha mutual fund holding snapshot
     const zHolding = await db
       .select({
@@ -155,7 +205,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   // 2. Fetch transaction history and NAV histories in parallel
   const [fundTxs, fundDetails, benchDetails] = await Promise.all([
-    isZerodha || !holding.schemeId || !holding.memberId
+    isMsfl || isZerodha || !holding.schemeId || !holding.memberId
       ? Promise.resolve([])
       : db
           .select()
@@ -169,11 +219,13 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           )
           .orderBy(asc(transactions.date)),
     holding.schemeCodeApi
-      ? isZerodha
-        ? holding.holdingType === "equity"
-          ? getZerodhaStockHistoryForSymbol(holding.schemeCodeApi)
-          : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
-        : getSchemeHistoryForDbCode(holding.schemeCodeApi)
+      ? isMsfl
+        ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
+        : isZerodha
+          ? holding.holdingType === "equity"
+            ? getZerodhaStockHistoryForSymbol(holding.schemeCodeApi)
+            : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
+          : getSchemeHistoryForDbCode(holding.schemeCodeApi)
       : Promise.resolve(null),
     getBenchmarkHistory(benchmarkCode),
   ]);
@@ -188,15 +240,15 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   // 4. Calculate dynamic XIRR and Alpha
   let metrics = { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
-  if (!isZerodha && mappedTxs.length > 0) {
+  if (!isMsfl && !isZerodha && mappedTxs.length > 0) {
     metrics = await calculateAlpha(
       mappedTxs,
       holding.asOfDate,
       holding.currentValue,
       benchmarkCode
     );
-  } else if (isZerodha && fundDetails?.data && benchDetails?.data) {
-    // For Zerodha funds: compute NAV-based XIRR using purchase/current NAV
+  } else if ((isMsfl || isZerodha) && fundDetails?.data && benchDetails?.data) {
+    // For MSFL/Zerodha: compute NAV-based XIRR using purchase/current NAV
     metrics = calculateXirrFromNav(
       holding.purchaseNav,
       holding.currentNav,

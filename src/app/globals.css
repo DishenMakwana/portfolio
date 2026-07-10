@@ -42,3 +42,14 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Remove default outline/focus-ring on Recharts components and SVGs when clicked */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-wrapper:focus,
+svg:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

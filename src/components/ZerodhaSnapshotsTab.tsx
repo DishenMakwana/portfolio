@@ -28,6 +28,7 @@ interface ZerodhaSnapshotsTabProps {
   reportsList: SnapshotReport[];
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleDeleteReport: (id: number) => void;
+  firstCasReportDate?: string | null;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -153,6 +154,7 @@ export default function ZerodhaSnapshotsTab({
   reportsList,
   handleFileUpload,
   handleDeleteReport,
+  firstCasReportDate,
 }: ZerodhaSnapshotsTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -168,9 +170,17 @@ export default function ZerodhaSnapshotsTab({
 
   const now = new Date();
   const today = parseLocalDate(toDateKey(now));
-  const firstReportDate = chronologicalReports[0]
-    ? parseLocalDate(chronologicalReports[0].asOfDate)
-    : today;
+
+  let firstReportDate = today;
+  if (chronologicalReports[0]) {
+    firstReportDate = parseLocalDate(chronologicalReports[0].asOfDate);
+  }
+  if (firstCasReportDate) {
+    const casDate = parseLocalDate(firstCasReportDate);
+    if (casDate < firstReportDate) {
+      firstReportDate = casDate;
+    }
+  }
   const latestReportDate = chronologicalReports.at(-1)
     ? parseLocalDate(chronologicalReports.at(-1)!.asOfDate)
     : today;

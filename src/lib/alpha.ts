@@ -443,6 +443,69 @@ export interface PortfolioTransaction {
   units: number;
 }
 
+interface NavPoint {
+  date: string;
+  nav: string;
+}
+
+interface ParsedNavPoint {
+  date: Date;
+  nav: number;
+}
+
+/**
+ * Parses and sorts the raw NAV history data ascending by date.
+ */
+export function parseAndSortNavHistory(
+  navHistory: NavPoint[],
+  parseDateFn: (s: string) => Date
+): ParsedNavPoint[] {
+  return [...navHistory]
+    .map((p) => ({ date: parseDateFn(p.date), nav: parseFloat(p.nav) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+/**
+ * Finds the closest date and NAV entry in historical data for a given purchase price.
+ * If purchaseNav is 0 or missing, falls back to the earliest listing entry.
+ */
+export function findSyntheticInvestmentEntry(
+  purchaseNav: number,
+  sortedHistory: ParsedNavPoint[]
+): ParsedNavPoint | null {
+  if (!sortedHistory.length) return null;
+
+  const actualPurchaseNav = purchaseNav;
+  if (!actualPurchaseNav || actualPurchaseNav <= 0) {
+    const earliestEntry = sortedHistory[0];
+    return earliestEntry && earliestEntry.nav > 0 ? earliestEntry : null;
+  }
+
+  let bestEntry = sortedHistory[0];
+  let bestDiff = Math.abs(sortedHistory[0].nav - actualPurchaseNav);
+  for (const entry of sortedHistory) {
+    const diff = Math.abs(entry.nav - actualPurchaseNav);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestEntry = entry;
+    }
+  }
+  return bestEntry;
+}
+
+/**
+ * Calculates the Compound Annual Growth Rate (CAGR) as a percentage.
+ * Formula: ((current / purchase) ^ (1 / years) - 1) * 100
+ */
+export function calculateCagr(
+  current: number,
+  purchase: number,
+  years: number
+): number {
+  if (years <= 0 || purchase <= 0 || current <= 0) return 0;
+  return (Math.pow(current / purchase, 1 / years) - 1) * 100;
+}
+
 /**
  * Computes NAV-based XIRR and benchmark XIRR for Zerodha holdings that have
  * no explicit transaction history. Uses the date in the fund's own NAV history
@@ -460,44 +523,31 @@ export function calculateXirrFromNav(
     return new Date(`${yyyy}-${mm}-${dd}`);
   };
 
-  if (
-    !fundNavHistory.length ||
-    !benchNavHistory.length ||
-    !purchaseNav ||
-    !currentNav
-  ) {
+  if (!fundNavHistory.length || !benchNavHistory.length || !currentNav) {
     return { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
   }
 
-  // Find the NAV entry in fund history closest to purchaseNav as investment date
-  const sorted = [...fundNavHistory]
-    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const sorted = parseAndSortNavHistory(fundNavHistory, parseApiDate);
+  const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
 
-  let bestEntry = sorted[0];
-  let bestDiff = Math.abs(sorted[0].nav - purchaseNav);
-  for (const entry of sorted) {
-    const diff = Math.abs(entry.nav - purchaseNav);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestEntry = entry;
-    }
+  if (!entry) {
+    return { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
   }
-  const investDate = bestEntry.date;
+
+  const investDate = entry.date;
+  const actualPurchaseNav = entry.nav;
   const exitDate = new Date(asOfDate);
 
-  // Synthetic cash flows: -₹100 invested, +₹100*(currentNav/purchaseNav) redeemed
+  // Synthetic cash flows: -₹100 invested, +₹100*(currentNav/actualPurchaseNav) redeemed
   const invested = 100;
-  const redeemed = invested * (currentNav / purchaseNav);
+  const redeemed = invested * (currentNav / actualPurchaseNav);
   const portfolioXirr = calculateXIRR([
     { amount: -invested, date: investDate },
     { amount: redeemed, date: exitDate },
   ]);
 
   // Benchmark: how much would ₹100 grow in UTI Nifty 50 over same period?
-  const benchSorted = [...benchNavHistory]
-    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const benchSorted = parseAndSortNavHistory(benchNavHistory, parseApiDate);
 
   const benchAtBuy = benchSorted.reduce((prev, cur) =>
     Math.abs(cur.date.getTime() - investDate.getTime()) <

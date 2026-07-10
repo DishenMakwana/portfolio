@@ -258,3 +258,68 @@ export const benchmarkNavHistory = mySchema.table(
     ),
   ]
 );
+
+export const msflReports = mySchema.table("msfl_reports", {
+  id: serial("id").primaryKey(),
+  asOfDate: text("as_of_date").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  filename: text("filename").notNull(),
+});
+
+export const msflHoldings = mySchema.table(
+  "msfl_holdings",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => msflReports.id, {
+      onDelete: "cascade",
+    }),
+    symbol: text("symbol").notNull(),
+    quantity: doublePrecision("quantity").notNull(),
+    averagePrice: doublePrecision("average_price").notNull(),
+    currentPrice: doublePrecision("current_price").notNull(),
+    investedValue: doublePrecision("invested_value").notNull(),
+    currentValue: doublePrecision("current_value").notNull(),
+    unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
+    unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+  },
+  (table) => [index("msfl_holdings_report_id_idx").on(table.reportId)]
+);
+
+export const msflSchemes = mySchema.table("msfl_schemes", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category").notNull(),
+  schemeCodeApi: text("scheme_code_api"),
+  mappedAt: text("mapped_at"),
+});
+
+export const msflSchemeNavCacheMeta = mySchema.table(
+  "msfl_scheme_nav_cache_meta",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    fundHouse: text("fund_house").notNull(),
+    schemeType: text("scheme_type").notNull(),
+    schemeCategory: text("scheme_category").notNull(),
+    schemeName: text("scheme_name").notNull(),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+  }
+);
+
+export const msflSchemeNavHistory = mySchema.table(
+  "msfl_scheme_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("msfl_scheme_nav_history_code_date_uq").on(
+      table.schemeCode,
+      table.date
+    ),
+  ]
+);
