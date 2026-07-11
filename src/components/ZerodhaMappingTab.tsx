@@ -45,7 +45,7 @@ export default function ZerodhaMappingTab({
   allSchemes,
 }: ZerodhaMappingTabProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Filter & Search states
   const [mappingFilter, setMappingFilter] = useState<

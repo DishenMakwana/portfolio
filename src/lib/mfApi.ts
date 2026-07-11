@@ -1,3 +1,5 @@
+import axios from "axios";
+
 export interface MfSearchResult {
   schemeCode: number;
   schemeName: string;
@@ -42,34 +44,52 @@ async function throttleRequest(): Promise<void> {
 }
 
 /**
+ * Custom retry helper for axios with exponential backoff
+ */
+async function axiosGetWithRetry<T>(
+  url: string,
+  timeoutMs: number,
+  retries: number,
+  backoffMs: number
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await axios.get<T>(url, {
+        headers: {
+          Accept: "application/json",
+        },
+        timeout: timeoutMs,
+      });
+      return response.data;
+    } catch (error: any) {
+      attempt++;
+      if (attempt > retries) {
+        throw error;
+      }
+      const delay = backoffMs * Math.pow(2, attempt - 1);
+      console.warn(
+        `[AXIOS RETRY] Request to "${url}" failed (Attempt ${attempt}/${retries + 1}). Retrying in ${delay}ms... Reason: ${error.message || error}`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+/**
  * Search mutual funds by text query on api.mfapi.in
  */
 export async function searchMutualFund(
   query: string
 ): Promise<MfSearchResult[]> {
   if (!query || query.trim().length < 3) return [];
+  const url = `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`;
   try {
     await throttleRequest();
-    const res = await fetch(
-      `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(4000),
-      }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
+    const data = await axiosGetWithRetry<MfSearchResult[]>(url, 4000, 1, 500);
     return Array.isArray(data) ? data : [];
   } catch (e: any) {
-    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
-      console.warn(
-        `[API TIMEOUT] api.mfapi.in timed out searching for: "${query}"`
-      );
-    } else {
-      console.error("Error searching MF API:", e);
-    }
+    console.error(`Error searching MF API at "${url}":`, e.message || e);
     return [];
   }
 }
@@ -86,29 +106,29 @@ export async function fetchMfDetails(
   if (!schemeCode) return null;
   if (isSpecializedFundSchemeCode(schemeCode)) return null;
 
+  const params = new URLSearchParams();
+  if (startDate) {
+    params.append("startDate", startDate);
+    const resolvedEndDate = endDate || new Date().toISOString().split("T")[0];
+    params.append("endDate", resolvedEndDate);
+  } else if (endDate) {
+    params.append("endDate", endDate);
+  }
+  const queryString = params.toString();
+  const url = `https://api.mfapi.in/mf/${schemeCode}${queryString ? `?${queryString}` : ""}`;
+
   try {
     await throttleRequest();
-    const params = new URLSearchParams();
-    if (startDate) params.append("startDate", startDate);
-    if (endDate) params.append("endDate", endDate);
-    const queryString = params.toString();
-    const url = `https://api.mfapi.in/mf/${schemeCode}${queryString ? `?${queryString}` : ""}`;
-
-    const res = await fetch(url, {
-      headers: {
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(3000), // Lowered to 3s for fast user page loading
-    });
-    if (!res.ok) return null;
-    return await res.json();
+    return await axiosGetWithRetry<MfDetailsResponse>(url, 15000, 2, 1000);
   } catch (e: any) {
-    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
+    const isTimeout =
+      e.code === "ECONNABORTED" || e.message?.includes("timeout");
+    if (isTimeout) {
       console.warn(
-        `[API TIMEOUT] api.mfapi.in timed out fetching details for scheme ${schemeCode}. Using cache or fallback.`
+        `[API TIMEOUT] api.mfapi.in timed out fetching details. URL: "${url}". Using cache or fallback.`
       );
     } else {
-      console.error(`Error fetching MF details for ${schemeCode}:`, e);
+      console.error(`Error fetching MF details from "${url}":`, e.message || e);
     }
     return null;
   }

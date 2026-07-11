@@ -19,12 +19,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { isUnlistedStock } from "@/lib/stockApi";
 import type { MsflDashboardData } from "@/lib/msflService";
 import {
   uploadMsflHoldingsAction,
   deleteMsflHoldingsAction,
   updateMsflSchemeMappingAction,
-  autoMapAllMsflSchemesAction,
 } from "@/app/zerodha/msflActions";
 
 interface MsflDashboardClientProps {
@@ -32,19 +32,10 @@ interface MsflDashboardClientProps {
   allMsflSchemes: any[];
 }
 
-function getShortFundName(fullName: string): string {
-  const parts = fullName.split(" ");
-  if (parts.length > 1) {
-    return `${parts[0]} ${parts[1]}`;
-  }
-  return parts[0];
-}
-
 function MetricCard({
   label,
   value,
   sub,
-  positive,
   icon: Icon,
   accentColor = "teal",
 }: {
@@ -390,6 +381,7 @@ export default function MsflDashboardClient({
     | "currentValue"
     | "unrealizedPnl"
     | "cagr"
+    | "alpha"
   >("currentValue");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -928,6 +920,14 @@ export default function MsflDashboardClient({
                         XIRR/CAGR {renderSortIcon("cagr")}
                       </div>
                     </th>
+                    <th
+                      className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                      onClick={() => toggleSort("alpha")}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Alpha {renderSortIcon("alpha")}
+                      </div>
+                    </th>
                     <th className="p-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -939,8 +939,15 @@ export default function MsflDashboardClient({
                         onClick={() => router.push(`/fund/msfl_${h.id}`)}
                         className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                       >
-                        <td className="p-4 font-bold text-slate-100">
-                          {h.symbol}
+                        <td className="p-4">
+                          <div className="font-bold text-slate-100 flex items-center gap-2">
+                            <span>{h.symbol}</span>
+                            {isUnlistedStock(h.symbol) && (
+                              <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse leading-none">
+                                Unlisted
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4 text-right font-semibold text-slate-200">
                           {h.quantity}
@@ -983,6 +990,22 @@ export default function MsflDashboardClient({
                             ? `${h.cagr.toFixed(2)}%`
                             : "-"}
                         </td>
+                        <td className="p-4 text-right">
+                          {h.alpha !== null && h.alpha !== undefined ? (
+                            <span
+                              className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
+                                h.alpha >= 0
+                                  ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                                  : "bg-red-950/80 text-red-400 border border-red-800/40"
+                              }`}
+                            >
+                              {h.alpha >= 0 ? "+" : ""}
+                              {h.alpha.toFixed(2)}%
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
                         <td className="p-4 text-center">
                           <button
                             onClick={(e) => {
@@ -999,7 +1022,7 @@ export default function MsflDashboardClient({
                   ) : (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="p-8 text-center text-slate-500"
                       >
                         No stocks found matching search query.

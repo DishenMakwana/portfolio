@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import {
   TrendingUp,
-  TrendingDown,
   Calendar,
   Calculator,
   Coins,
@@ -151,15 +150,6 @@ export default function BullionClient({
       handleCalculateBudget();
     }
   }, [budget, activePricePerGram, makingCharges, gstType]);
-
-  // Daily price changes (simulated or real from API)
-  const getActiveChange = () => {
-    if (selectedTab === "Gold") return rates.gold.change;
-    if (selectedTab === "Silver") return rates.silver.change;
-    return rates.platinum.change;
-  };
-
-  const activeChange = getActiveChange();
 
   // Prepare chart data for active tab based on selected timeframe
   const getChartData = () => {

@@ -22,6 +22,10 @@ function normaliseSchemeCode(
 // Cache for scheme histories to avoid duplicate DB queries within the same request lifecycle
 const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
 
+export function clearSchemeCache(schemeCode: string) {
+  schemeHistoryCache.delete(schemeCode);
+}
+
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
@@ -82,6 +86,10 @@ const benchmarkHistoryCache = new Map<
   string,
   Promise<MfDetailsResponse | null>
 >();
+
+export function clearBenchmarkCache(benchmarkCode: string) {
+  benchmarkHistoryCache.delete(benchmarkCode);
+}
 
 async function triggerBenchmarkCacheUpdate(
   benchmarkCode: string,
@@ -1113,7 +1121,10 @@ export function getBenchmarkCodeForCategory(category: string | null): string {
   ) {
     return "120197"; // ICICI Prudential Liquid Fund Direct Growth (proxy for Nifty Short/Ultra Short Duration indices)
   }
-  return "120716"; // Nifty 50
+  if (cat.includes("large") || cat.includes("index")) {
+    return "120716"; // Nifty 50
+  }
+  return "147625"; // Default to Nifty 500 to match the UI factsheet default (NSE - Nifty 500 TRI)
 }
 
 export function getBenchmarkNameForCode(code: string): string {
@@ -1121,6 +1132,7 @@ export function getBenchmarkNameForCode(code: string): string {
   if (code === "147622") return "Nifty Midcap 150 Index";
   if (code === "120251") return "Nifty 50 Hybrid Composite debt 65:35 Index";
   if (code === "120197") return "Nifty Short/Ultra Short Duration Debt Index";
+  if (code === "147625") return "Nifty 500 Index";
   return "Nifty 50 Index";
 }
 
@@ -1132,5 +1144,6 @@ export function getBenchmarkFundNameForCode(code: string): string {
   if (code === "120251")
     return "ICICI Prudential Equity & Debt Fund Direct Growth";
   if (code === "120197") return "ICICI Prudential Liquid Fund Direct Growth";
+  if (code === "147625") return "Motilal Oswal Nifty 500 Index Fund Direct";
   return "UTI Nifty 50 Index Fund Direct";
 }

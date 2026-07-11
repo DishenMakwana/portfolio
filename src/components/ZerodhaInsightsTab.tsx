@@ -7,10 +7,8 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CheckCircle2,
-  TrendingDown,
   TrendingUp,
   Award,
-  TrendingUp as TrendingUpIcon,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import type { ZerodhaDashboardData } from "@/lib/zerodhaService";
@@ -47,7 +45,6 @@ function MetricCard({
   label,
   value,
   sub,
-  positive,
   icon: Icon,
   accentColor = "teal",
 }: {

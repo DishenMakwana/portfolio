@@ -16,7 +16,7 @@ export async function uploadZerodhaHoldingsAction(formData: FormData) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = parseZerodhaHoldings(buffer, file.name);
+    const parsed = parseZerodhaHoldings(buffer);
 
     if (parsed.holdings.length === 0) {
       return {
@@ -141,7 +141,7 @@ export async function autoMapAllZerodhaSchemesAction(
             confidence: null,
           });
         }
-      } catch (e) {
+      } catch {
         results.push({
           schemeId: s.id,
           schemeName: s.name,

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { isUnlistedStock } from "@/lib/stockApi";
 
 interface Holding {
   id: number;
@@ -298,10 +299,15 @@ export default function HoldingsTab({
                       <div className="font-bold text-slate-100">
                         {h.schemeName}
                       </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
                         <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
                           {h.category}
                         </span>
+                        {isUnlistedStock(h.schemeName) && (
+                          <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase animate-pulse">
+                            Unlisted
+                          </span>
+                        )}
                         <span>• Units: {h.balanceUnits.toFixed(3)}</span>
                         <span>• NAV: ₹{h.currentNav.toFixed(2)}</span>
                       </div>

@@ -9,7 +9,7 @@ import {
   memberReportCagrs,
   sipTransactions,
 } from "../db/schema";
-import { eq, asc, desc, and, sql } from "drizzle-orm";
+import { eq, asc, desc, sql } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
 
 export interface HoldingDetails {

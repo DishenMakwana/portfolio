@@ -8,7 +8,6 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Lightbulb,
   TrendingUp,
-  TrendingDown,
   IndianRupee,
   BarChart3,
   Users,
@@ -195,10 +194,12 @@ function DonutChart({
   const cy = 75;
   const strokeW = 18;
 
-  const cumulativeOffsets = slices.reduce<number[]>((acc, slice, i) => {
-    acc.push(i === 0 ? 0 : acc[i - 1] + slices[i - 1].value);
-    return acc;
-  }, []);
+  const cumulativeOffsets: number[] = [];
+  for (let i = 0; i < slices.length; i++) {
+    cumulativeOffsets.push(
+      i === 0 ? 0 : cumulativeOffsets[i - 1] + slices[i - 1].value
+    );
+  }
 
   const paths = slices.map((slice, i) => {
     const cum = cumulativeOffsets[i];
@@ -1149,12 +1150,17 @@ export default function InsightsDashboard({ data }: Props) {
                                               </span>
                                               <span
                                                 className={`text-[10px] px-2 py-0.5 rounded font-black ${
-                                                  hold.cagr >= niftyBenchmark
+                                                  (hold.cagr ?? 0) >=
+                                                  niftyBenchmark
                                                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                                                     : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                                                 }`}
                                               >
-                                                {hold.cagr.toFixed(2)}% CAGR
+                                                {hold.cagr !== null &&
+                                                hold.cagr !== undefined
+                                                  ? `${hold.cagr.toFixed(2)}%`
+                                                  : "-"}{" "}
+                                                CAGR
                                               </span>
                                             </div>
                                             <div className="grid grid-cols-3 gap-3 mt-2.5 pt-2.5 border-t border-slate-800/50 text-xs text-slate-400">

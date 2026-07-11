@@ -50,10 +50,7 @@ function subtractOneDay(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export function parseZerodhaHoldings(
-  fileBuffer: Buffer,
-  filename: string
-): ZerodhaParseResult {
+export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
   const holdings: ZerodhaHoldingParsed[] = [];
   let asOfDate = "";

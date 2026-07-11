@@ -12,7 +12,6 @@ interface ZerodhaFundsTabProps {
   toggleFundSort: (field: any) => void;
   fundSortField: string;
   fundSortOrder: "asc" | "desc";
-  formatPrice: (v: number) => string;
 }
 
 export default function ZerodhaFundsTab({
@@ -21,7 +20,6 @@ export default function ZerodhaFundsTab({
   toggleFundSort,
   fundSortField,
   fundSortOrder,
-  formatPrice,
 }: ZerodhaFundsTabProps) {
   const router = useRouter();
   const [fundSearch, setFundSearch] = useState("");
@@ -65,80 +63,64 @@ export default function ZerodhaFundsTab({
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full min-w-[1180px] text-left border-collapse">
           <thead>
-            <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
+            <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-700/80">
               <th
                 className="p-4 cursor-pointer hover:text-slate-200 select-none"
                 onClick={() => toggleFundSort("symbol")}
               >
                 <div className="flex items-center gap-1">
-                  Scheme {renderFundSortIcon("symbol")}
+                  Scheme Details {renderFundSortIcon("symbol")}
                 </div>
               </th>
-              <th className="p-4">Category</th>
+              <th className="p-4">Holder</th>
               <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => toggleFundSort("quantity")}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  Units {renderFundSortIcon("quantity")}
-                </div>
-              </th>
-              <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => toggleFundSort("averagePrice")}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  Avg Price {renderFundSortIcon("averagePrice")}
-                </div>
-              </th>
-              <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => toggleFundSort("currentPrice")}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  LTP {renderFundSortIcon("currentPrice")}
-                </div>
-              </th>
-              <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => toggleFundSort("investedValue")}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  Invested {renderFundSortIcon("investedValue")}
-                </div>
-              </th>
-              <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
                 onClick={() => toggleFundSort("currentValue")}
               >
-                <div className="flex items-center justify-end gap-1">
+                <div className="flex items-center gap-1">
                   Valuation {renderFundSortIcon("currentValue")}
                 </div>
               </th>
               <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
                 onClick={() => toggleFundSort("unrealizedPnl")}
               >
-                <div className="flex items-center justify-end gap-1">
-                  P&amp;L {renderFundSortIcon("unrealizedPnl")}
+                <div className="flex items-center gap-1">
+                  Profit/Loss {renderFundSortIcon("unrealizedPnl")}
                 </div>
               </th>
               <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => toggleFundSort("unrealizedPnlPct")}
+                className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap"
+                onClick={() => toggleFundSort("holdingDays")}
               >
-                <div className="flex items-center justify-end gap-1">
-                  Return % {renderFundSortIcon("unrealizedPnlPct")}
+                <div className="flex items-center gap-1">
+                  Holding Days {renderFundSortIcon("holdingDays")}
                 </div>
               </th>
               <th
-                className="p-4 text-right cursor-pointer hover:text-slate-200 select-none"
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                onClick={() => toggleFundSort("cagr")}
+              >
+                <div className="flex items-center gap-1">
+                  CAGR {renderFundSortIcon("cagr")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
                 onClick={() => toggleFundSort("xirr")}
               >
-                <div className="flex items-center justify-end gap-1">
+                <div className="flex items-center gap-1">
                   XIRR {renderFundSortIcon("xirr")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none"
+                onClick={() => toggleFundSort("alpha")}
+              >
+                <div className="flex items-center gap-1">
+                  Alpha {renderFundSortIcon("alpha")}
                 </div>
               </th>
             </tr>
@@ -153,62 +135,74 @@ export default function ZerodhaFundsTab({
                 >
                   <td className="p-4">
                     <div
-                      className="font-bold text-slate-100 break-words max-w-[280px]"
+                      className="font-bold text-slate-100 break-words max-w-[320px] text-base leading-snug"
                       title={f.symbol}
                     >
                       {f.symbol}
                     </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {f.isin}
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-1">
+                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] capitalize">
+                        {f.instrumentType || "Mutual Fund"}
+                      </span>
+                      <span>• Units: {f.quantity.toFixed(3)}</span>
+                      <span>• NAV: ₹{f.currentPrice.toFixed(2)}</span>
                     </div>
                   </td>
-                  <td className="p-4 text-slate-400 capitalize">
-                    {f.instrumentType || "Mutual Fund"}
+                  <td className="p-4 font-medium text-slate-200 uppercase tracking-wide">
+                    Dishen
                   </td>
-                  <td className="p-4 text-right text-slate-300 font-medium">
-                    {f.quantity.toFixed(3)}
+                  <td className="p-4 font-bold text-slate-100">
+                    <div>{formatCurrency(f.currentValue)}</div>
+                    <div className="text-[11px] text-slate-500 font-normal">
+                      Cost: {formatCurrency(f.investedValue)}
+                    </div>
                   </td>
-                  <td className="p-4 text-right text-slate-400">
-                    {formatPrice(f.averagePrice)}
-                  </td>
-                  <td className="p-4 text-right text-slate-400">
-                    {formatPrice(f.currentPrice)}
-                  </td>
-                  <td className="p-4 text-right text-slate-400">
-                    {formatCurrency(f.investedValue)}
-                  </td>
-                  <td className="p-4 text-right font-bold text-slate-100">
-                    {formatCurrency(f.currentValue)}
-                  </td>
-                  <td
-                    className={`p-4 text-right font-semibold ${
-                      f.unrealizedPnl >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
-                  >
-                    {formatCurrency(f.unrealizedPnl)}
-                  </td>
-                  <td className="p-4 text-right">
-                    <span
-                      className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
-                        f.unrealizedPnl >= 0
-                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
-                          : "bg-red-950/80 text-red-400 border border-red-800/40"
-                      }`}
+                  <td className="p-4">
+                    <div
+                      className={`font-semibold ${f.unrealizedPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
                     >
-                      {f.unrealizedPnlPct >= 0 ? "+" : ""}
-                      {f.unrealizedPnlPct.toFixed(2)}%
-                    </span>
+                      {formatCurrency(f.unrealizedPnl)}
+                    </div>
+                    <div
+                      className={`text-[11px] ${f.unrealizedPnl >= 0 ? "text-emerald-500/80" : "text-red-500/80"}`}
+                    >
+                      {f.unrealizedPnlPct.toFixed(1)}% Abs
+                    </div>
                   </td>
-                  <td className="p-4 text-right font-bold text-teal-400">
+                  <td className="p-4 font-bold text-slate-200 whitespace-nowrap">
+                    {f.holdingDays ?? "-"}
+                  </td>
+                  <td className="p-4 font-bold text-slate-200">
+                    {f.cagr !== null && f.cagr !== undefined
+                      ? formatPercent(f.cagr)
+                      : "-"}
+                  </td>
+                  <td className="p-4 font-bold text-teal-400">
                     {f.xirr !== null && f.xirr !== undefined
                       ? formatPercent(f.xirr)
                       : "-"}
+                  </td>
+                  <td className="p-4">
+                    {f.alpha !== null && f.alpha !== undefined ? (
+                      <span
+                        className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
+                          f.alpha >= 0
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                            : "bg-red-950/80 text-red-400 border border-red-800/40"
+                        }`}
+                      >
+                        {f.alpha >= 0 ? "+" : ""}
+                        {f.alpha.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-slate-500">
+                <td colSpan={8} className="p-8 text-center text-slate-500">
                   No mutual funds found matching search.
                 </td>
               </tr>

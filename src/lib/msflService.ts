@@ -56,6 +56,7 @@ export interface MsflHoldingData {
   unrealizedPnlPct: number;
   xirr?: number | null;
   cagr?: number | null;
+  alpha?: number | null;
 }
 
 export interface MsflDashboardData {
@@ -106,10 +107,11 @@ function calculateFundMetrics(
   purchaseNav: number,
   currentNav: number,
   asOfDate: string,
-  fundNavHistory: { date: string; nav: string }[]
-): { xirr: number; cagr: number } {
+  fundNavHistory: { date: string; nav: string }[],
+  benchmarkNavHistory?: { date: string; nav: string }[]
+): { xirr: number; cagr: number; alpha: number | null } {
   if (!fundNavHistory.length || !currentNav || currentNav <= 0) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, alpha: null };
   }
 
   const parseApiDateLocal = (s: string) => {
@@ -121,7 +123,7 @@ function calculateFundMetrics(
   const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
 
   if (!entry) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, alpha: null };
   }
 
   const investDate = entry.date;
@@ -131,13 +133,52 @@ function calculateFundMetrics(
   const years = msDiff / (365.25 * 24 * 60 * 60 * 1000);
 
   if (years <= 0) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, alpha: null };
   }
 
   const cagrValue = calculateCagr(currentNav, actualPurchaseNav, years);
+
+  let alpha: number | null = null;
+  if (benchmarkNavHistory && benchmarkNavHistory.length > 0) {
+    const sortedBenchmark = benchmarkNavHistory
+      .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+      .filter((p) => !isNaN(p.nav) && p.nav > 0)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (sortedBenchmark.length > 0) {
+      // Find benchmark price closest to investDate
+      let startBenchmarkPrice = sortedBenchmark[0].nav;
+      for (let i = sortedBenchmark.length - 1; i >= 0; i--) {
+        if (sortedBenchmark[i].date <= investDate) {
+          startBenchmarkPrice = sortedBenchmark[i].nav;
+          break;
+        }
+      }
+
+      // Find benchmark price closest to exitDate
+      let endBenchmarkPrice = sortedBenchmark[sortedBenchmark.length - 1].nav;
+      for (let i = sortedBenchmark.length - 1; i >= 0; i--) {
+        if (sortedBenchmark[i].date <= exitDate) {
+          endBenchmarkPrice = sortedBenchmark[i].nav;
+          break;
+        }
+      }
+
+      if (startBenchmarkPrice > 0 && endBenchmarkPrice > 0) {
+        const benchmarkCagr = calculateCagr(
+          endBenchmarkPrice,
+          startBenchmarkPrice,
+          years
+        );
+        alpha = cagrValue - benchmarkCagr;
+      }
+    }
+  }
+
   return {
     xirr: cagrValue,
     cagr: cagrValue,
+    alpha,
   };
 }
 
@@ -288,11 +329,14 @@ export async function deleteMsflHoldingsReport(
   await db.delete(msflReports).where(eq(msflReports.id, reportId));
 }
 
-// In-memory cache for MSFL stock details to save API hits
 const msflStockHistoryCache = new Map<
   string,
   Promise<MfDetailsResponse | null>
 >();
+
+export function clearMsflStockCache(ticker: string) {
+  msflStockHistoryCache.delete(ticker);
+}
 
 async function triggerMsflStockNavCacheUpdate(ticker: string) {
   try {
@@ -523,6 +567,9 @@ export async function getMsflDashboardData(
 
   const schemesList = await db.select().from(msflSchemes);
 
+  const niftyHistory = await getBenchmarkHistory("120716");
+  const niftyData = niftyHistory?.data || [];
+
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
       const scheme = schemesList.find((s) => s.name === h.symbol);
@@ -534,15 +581,17 @@ export async function getMsflDashboardData(
           h.averagePrice,
           h.currentPrice,
           selectedReport.asOfDate,
-          stockDetails.data
+          stockDetails.data,
+          niftyData
         );
         return {
           ...h,
           xirr: metrics.xirr,
           cagr: metrics.cagr,
+          alpha: metrics.alpha,
         };
       }
-      return { ...h, xirr: null, cagr: null };
+      return { ...h, xirr: null, cagr: null, alpha: null };
     })
   );
 
@@ -568,8 +617,6 @@ export async function getMsflDashboardData(
   // Timeline Data
   const timelineData = [];
   const chronologicalReports = [...reportsList].reverse();
-  const niftyHistory = await getBenchmarkHistory("120716");
-  const niftyData = niftyHistory?.data || [];
 
   for (const r of chronologicalReports) {
     const t = await getMsflSnapshotTotals(r.id);

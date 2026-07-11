@@ -1,6 +1,4 @@
 "use client";
-
-import { motion } from "framer-motion";
 import {
   PieChart,
   Pie,
@@ -13,8 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { PieChart as PieIcon, BarChart2, Activity } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { BarChart2, Activity } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
 
@@ -125,7 +123,7 @@ export default function ZerodhaOverviewTab({
                     >
                       {data.assetSplit.map((entry, index) => (
                         <Cell
-                          key={`cell-${index}`}
+                          key={`asset-${entry.name}`}
                           fill={COLORS[index % COLORS.length]}
                         />
                       ))}
@@ -217,7 +215,7 @@ export default function ZerodhaOverviewTab({
                     >
                       {data.sectorAllocation.slice(0, 5).map((entry, index) => (
                         <Cell
-                          key={`cell-${index}`}
+                          key={`sector-${entry.name}`}
                           fill={COLORS[(index + 2) % COLORS.length]}
                         />
                       ))}

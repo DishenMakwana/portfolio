@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useState, useMemo } from "react";
 import {
   ArrowLeft,
@@ -8,14 +8,19 @@ import {
   AlertTriangle,
   TrendingUp,
   Info,
-  Percent,
   Layers,
   Activity,
   PieChart,
   HelpCircle,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from "lucide-react";
+import {
+  refreshBenchmarkXirrAction,
+  refreshFundHistoryAction,
+} from "@/app/actions";
+import { isUnlistedStock } from "@/lib/stockApi";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -104,13 +109,57 @@ export default function FundDetailsClient({
   chartData,
 }: FundDetailsClientProps) {
   const router = useRouter();
+  const params = useParams();
+  const rawId = params?.id as string;
+  const [currentMetrics, setCurrentMetrics] = useState(metrics);
+  const [currentChartData, setCurrentChartData] = useState(chartData);
+  const [currentVolatilityStats, setCurrentVolatilityStats] =
+    useState(volatilityStats);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshingChart, setIsRefreshingChart] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
     "3y"
   );
 
+  const handleRefreshBenchmark = async () => {
+    if (isRefreshing || !rawId) return;
+    setIsRefreshing(true);
+    try {
+      const res = await refreshBenchmarkXirrAction(rawId);
+      if (res.success && res.metrics) {
+        setCurrentMetrics(res.metrics);
+      } else {
+        alert(res.error || "Failed to refresh benchmark data");
+      }
+    } catch (err: any) {
+      alert("Error: " + (err.message || "Failed to connect to server"));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleRefreshFundHistory = async () => {
+    if (isRefreshingChart || !rawId) return;
+    setIsRefreshingChart(true);
+    try {
+      const res = await refreshFundHistoryAction(rawId);
+      if (res.success && res.chartData) {
+        setCurrentChartData(res.chartData);
+        if (res.metrics) setCurrentMetrics(res.metrics);
+        if (res.volatilityStats) setCurrentVolatilityStats(res.volatilityStats);
+      } else {
+        alert(res.error || "Failed to refresh fund history");
+      }
+    } catch (err: any) {
+      alert("Error: " + (err.message || "Failed to connect to server"));
+    } finally {
+      setIsRefreshingChart(false);
+    }
+  };
+
   const filteredChartData = useMemo(() => {
-    if (!chartData.length) return [];
+    if (!currentChartData.length || !holding.asOfDate) return [];
 
     const now = new Date(holding.asOfDate);
     let cutoffTime = 0;
@@ -128,7 +177,7 @@ export default function FundDetailsClient({
     }
 
     // Filter points
-    const points = chartData.filter((pt) => pt.timestamp >= cutoffTime);
+    const points = currentChartData.filter((pt) => pt.timestamp >= cutoffTime);
     if (!points.length) return [];
 
     // Recalculate returns based on the first point in the selected timeframe
@@ -144,11 +193,11 @@ export default function FundDetailsClient({
         benchReturn,
       };
     });
-  }, [chartData, timeframe, holding.asOfDate]);
+  }, [currentChartData, timeframe, holding.asOfDate]);
 
   // Find the entry point to display as a marker on the chart (only if it falls within the selected timeline)
   const entryPoint = useMemo(() => {
-    if (!filteredChartData.length || !chartData.length) return null;
+    if (!filteredChartData.length || !currentChartData.length) return null;
 
     // 1. For standard funds with transactions:
     // Find the very first buy transaction in all history
@@ -187,7 +236,7 @@ export default function FundDetailsClient({
     const targetNav = holding.purchaseNav || 0;
     if (targetNav <= 0) {
       // Fallback: earliest point in full chart history is listing/allotment date
-      const firstPt = chartData[0];
+      const firstPt = currentChartData[0];
       if (firstPt) {
         // Only show if the listing date is within the active filtered range
         const visibleFirstPt = filteredChartData.find(
@@ -206,9 +255,9 @@ export default function FundDetailsClient({
     }
 
     // Find the point in full chartData closest to purchaseNav (the absolute entry point)
-    let bestFullPt = chartData[0];
-    let bestFullDiff = Math.abs(chartData[0].fundNav - targetNav);
-    for (const pt of chartData) {
+    let bestFullPt = currentChartData[0];
+    let bestFullDiff = Math.abs(currentChartData[0].fundNav - targetNav);
+    for (const pt of currentChartData) {
       const diff = Math.abs(pt.fundNav - targetNav);
       if (diff < bestFullDiff) {
         bestFullDiff = diff;
@@ -230,7 +279,7 @@ export default function FundDetailsClient({
     }
 
     return null;
-  }, [filteredChartData, chartData, holding.purchaseNav, transactions]);
+  }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -254,9 +303,8 @@ export default function FundDetailsClient({
   };
 
   const cleanCategory = holding.category || "N/A";
-  const isDebt =
-    cleanCategory.toLowerCase().includes("debt") ||
-    cleanCategory.toLowerCase().includes("liquid");
+  const hasHoldingDays =
+    Number.isFinite(holding.holdingDays) && holding.holdingDays > 0;
 
   // Custom chart tooltip
   const CustomTooltip = ({ active, payload }: any) => {
@@ -347,6 +395,11 @@ export default function FundDetailsClient({
               <span className="bg-slate-800/80 text-teal-400 border border-teal-950/60 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                 {cleanCategory}
               </span>
+              {isUnlistedStock(holding.schemeName) && (
+                <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                  Unlisted
+                </span>
+              )}
             </div>
             <p className="text-slate-400 mt-1 text-sm font-medium">
               Holder:{" "}
@@ -372,111 +425,167 @@ export default function FundDetailsClient({
       </header>
 
       {/* KPI METRIC CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {/* Card 1: Valuation */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
-            Current value
-          </span>
-          <div className="mt-2">
-            <div className="text-xl font-black text-slate-100 tracking-tight">
-              {formatCurrency(holding.currentValue)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-              Valuation price
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Invested Cost */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
-            Invested Cost
-          </span>
-          <div className="mt-2">
-            <div className="text-xl font-black text-slate-100 tracking-tight">
-              {formatCurrency(holding.purchaseValue)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-              Principal amount
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Returns */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
-            Net returns
-          </span>
-          <div className="mt-2">
-            <div
-              className={`text-xl font-black ${holding.gain >= 0 ? "text-emerald-400" : "text-red-400"} tracking-tight`}
-            >
-              {formatCurrency(holding.gain)}
-            </div>
-            <div
-              className={`text-[10px] font-extrabold mt-1 ${holding.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
-            >
-              {holding.absoluteReturn.toFixed(2)}% Abs
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Scheme XIRR */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-            Scheme XIRR
-            <span title="Calculated from reconstructed transactions">
-              <Info size={12} className="text-slate-500 cursor-pointer" />
+      <div className="space-y-4">
+        {/* Row 1: Absolute values */}
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${hasHoldingDays ? "xl:grid-cols-4" : "lg:grid-cols-3"} gap-4`}
+        >
+          {/* Card 1: Valuation */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
+              Current value
             </span>
-          </span>
-          <div className="mt-2">
-            <div className="text-xl font-black text-teal-400 tracking-tight">
-              {formatPercent(metrics.portfolioXirr)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-              Annualized IRR
-            </div>
-          </div>
-        </div>
-
-        {/* Card 5: Benchmark XIRR */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-            {factsheetMeta.profile.benchmarkName
-              .replace("Index Fund Direct", "")
-              .trim()}{" "}
-            XIRR
-            <span title="Benchmark return on same cash flow dates">
-              <Info size={12} className="text-slate-500 cursor-pointer" />
-            </span>
-          </span>
-          <div className="mt-2">
-            <div className="text-xl font-black text-indigo-400 tracking-tight">
-              {formatPercent(metrics.benchmarkXirr)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-              Simulated Index
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight">
+                {formatCurrency(holding.currentValue)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Valuation price
+              </div>
             </div>
           </div>
+
+          {/* Card 2: Invested Cost */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
+              Invested Cost
+            </span>
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight">
+                {formatCurrency(holding.purchaseValue)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Principal amount
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Returns */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
+              Net returns
+            </span>
+            <div className="mt-2">
+              <div
+                className={`text-2xl sm:text-3xl font-black ${holding.gain >= 0 ? "text-emerald-400" : "text-red-400"} tracking-tight`}
+              >
+                {formatCurrency(holding.gain)}
+              </div>
+              <div
+                className={`text-[10px] font-extrabold mt-1 ${holding.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {holding.absoluteReturn.toFixed(2)}% Abs
+              </div>
+            </div>
+          </div>
+
+          {hasHoldingDays && (
+            <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+              <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider">
+                Holding period
+              </span>
+              <div className="mt-2">
+                <div className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight">
+                  {holding.holdingDays.toLocaleString("en-IN")}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                  Days held
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Card 6: Alpha */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300">
-          <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-            Alpha
-            <span title="Outperformance over index">
-              <Info size={12} className="text-slate-500 cursor-pointer" />
+        {/* Row 2: Annualized returns (4 cards) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Card 4: Scheme XIRR */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+              Scheme XIRR
+              <span title="Calculated from reconstructed transactions">
+                <Info size={12} className="text-slate-500 cursor-pointer" />
+              </span>
             </span>
-          </span>
-          <div className="mt-2">
-            <div
-              className={`text-xl font-black ${metrics.alpha >= 0 ? "text-emerald-400" : "text-red-400"} tracking-tight`}
-            >
-              {metrics.alpha.toFixed(2)}%
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-teal-400 tracking-tight">
+                {formatPercent(currentMetrics.portfolioXirr)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Annualized IRR
+              </div>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-              {metrics.alpha >= 0 ? "Outperforming" : "Underperforming"}
+          </div>
+
+          {/* Card 5: Benchmark XIRR */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between w-full">
+              <span className="flex items-center gap-1">
+                {factsheetMeta.profile.benchmarkName
+                  .replace("Index Fund Direct", "")
+                  .trim()}{" "}
+                XIRR
+                <span title="Benchmark return on same cash flow dates">
+                  <Info size={12} className="text-slate-500 cursor-pointer" />
+                </span>
+              </span>
+              <button
+                onClick={handleRefreshBenchmark}
+                disabled={isRefreshing}
+                className={`p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-indigo-400 transition-colors duration-200 ${isRefreshing ? "animate-spin text-indigo-400" : ""}`}
+                title="Force reload live benchmark data"
+              >
+                <RefreshCw size={12} />
+              </button>
+            </span>
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-indigo-400 tracking-tight">
+                {formatPercent(currentMetrics.benchmarkXirr)}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Simulated Index
+              </div>
+            </div>
+          </div>
+
+          {/* Card 6: CAGR */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+              Report CAGR
+              <span title="Compounded Annualized Growth Rate">
+                <Info size={12} className="text-slate-500 cursor-pointer" />
+              </span>
+            </span>
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                {holding.cagr !== null && holding.cagr !== undefined
+                  ? `${holding.cagr.toFixed(2)}%`
+                  : "-"}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Compounded Annual
+              </div>
+            </div>
+          </div>
+
+          {/* Card 7: Alpha */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+              Alpha
+              <span title="Outperformance over index">
+                <Info size={12} className="text-slate-500 cursor-pointer" />
+              </span>
+            </span>
+            <div className="mt-2">
+              <div
+                className={`text-2xl sm:text-3xl font-black ${currentMetrics.alpha >= 0 ? "text-emerald-400" : "text-red-400"} tracking-tight`}
+              >
+                {currentMetrics.alpha.toFixed(2)}%
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                {currentMetrics.alpha >= 0
+                  ? "Outperforming"
+                  : "Underperforming"}
+              </div>
             </div>
           </div>
         </div>
@@ -489,6 +598,19 @@ export default function FundDetailsClient({
             <h3 className="text-lg font-black text-slate-100 tracking-tight flex items-center gap-2">
               <TrendingUp size={20} className="text-teal-400" />
               <span>Historical Returns Analysis</span>
+              <button
+                onClick={handleRefreshFundHistory}
+                disabled={isRefreshingChart}
+                className="text-slate-500 hover:text-teal-400 transition-colors p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                title="Refresh historical returns chart data"
+              >
+                <RefreshCw
+                  size={14}
+                  className={
+                    isRefreshingChart ? "animate-spin text-teal-400" : ""
+                  }
+                />
+              </button>
             </h3>
             <p className="text-xs text-slate-400 mt-1 font-medium text-wrap">
               Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}
@@ -617,6 +739,20 @@ export default function FundDetailsClient({
                 )}
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+        ) : isUnlistedStock(holding.schemeName) ? (
+          <div className="h-72 border border-dashed border-slate-800 rounded-xl flex flex-col justify-center items-center text-center p-8 bg-slate-950/40">
+            <AlertTriangle
+              className="text-rose-500 mb-3 animate-pulse"
+              size={32}
+            />
+            <h4 className="text-sm font-black text-rose-400 uppercase tracking-wider">
+              Stock Unlisted / Delisted
+            </h4>
+            <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+              This asset is currently unlisted or suspended from trading on the
+              stock exchange. No historical price tracking feed is available.
+            </p>
           </div>
         ) : (
           <div className="h-72 border border-dashed border-slate-800 rounded-xl flex flex-col justify-center items-center text-center p-8 bg-slate-950/40">
@@ -810,9 +946,9 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span
-                  className={`text-base font-black font-mono block mt-1 ${volatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                  className={`text-base font-black font-mono block mt-1 ${currentVolatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
                 >
-                  {volatilityStats.alpha.toFixed(2)}%
+                  {currentVolatilityStats.alpha.toFixed(2)}%
                 </span>
               </div>
               <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
@@ -823,7 +959,7 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-teal-400 block mt-1">
-                  {volatilityStats.sharpe.toFixed(2)}
+                  {currentVolatilityStats.sharpe.toFixed(2)}
                 </span>
               </div>
               <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
@@ -834,7 +970,7 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-slate-200 block mt-1">
-                  {volatilityStats.mean.toFixed(2)}%
+                  {currentVolatilityStats.mean.toFixed(2)}%
                 </span>
               </div>
               <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
@@ -845,7 +981,7 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-indigo-400 block mt-1">
-                  {volatilityStats.beta.toFixed(2)}
+                  {currentVolatilityStats.beta.toFixed(2)}
                 </span>
               </div>
               <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
@@ -856,7 +992,7 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-slate-200 block mt-1">
-                  {volatilityStats.stdDev.toFixed(2)}%
+                  {currentVolatilityStats.stdDev.toFixed(2)}%
                 </span>
               </div>
               <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
@@ -867,8 +1003,8 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {volatilityStats.ytm > 0
-                    ? `${volatilityStats.ytm.toFixed(2)}%`
+                  {currentVolatilityStats.ytm > 0
+                    ? `${currentVolatilityStats.ytm.toFixed(2)}%`
                     : "0.0%"}
                 </span>
               </div>
@@ -880,8 +1016,8 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {volatilityStats.modifiedDuration > 0
-                    ? `${volatilityStats.modifiedDuration.toFixed(2)} Yr`
+                  {currentVolatilityStats.modifiedDuration > 0
+                    ? `${currentVolatilityStats.modifiedDuration.toFixed(2)} Yr`
                     : "0.0"}
                 </span>
               </div>
@@ -893,8 +1029,8 @@ export default function FundDetailsClient({
                   </span>
                 </span>
                 <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {volatilityStats.avgMaturity > 0
-                    ? `${volatilityStats.avgMaturity.toFixed(2)} Yr`
+                  {currentVolatilityStats.avgMaturity > 0
+                    ? `${currentVolatilityStats.avgMaturity.toFixed(2)} Yr`
                     : "0.0"}
                 </span>
               </div>
@@ -1143,7 +1279,9 @@ export default function FundDetailsClient({
                 Report CAGR
               </div>
               <div className="text-slate-200 mt-0.5 font-black">
-                {holding.cagr.toFixed(2)}%
+                {holding.cagr !== null && holding.cagr !== undefined
+                  ? `${holding.cagr.toFixed(2)}%`
+                  : "-"}
               </div>
             </div>
             <div className="col-span-2">

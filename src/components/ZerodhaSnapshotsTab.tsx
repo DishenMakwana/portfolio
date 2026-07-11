@@ -4,17 +4,14 @@ import { useState } from "react";
 import {
   Upload,
   FileSpreadsheet,
-  CheckCircle,
   Trash2,
   ExternalLink,
-  CalendarDays,
   XCircle,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Search,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 interface SnapshotReport {

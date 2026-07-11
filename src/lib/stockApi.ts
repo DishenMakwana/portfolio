@@ -7,6 +7,7 @@ export async function fetchStockHistory(
   symbol: string
 ): Promise<MfDetailsResponse | null> {
   if (!symbol) return null;
+  if (isUnlistedStock(symbol)) return null;
 
   // Stocks in Zerodha are typically Indian stocks. Suffix .NS for National Stock Exchange (NSE).
   const ticker = symbol.includes(".") ? symbol : `${symbol}.NS`;
@@ -100,4 +101,19 @@ export async function fetchStockHistory(
     }
     return null;
   }
+}
+
+const UNLISTED_STOCKS = new Set([
+  "BIBCL.NS",
+  "BIBCL",
+  "GVFILM.NS",
+  "GVFILM",
+  "BIRLACAP.NS",
+  "BIRLACAP",
+]);
+
+export function isUnlistedStock(symbol: string | null | undefined): boolean {
+  if (!symbol) return false;
+  const s = symbol.toUpperCase().trim();
+  return UNLISTED_STOCKS.has(s);
 }

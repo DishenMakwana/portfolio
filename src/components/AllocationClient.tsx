@@ -342,10 +342,6 @@ function CardHeader({
 export default function AllocationClient({
   memberSummaries,
   holdings,
-  categoryAllocation,
-  capAllocation,
-  amcAllocation,
-  totals,
   selectedReport,
 }: AllocationClientProps) {
   /* ── Filter state ── */

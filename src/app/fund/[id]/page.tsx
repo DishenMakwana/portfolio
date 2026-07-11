@@ -23,7 +23,6 @@ import {
   generateFactsheetChartData,
   calculateXirrFromNav,
   getBenchmarkCodeForCategory,
-  getBenchmarkNameForCode,
   getBenchmarkFundNameForCode,
 } from "@/lib/alpha";
 import {
@@ -158,6 +157,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           memberName: "Zerodha Account",
           memberPan: null,
           schemeCodeApi: scheme ? scheme.schemeCodeApi : null,
+          category: scheme ? scheme.category : zHolding.category,
         };
       }
     }
@@ -256,6 +256,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       fundDetails.data,
       benchDetails.data
     );
+  }
+
+  if (isMsfl || isZerodha) {
+    holding.cagr = metrics.portfolioXirr;
   }
 
   const fundNavHistory = fundDetails?.data || [];

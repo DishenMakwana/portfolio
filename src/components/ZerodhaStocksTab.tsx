@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
+import { isUnlistedStock } from "@/lib/stockApi";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
 
 interface ZerodhaStocksTabProps {
@@ -126,18 +127,18 @@ export default function ZerodhaStocksTab({
               </th>
               <th
                 className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
-                onClick={() => toggleStockSort("unrealizedPnlPct")}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  Return % {renderStockSortIcon("unrealizedPnlPct")}
-                </div>
-              </th>
-              <th
-                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
                 onClick={() => toggleStockSort("xirr")}
               >
                 <div className="flex items-center justify-end gap-1">
                   XIRR {renderStockSortIcon("xirr")}
+                </div>
+              </th>
+              <th
+                className="p-4 cursor-pointer hover:text-slate-200 select-none text-right"
+                onClick={() => toggleStockSort("alpha")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Alpha {renderStockSortIcon("alpha")}
                 </div>
               </th>
             </tr>
@@ -152,7 +153,14 @@ export default function ZerodhaStocksTab({
                 >
                   {/* Stock name + ISIN */}
                   <td className="p-4">
-                    <div className="font-bold text-slate-100">{s.symbol}</div>
+                    <div className="font-bold text-slate-100 flex items-center gap-2">
+                      <span>{s.symbol}</span>
+                      {isUnlistedStock(s.symbol) && (
+                        <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse leading-none">
+                          Unlisted
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
                       <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
                         {s.instrumentType || "EQ"}
@@ -202,24 +210,28 @@ export default function ZerodhaStocksTab({
                       {s.unrealizedPnlPct.toFixed(1)}% Abs
                     </div>
                   </td>
-                  {/* Return % badge */}
-                  <td className="p-4 text-right">
-                    <span
-                      className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
-                        s.unrealizedPnl >= 0
-                          ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
-                          : "bg-red-950/80 text-red-400 border border-red-800/40"
-                      }`}
-                    >
-                      {s.unrealizedPnlPct >= 0 ? "+" : ""}
-                      {s.unrealizedPnlPct.toFixed(2)}%
-                    </span>
-                  </td>
                   {/* XIRR */}
                   <td className="p-4 text-right font-bold text-teal-400">
                     {s.xirr !== null && s.xirr !== undefined
                       ? formatPercent(s.xirr)
                       : "-"}
+                  </td>
+                  {/* Alpha */}
+                  <td className="p-4 text-right">
+                    {s.alpha !== null && s.alpha !== undefined ? (
+                      <span
+                        className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
+                          s.alpha >= 0
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                            : "bg-red-950/80 text-red-400 border border-red-800/40"
+                        }`}
+                      >
+                        {s.alpha >= 0 ? "+" : ""}
+                        {s.alpha.toFixed(2)}%
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                 </tr>
               ))

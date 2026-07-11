@@ -10,12 +10,14 @@ import {
 import { eq, desc, asc } from "drizzle-orm";
 import { ZerodhaHoldingParsed } from "./zerodhaParser";
 import {
-  getSchemeHistoryForDbCode,
   getBenchmarkHistory,
   findClosestNav,
   parseAndSortNavHistory,
   findSyntheticInvestmentEntry,
   calculateCagr,
+  calculateXirrFromNav,
+  getBenchmarkCodeForCategory,
+  getBenchmarkFundNameForCode,
 } from "./alpha";
 import { fetchStockHistory } from "./stockApi";
 
@@ -57,6 +59,11 @@ export interface ZerodhaDashboardData {
     unrealizedPnlPct: number;
     xirr?: number | null;
     cagr?: number | null;
+    holdingDays?: number | null;
+    benchmarkXirr?: number | null;
+    alpha?: number | null;
+    benchmarkCode?: string | null;
+    benchmarkName?: string | null;
   }[];
   totals: {
     invested: number;
@@ -249,10 +256,17 @@ function calculateFundMetrics(
   purchaseNav: number,
   currentNav: number,
   asOfDate: string,
-  fundNavHistory: { date: string; nav: string }[]
-): { xirr: number; cagr: number } {
+  fundNavHistory: { date: string; nav: string }[],
+  benchNavHistory: { date: string; nav: string }[] = []
+): {
+  xirr: number;
+  cagr: number;
+  holdingDays: number;
+  benchmarkXirr: number;
+  alpha: number;
+} {
   if (!fundNavHistory.length || !currentNav || currentNav <= 0) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, holdingDays: 0, benchmarkXirr: 0, alpha: 0 };
   }
 
   const parseApiDate = (s: string) => {
@@ -264,23 +278,44 @@ function calculateFundMetrics(
   const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
 
   if (!entry) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, holdingDays: 0, benchmarkXirr: 0, alpha: 0 };
   }
 
   const investDate = entry.date;
-  const actualPurchaseNav = entry.nav;
   const exitDate = new Date(asOfDate);
   const msDiff = exitDate.getTime() - investDate.getTime();
+  const holdingDays = Math.max(0, Math.round(msDiff / (24 * 60 * 60 * 1000)));
+
+  if (benchNavHistory.length > 0) {
+    const metrics = calculateXirrFromNav(
+      purchaseNav,
+      currentNav,
+      asOfDate,
+      fundNavHistory,
+      benchNavHistory
+    );
+    return {
+      xirr: metrics.portfolioXirr,
+      cagr: metrics.portfolioXirr,
+      holdingDays,
+      benchmarkXirr: metrics.benchmarkXirr,
+      alpha: metrics.alpha,
+    };
+  }
+  const actualPurchaseNav = entry.nav;
   const years = msDiff / (365.25 * 24 * 60 * 60 * 1000);
 
   if (years <= 0) {
-    return { xirr: 0, cagr: 0 };
+    return { xirr: 0, cagr: 0, holdingDays, benchmarkXirr: 0, alpha: 0 };
   }
 
   const cagrValue = calculateCagr(currentNav, actualPurchaseNav, years);
   return {
     xirr: cagrValue,
     cagr: cagrValue,
+    holdingDays,
+    benchmarkXirr: 0,
+    alpha: 0,
   };
 }
 
@@ -423,45 +458,79 @@ export async function getZerodhaDashboardData(
 
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
+      const scheme = schemesList.find((s) => s.name === h.symbol);
+      const category =
+        scheme?.category ||
+        h.instrumentType ||
+        (h.holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
+      const benchmarkCode = getBenchmarkCodeForCategory(category);
+      const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
+
       if (h.holdingType === "mutual_fund") {
-        const scheme = schemesList.find((s) => s.name === h.symbol);
         if (scheme && scheme.schemeCodeApi) {
-          const fundDetails = await getZerodhaSchemeHistoryForDbCode(
-            scheme.schemeCodeApi
-          );
+          const [fundDetails, benchDetails] = await Promise.all([
+            getZerodhaSchemeHistoryForDbCode(scheme.schemeCodeApi),
+            getBenchmarkHistory(benchmarkCode),
+          ]);
           if (fundDetails && fundDetails.data && fundDetails.data.length > 0) {
             const metrics = calculateFundMetrics(
               h.averagePrice,
               h.currentPrice,
               selectedReport.asOfDate,
-              fundDetails.data
+              fundDetails.data,
+              benchDetails?.data || []
             );
             return {
               ...h,
+              instrumentType: category,
               xirr: metrics.xirr,
               cagr: metrics.cagr,
+              holdingDays: metrics.holdingDays,
+              benchmarkXirr: metrics.benchmarkXirr,
+              alpha: metrics.alpha,
+              benchmarkCode,
+              benchmarkName,
             };
           }
         }
       } else if (h.holdingType === "equity") {
-        const scheme = schemesList.find((s) => s.name === h.symbol);
         const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
-        const stockDetails = await getZerodhaStockHistoryForSymbol(ticker);
+        const [stockDetails, benchDetails] = await Promise.all([
+          getZerodhaStockHistoryForSymbol(ticker),
+          getBenchmarkHistory(benchmarkCode),
+        ]);
         if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
           const metrics = calculateFundMetrics(
             h.averagePrice,
             h.currentPrice,
             selectedReport.asOfDate,
-            stockDetails.data
+            stockDetails.data,
+            benchDetails?.data || []
           );
           return {
             ...h,
+            instrumentType: category,
             xirr: metrics.xirr,
             cagr: metrics.cagr,
+            holdingDays: metrics.holdingDays,
+            benchmarkXirr: metrics.benchmarkXirr,
+            alpha: metrics.alpha,
+            benchmarkCode,
+            benchmarkName,
           };
         }
       }
-      return { ...h, xirr: null, cagr: null };
+      return {
+        ...h,
+        instrumentType: category,
+        xirr: null,
+        cagr: null,
+        holdingDays: null,
+        benchmarkXirr: null,
+        alpha: null,
+        benchmarkCode,
+        benchmarkName,
+      };
     })
   );
 
@@ -726,11 +795,14 @@ export async function getZerodhaDashboardData(
   };
 }
 
-// In-memory cache for Zerodha scheme history
 const zerodhaSchemeHistoryCache = new Map<
   string,
   Promise<MfDetailsResponse | null>
 >();
+
+export function clearZerodhaSchemeCache(schemeCode: string) {
+  zerodhaSchemeHistoryCache.delete(schemeCode);
+}
 
 export function normaliseSchemeCode(
   code: string | null | undefined
@@ -952,11 +1024,14 @@ export async function updateZerodhaSchemeCode(
     .where(eq(zerodhaSchemes.id, schemeId));
 }
 
-// In-memory cache for Zerodha stock history
 const zerodhaStockHistoryCache = new Map<
   string,
   Promise<MfDetailsResponse | null>
 >();
+
+export function clearZerodhaStockCache(ticker: string) {
+  zerodhaStockHistoryCache.delete(ticker);
+}
 
 async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
   try {

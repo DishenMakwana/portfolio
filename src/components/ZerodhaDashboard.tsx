@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 
 import {
@@ -48,6 +48,11 @@ export interface ZerodhaHolding {
   unrealizedPnlPct: number;
   xirr?: number | null;
   cagr?: number | null;
+  holdingDays?: number | null;
+  benchmarkXirr?: number | null;
+  alpha?: number | null;
+  benchmarkCode?: string | null;
+  benchmarkName?: string | null;
 }
 
 export interface ZerodhaScheme {
@@ -174,7 +179,7 @@ export default function ZerodhaDashboard({
 }: ZerodhaDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const rawTab = searchParams.get("tab");
   const activeTab =
@@ -209,6 +214,7 @@ export default function ZerodhaDashboard({
     | "unrealizedPnlPct"
     | "xirr"
     | "cagr"
+    | "alpha"
   >("currentValue");
   const [stockSortOrder, setStockSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -243,6 +249,10 @@ export default function ZerodhaDashboard({
     | "currentValue"
     | "unrealizedPnl"
     | "unrealizedPnlPct"
+    | "xirr"
+    | "cagr"
+    | "holdingDays"
+    | "alpha"
   >("currentValue");
   const [fundSortOrder, setFundSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -700,7 +710,6 @@ export default function ZerodhaDashboard({
             toggleFundSort={toggleFundSort}
             fundSortField={fundSortField}
             fundSortOrder={fundSortOrder}
-            formatPrice={formatPrice}
           />
         )}
 
