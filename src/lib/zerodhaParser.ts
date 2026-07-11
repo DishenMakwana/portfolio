@@ -20,7 +20,7 @@ export interface ZerodhaParseResult {
   holdings: ZerodhaHoldingParsed[];
 }
 
-function extractAsOfDate(rows: any[][]): string | null {
+function extractAsOfDate(rows: unknown[][]): string | null {
   for (let i = 0; i < Math.min(20, rows.length); i++) {
     const row = rows[i];
     if (!row) continue;
@@ -58,7 +58,9 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
   // Parse Equity Sheet
   const equitySheet = workbook.Sheets["Equity"];
   if (equitySheet) {
-    const rows: any[][] = XLSX.utils.sheet_to_json(equitySheet, { header: 1 });
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(equitySheet, {
+      header: 1,
+    });
     const date = extractAsOfDate(rows);
     if (date) asOfDate = date;
 
@@ -170,7 +172,7 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
   // Parse Mutual Funds Sheet
   const mfSheet = workbook.Sheets["Mutual Funds"];
   if (mfSheet) {
-    const rows: any[][] = XLSX.utils.sheet_to_json(mfSheet, { header: 1 });
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(mfSheet, { header: 1 });
     if (!asOfDate) {
       const date = extractAsOfDate(rows);
       if (date) asOfDate = date;

@@ -30,7 +30,7 @@ export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
   const sheetName = workbook.SheetNames[0]; // Usually '1. Mutual Fund'
   const sheet = workbook.Sheets[sheetName];
-  const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
   let asOfDate = "";
   const holdings: HoldingParsed[] = [];

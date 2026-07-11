@@ -47,7 +47,37 @@ interface ZerodhaOverviewTabProps {
   COLORS: string[];
 }
 
-const CustomPerformanceTooltip = ({ active, payload }: any) => {
+interface CustomPerformanceTooltipProps {
+  active?: boolean;
+  payload?: ReadonlyArray<{
+    payload: {
+      date: string;
+      equity: number;
+      equityReturn: number;
+      mutualFunds: number;
+      fundsReturn: number;
+      nifty50: number;
+      niftyReturn: number;
+    };
+  }>;
+}
+
+interface SimplePieTooltipProps {
+  active?: boolean;
+  payload?: ReadonlyArray<{
+    name?: any;
+    value?: any;
+    payload?: {
+      name: string;
+      value: number;
+    };
+  }>;
+}
+
+const CustomPerformanceTooltip = ({
+  active,
+  payload,
+}: CustomPerformanceTooltipProps): React.JSX.Element | null => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -129,8 +159,16 @@ export default function ZerodhaOverviewTab({
                       ))}
                     </Pie>
                     <Tooltip
-                      content={({ active, payload }: any) => {
-                        if (active && payload && payload.length) {
+                      content={({
+                        active,
+                        payload,
+                      }: SimplePieTooltipProps): React.JSX.Element | null => {
+                        if (
+                          active &&
+                          payload &&
+                          payload.length &&
+                          payload[0].payload
+                        ) {
                           const entry = payload[0].payload;
                           return (
                             <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-xs">
@@ -221,8 +259,16 @@ export default function ZerodhaOverviewTab({
                       ))}
                     </Pie>
                     <Tooltip
-                      content={({ active, payload }: any) => {
-                        if (active && payload && payload.length) {
+                      content={({
+                        active,
+                        payload,
+                      }: SimplePieTooltipProps): React.JSX.Element | null => {
+                        if (
+                          active &&
+                          payload &&
+                          payload.length &&
+                          payload[0].payload
+                        ) {
                           const entry = payload[0].payload;
                           return (
                             <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-xs">

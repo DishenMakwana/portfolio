@@ -29,7 +29,9 @@ export function parseMsflHoldings(
   const worksheet = workbook.Sheets[firstSheetName];
 
   if (worksheet) {
-    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1,
+    });
 
     // Attempt to extract asOfDate from filename if it has date info (like YYYY-MM-DD)
     const dateMatch = filename.match(/(\d{4}-\d{2}-\d{2})/);

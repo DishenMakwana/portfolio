@@ -68,13 +68,32 @@ export async function deleteReport(reportId: number): Promise<void> {
   await rebuildAllTransactions();
 }
 
+export interface ParsedHolding {
+  memberName: string;
+  memberPan?: string | null;
+  schemeName: string;
+  category: string;
+  folioNo: string;
+  balanceUnits: number;
+  purchaseNav: number;
+  purchaseValue: number;
+  currentNav: number;
+  currentValue: number;
+  dividend?: number | null;
+  gain: number;
+  holdingDays: number;
+  absoluteReturn: number;
+  cagr: number;
+  comments?: string | null;
+}
+
 /**
  * Process parsed Excel data and save to database
  */
 export async function saveReportSnapshot(
   asOfDate: string,
   filename: string,
-  parsedHoldings: any[],
+  parsedHoldings: ParsedHolding[],
   familyCagr?: number,
   memberCagrs?: { memberName: string; cagr: number }[]
 ): Promise<number> {

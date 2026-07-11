@@ -8,10 +8,15 @@ import {
   getMsflDashboardData,
   updateMsflSchemeCode,
 } from "@/lib/msflService";
+import { db } from "@/db/db";
+import { msflSchemes } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-export async function uploadMsflHoldingsAction(formData: FormData) {
+export async function uploadMsflHoldingsAction(
+  formData: FormData
+): Promise<{ success: boolean; reportId?: number; error?: string }> {
   try {
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
     if (!file) {
       return { success: false, error: "No file uploaded" };
     }
@@ -34,55 +39,74 @@ export async function uploadMsflHoldingsAction(formData: FormData) {
 
     revalidatePath("/zerodha");
     return { success: true, reportId };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("MSFL Upload Action Error:", error);
-    return { success: false, error: error.message || "Failed to parse file" };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to parse file";
+    return { success: false, error: errorMsg };
   }
 }
 
-export async function deleteMsflHoldingsAction(reportId: number) {
+export async function deleteMsflHoldingsAction(
+  reportId: number
+): Promise<{ success: boolean; error?: string }> {
   try {
     await deleteMsflHoldingsReport(reportId);
     revalidatePath("/zerodha");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("MSFL Delete Action Error:", error);
+    const errorMsg =
+      error instanceof Error
+        ? error.message
+        : "Failed to delete report snapshot";
     return {
       success: false,
-      error: error.message || "Failed to delete report snapshot",
+      error: errorMsg,
     };
   }
 }
 
-export async function getMsflDashboardAction(reportId?: number) {
+export async function getMsflDashboardAction(
+  reportId?: number
+): Promise<ReturnType<typeof getMsflDashboardData>> {
   try {
     return await getMsflDashboardData(reportId);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("MSFL Get Dashboard Data Error:", error);
-    throw new Error(error.message || "Failed to fetch MSFL dashboard data");
+    const errorMsg =
+      error instanceof Error
+        ? error.message
+        : "Failed to fetch MSFL dashboard data";
+    throw new Error(errorMsg);
   }
 }
 
 export async function updateMsflSchemeMappingAction(
   schemeId: number,
   code: string | null
-) {
+): Promise<{ success: boolean; error?: string }> {
   try {
     await updateMsflSchemeCode(schemeId, code);
     revalidatePath("/zerodha");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("updateMsflSchemeMappingAction Error:", error);
-    return { success: false, error: error.message };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to update mapping";
+    return { success: false, error: errorMsg };
   }
 }
 
-export async function autoMapAllMsflSchemesAction(onlyUnmapped = true) {
+export async function autoMapAllMsflSchemesAction(onlyUnmapped = true): Promise<
+  Array<{
+    schemeId: number;
+    schemeName: string;
+    status: string;
+    schemeCode: string | null;
+  }>
+> {
   try {
-    const { db } = await import("@/db/db");
-    const { msflSchemes } = await import("@/db/schema");
-    const { eq } = await import("drizzle-orm");
-
     const allSchemes = await db.query.msflSchemes.findMany();
     const results = [];
 
@@ -116,7 +140,7 @@ export async function autoMapAllMsflSchemesAction(onlyUnmapped = true) {
 
     revalidatePath("/zerodha");
     return results;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("autoMapAllMsflSchemesAction Error:", error);
     return [];
   }

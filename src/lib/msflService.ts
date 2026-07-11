@@ -270,7 +270,7 @@ async function getMsflSnapshotTotals(reportId: number) {
 export async function saveMsflHoldingsReport(
   asOfDate: string,
   filename: string,
-  holdings: any[]
+  holdings: import("@/lib/msflParser").MsflHoldingParsed[]
 ): Promise<number> {
   const reportResult = await db
     .insert(msflReports)

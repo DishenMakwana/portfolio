@@ -62,14 +62,15 @@ async function axiosGetWithRetry<T>(
         timeout: timeoutMs,
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempt++;
       if (attempt > retries) {
         throw error;
       }
       const delay = backoffMs * Math.pow(2, attempt - 1);
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.warn(
-        `[AXIOS RETRY] Request to "${url}" failed (Attempt ${attempt}/${retries + 1}). Retrying in ${delay}ms... Reason: ${error.message || error}`
+        `[AXIOS RETRY] Request to "${url}" failed (Attempt ${attempt}/${retries + 1}). Retrying in ${delay}ms... Reason: ${errorMsg}`
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -88,8 +89,9 @@ export async function searchMutualFund(
     await throttleRequest();
     const data = await axiosGetWithRetry<MfSearchResult[]>(url, 4000, 1, 500);
     return Array.isArray(data) ? data : [];
-  } catch (e: any) {
-    console.error(`Error searching MF API at "${url}":`, e.message || e);
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error(`Error searching MF API at "${url}":`, errorMsg);
     return [];
   }
 }
@@ -120,15 +122,20 @@ export async function fetchMfDetails(
   try {
     await throttleRequest();
     return await axiosGetWithRetry<MfDetailsResponse>(url, 15000, 2, 1000);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
     const isTimeout =
-      e.code === "ECONNABORTED" || e.message?.includes("timeout");
+      (e &&
+        typeof e === "object" &&
+        "code" in e &&
+        e.code === "ECONNABORTED") ||
+      errorMsg.includes("timeout");
     if (isTimeout) {
       console.warn(
         `[API TIMEOUT] api.mfapi.in timed out fetching details. URL: "${url}". Using cache or fallback.`
       );
     } else {
-      console.error(`Error fetching MF details from "${url}":`, e.message || e);
+      console.error(`Error fetching MF details from "${url}":`, errorMsg);
     }
     return null;
   }

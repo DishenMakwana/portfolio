@@ -12,13 +12,19 @@ import {
   saveSipMandates,
   clearSipMandates,
   HoldingDetails,
+  deleteReport,
 } from "@/lib/portfolioService";
 import {
   calculateAlpha,
   PortfolioTransaction,
   getBenchmarkCodeForCategory,
+  clearAllAlphaCaches,
 } from "@/lib/alpha";
-import { searchMutualFund } from "@/lib/mfApi";
+import { clearAllZerodhaCaches } from "@/lib/zerodhaService";
+import { clearAllMsflCaches } from "@/lib/msflService";
+import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
+import { parseSipExcel } from "@/lib/sipParser";
+import { getBullionData } from "@/lib/bullionService";
 import { db } from "@/db/db";
 import {
   transactions as txTable,
@@ -77,26 +83,32 @@ export async function uploadReportAction(formData: FormData) {
 
     revalidatePath("/");
     return { success: true, reportId };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload Action Error:", error);
-    return { success: false, error: error.message || "Failed to parse file" };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to parse file";
+    return { success: false, error: errorMsg };
   }
 }
 
 /**
  * Delete a report snapshot
  */
-export async function deleteReportAction(reportId: number) {
+export async function deleteReportAction(reportId: number): Promise<{
+  success: boolean;
+  error?: string;
+}> {
   try {
-    const { deleteReport } = await import("@/lib/portfolioService");
     await deleteReport(reportId);
     revalidatePath("/");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete Action Error:", error);
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to delete report";
     return {
       success: false,
-      error: error.message || "Failed to delete report",
+      error: errorMsg,
     };
   }
 }
@@ -114,13 +126,15 @@ export async function searchMfApiAction(query: string) {
 export async function updateSchemeMappingAction(
   schemeId: number,
   code: string | null
-) {
+): Promise<{ success: boolean; error?: string }> {
   try {
     await updateSchemeCode(schemeId, code);
     revalidatePath("/");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to update mapping";
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -141,7 +155,6 @@ export interface AutoMapResult {
 export async function autoMapAllSchemesAction(
   onlyUnmapped: boolean = true
 ): Promise<{ results: AutoMapResult[]; savedCount: number }> {
-  const { autoMapScheme, searchMutualFund } = await import("@/lib/mfApi");
   const allSchemes = await getSchemes();
 
   const targets = onlyUnmapped
@@ -252,9 +265,17 @@ export async function autoMapAllSchemesAction(
   return { results, savedCount };
 }
 
+export interface ReportSummary {
+  id: number;
+  asOfDate: string;
+  uploadedAt: string;
+  filename: string;
+  cagr: number | null;
+}
+
 export interface DashboardData {
-  reportsList: any[];
-  selectedReport: any | null;
+  reportsList: ReportSummary[];
+  selectedReport: ReportSummary | null;
   totals: {
     invested: number;
     currentValue: number;
@@ -377,8 +398,20 @@ export async function getDashboardDataAction(
     .where(lte(txTable.date, selectedReport.asOfDate));
 
   // Re-map transactions to format needed for Alpha calculation
+  interface RawTransaction {
+    id: number;
+    memberId: number | null;
+    schemeId: number | null;
+    date: string;
+    type: string;
+    units: number;
+    nav: number;
+    amount: number;
+    sourceReportId: number | null;
+  }
+
   const getPortfolioTransactions = (
-    filterFn?: (tx: any) => boolean
+    filterFn?: (tx: RawTransaction) => boolean
   ): PortfolioTransaction[] => {
     return txHistory.filter(filterFn || (() => true)).map((tx) => ({
       date: tx.date,
@@ -841,7 +874,6 @@ export async function uploadSipAction(formData: FormData) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { parseSipExcel } = await import("@/lib/sipParser");
     const parsed = parseSipExcel(buffer, file.name);
 
     if (parsed.sips.length === 0) {
@@ -855,9 +887,11 @@ export async function uploadSipAction(formData: FormData) {
 
     revalidatePath("/sips");
     return { success: true, inserted, skipped, total: parsed.sips.length };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("SIP Upload Error:", err);
-    return { success: false, error: err.message || "Failed to parse SIP file" };
+    const errorMsg =
+      err instanceof Error ? err.message : "Failed to parse SIP file";
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -871,51 +905,54 @@ export async function getSipMandatesAction() {
 /**
  * Clear all SIP mandates (full reset)
  */
-export async function clearSipMandatesAction() {
+export async function clearSipMandatesAction(): Promise<{
+  success: boolean;
+  error?: string;
+}> {
   try {
     await clearSipMandates();
     revalidatePath("/sips");
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error ? err.message : "Failed to clear SIP mandates";
+    return { success: false, error: errorMsg };
   }
 }
 
 /**
  * Fetch fresh live rates and chart data by bypassing the in-memory cache
  */
-export async function refreshBullionDataAction() {
-  const { getBullionData } = await import("@/lib/bullionService");
+export async function refreshBullionDataAction(): Promise<{
+  success: boolean;
+  data?: {
+    rates: import("@/lib/bullionService").BullionRates;
+    chartData: import("@/lib/bullionService").ChartDataPoint[];
+    isThrottled?: boolean;
+  };
+  error?: string;
+}> {
   try {
     const data = await getBullionData(true);
     return { success: true, data };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error ? err.message : "Failed to refresh bullion rates";
     return {
       success: false,
-      error: err.message || "Failed to refresh bullion rates",
+      error: errorMsg,
     };
   }
 }
 
 /**
- * Force clear all in-memory and database caches for NAVs, stocks, and benchmarks
+ * Force clear all in-memory caches for NAVs, stocks, and benchmarks
  */
-export async function globalRefreshAction() {
+export async function globalRefreshAction(): Promise<{
+  success: boolean;
+  error?: string;
+}> {
   try {
-    const {
-      schemeNavCacheMeta,
-      schemeNavHistory,
-      benchmarkNavCacheMeta,
-      benchmarkNavHistory,
-      zerodhaSchemeNavCacheMeta,
-      zerodhaSchemeNavHistory,
-      msflSchemeNavCacheMeta,
-      msflSchemeNavHistory,
-    } = await import("@/db/schema");
-    const { clearAllAlphaCaches } = await import("@/lib/alpha");
-    const { clearAllZerodhaCaches } = await import("@/lib/zerodhaService");
-    const { clearAllMsflCaches } = await import("@/lib/msflService");
-
     // 1. Clear in-memory caches
     clearAllAlphaCaches();
     clearAllZerodhaCaches();
@@ -925,8 +962,10 @@ export async function globalRefreshAction() {
     revalidatePath("/", "layout");
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("globalRefreshAction Error:", err);
-    return { success: false, error: err.message || "Global refresh failed" };
+    const errorMsg =
+      err instanceof Error ? err.message : "Global refresh failed";
+    return { success: false, error: errorMsg };
   }
 }

@@ -83,12 +83,17 @@ export async function fetchStockHistory(
       },
       data,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errObj = error as
+      { name?: string; code?: string | number } | null | undefined;
+    const errorName = errObj?.name;
+    const errorCode = errObj?.code;
+    const errorMsg = error instanceof Error ? error.message : String(error);
     if (
-      error?.name === "TimeoutError" ||
-      error?.name === "AbortError" ||
-      error?.code === 23 ||
-      error?.code === "ETIMEDOUT"
+      errorName === "TimeoutError" ||
+      errorName === "AbortError" ||
+      errorCode === 23 ||
+      errorCode === "ETIMEDOUT"
     ) {
       console.warn(
         `[Yahoo Finance API] Timeout fetching history for ${ticker} (3s). Using cache or fallback.`
@@ -96,7 +101,7 @@ export async function fetchStockHistory(
     } else {
       console.error(
         `[Yahoo Finance API] Error fetching history for ${ticker}:`,
-        error
+        errorMsg
       );
     }
     return null;

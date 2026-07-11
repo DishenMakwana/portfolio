@@ -6,11 +6,18 @@ import {
   saveZerodhaHoldingsReport,
   deleteZerodhaHoldingsReport,
   getZerodhaDashboardData,
+  updateZerodhaSchemeCode,
 } from "@/lib/zerodhaService";
+import { db } from "@/db/db";
+import { zerodhaSchemes } from "@/db/schema";
+import { autoMapScheme } from "@/lib/mfApi";
+import { eq } from "drizzle-orm";
 
-export async function uploadZerodhaHoldingsAction(formData: FormData) {
+export async function uploadZerodhaHoldingsAction(
+  formData: FormData
+): Promise<{ success: boolean; reportId?: number; error?: string }> {
   try {
-    const file = formData.get("file") as File;
+    const file = formData.get("file") as File | null;
     if (!file) {
       return { success: false, error: "No file uploaded" };
     }
@@ -34,32 +41,44 @@ export async function uploadZerodhaHoldingsAction(formData: FormData) {
 
     revalidatePath("/zerodha");
     return { success: true, reportId };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Zerodha Upload Action Error:", error);
-    return { success: false, error: error.message || "Failed to parse file" };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to parse file";
+    return { success: false, error: errorMsg };
   }
 }
 
-export async function deleteZerodhaHoldingsAction(reportId: number) {
+export async function deleteZerodhaHoldingsAction(
+  reportId: number
+): Promise<{ success: boolean; error?: string }> {
   try {
     await deleteZerodhaHoldingsReport(reportId);
     revalidatePath("/zerodha");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Zerodha Delete Action Error:", error);
+    const errorMsg =
+      error instanceof Error
+        ? error.message
+        : "Failed to delete report snapshot";
     return {
       success: false,
-      error: error.message || "Failed to delete report snapshot",
+      error: errorMsg,
     };
   }
 }
 
-export async function getZerodhaDashboardAction(reportId?: number) {
+export async function getZerodhaDashboardAction(
+  reportId?: number
+): Promise<ReturnType<typeof getZerodhaDashboardData>> {
   try {
     return await getZerodhaDashboardData(reportId);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Zerodha Get Dashboard Data Error:", error);
-    throw new Error(error.message || "Failed to fetch dashboard data");
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to fetch dashboard data";
+    throw new Error(errorMsg);
   }
 }
 
@@ -75,15 +94,16 @@ export interface ZerodhaAutoMapResult {
 export async function updateZerodhaSchemeMappingAction(
   schemeId: number,
   code: string | null
-) {
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const { updateZerodhaSchemeCode } = await import("@/lib/zerodhaService");
     await updateZerodhaSchemeCode(schemeId, code);
     revalidatePath("/zerodha");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("updateZerodhaSchemeMappingAction Error:", error);
-    return { success: false, error: error.message };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to update mapping";
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -91,11 +111,6 @@ export async function autoMapAllZerodhaSchemesAction(
   onlyUnmapped = true
 ): Promise<ZerodhaAutoMapResult[]> {
   try {
-    const { db } = await import("@/db/db");
-    const { zerodhaSchemes } = await import("@/db/schema");
-    const { autoMapScheme } = await import("@/lib/mfApi");
-    const { eq } = await import("drizzle-orm");
-
     const allSchemes = await db.query.zerodhaSchemes.findMany();
     const results: ZerodhaAutoMapResult[] = [];
 
@@ -154,7 +169,7 @@ export async function autoMapAllZerodhaSchemesAction(
 
     revalidatePath("/zerodha");
     return results;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("autoMapAllZerodhaSchemesAction Error:", error);
     return [];
   }
@@ -163,12 +178,8 @@ export async function autoMapAllZerodhaSchemesAction(
 export async function updateZerodhaSchemeCategoryAction(
   schemeId: number,
   category: string
-) {
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const { db } = await import("@/db/db");
-    const { zerodhaSchemes } = await import("@/db/schema");
-    const { eq } = await import("drizzle-orm");
-
     await db
       .update(zerodhaSchemes)
       .set({ category })
@@ -176,8 +187,10 @@ export async function updateZerodhaSchemeCategoryAction(
 
     revalidatePath("/zerodha");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("updateZerodhaSchemeCategoryAction Error:", error);
-    return { success: false, error: error.message };
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to update category";
+    return { success: false, error: errorMsg };
   }
 }

@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 
+import type { OverviewHolding } from "./OverviewTab";
+
 interface MemberSummary {
   name: string;
   pan: string | null;
@@ -26,6 +28,7 @@ interface Totals {
   gain: number;
   absoluteReturn: number;
   portfolioXirr: number;
+  benchmarkXirr: number;
   alpha: number;
   cagr?: number | null;
 }
@@ -40,7 +43,7 @@ interface MembersTabProps {
     alpha: number | null;
     cagr: number | null;
   };
-  holdings: any[];
+  holdings: OverviewHolding[];
 }
 
 function formatPointDelta(delta: number) {

@@ -22,6 +22,7 @@ import {
   autoMapAllSchemesAction,
   AutoMapResult,
 } from "@/app/actions";
+import type { MfSearchResult } from "@/lib/mfApi";
 
 interface Scheme {
   id: number;
@@ -41,7 +42,7 @@ const STATUS_META: Record<
     color: string;
     bg: string;
     border: string;
-    icon: any;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
   }
 > = {
   mapped: {
@@ -93,7 +94,9 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
   const [mappingSchemeId, setMappingSchemeId] = useState<number | null>(null);
   const [mappingSchemeName, setMappingSchemeName] = useState("");
   const [apiSearchQuery, setApiSearchQuery] = useState("");
-  const [apiSearchResults, setApiSearchResults] = useState<any[]>([]);
+  const [apiSearchResults, setApiSearchResults] = useState<MfSearchResult[]>(
+    []
+  );
   const [isSearchingApi, setIsSearchingApi] = useState(false);
 
   // ── Auto-map state
@@ -610,7 +613,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                       : "❌ No results found"}
                   </div>
                 ) : (
-                  apiSearchResults.map((res: any) => (
+                  apiSearchResults.map((res: MfSearchResult) => (
                     <div
                       key={res.schemeCode}
                       onClick={() =>

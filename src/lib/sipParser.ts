@@ -28,7 +28,7 @@ export function parseSipExcel(buffer: Buffer, filename: string): SipParsed {
   const raw: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, {
     header: 1,
     defval: null,
-  }) as any;
+  }) as unknown as (string | number | null)[][];
 
   if (!raw || raw.length < 4) {
     throw new Error("Unexpected SIP file format: too few rows");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
 import {
   ArrowLeft,
@@ -38,7 +38,7 @@ interface FundDetailsClientProps {
     schemeName: string | null;
     category: string | null;
     schemeCodeApi: string | null;
-    folioNo: string;
+    folioNo?: string | null;
     balanceUnits: number;
     purchaseNav: number;
     purchaseValue: number;
@@ -54,7 +54,17 @@ interface FundDetailsClientProps {
     memberPan: string | null;
     asOfDate: string | null;
   };
-  transactions: any[];
+  transactions: Array<{
+    id: number;
+    memberId: number | null;
+    schemeId: number | null;
+    date: string;
+    type: string;
+    units: number;
+    nav: number;
+    amount: number;
+    sourceReportId: number | null;
+  }>;
   metrics: {
     portfolioXirr: number;
     benchmarkXirr: number;
@@ -97,7 +107,7 @@ interface FundDetailsClientProps {
   }[];
 }
 
-const formatCurrency = (val: number) => {
+const formatCurrency = (val: number): string => {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
@@ -105,11 +115,35 @@ const formatCurrency = (val: number) => {
   }).format(val);
 };
 
-const formatPercent = (val: number) => {
+const formatPercent = (val: number): string => {
   return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
 };
 
-const CustomTooltip = ({ active, payload, benchmarkName }: any) => {
+interface CustomTooltipPoint {
+  date: string;
+  timestamp: number;
+  fundNav: number;
+  benchNav: number;
+  fundReturn: number;
+  benchReturn: number;
+  txs?: Array<{ type: string; amount: number }>;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    value: number;
+    name: string;
+    payload: CustomTooltipPoint;
+  }>;
+  benchmarkName?: string;
+}
+
+const CustomTooltip = ({
+  active,
+  payload,
+  benchmarkName,
+}: CustomTooltipProps): React.JSX.Element | null => {
   if (active && payload && payload.length) {
     const fundVal = payload[0].value;
     const benchVal = payload[1].value;
@@ -158,21 +192,23 @@ const CustomTooltip = ({ active, payload, benchmarkName }: any) => {
             <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
               Transactions on date
             </p>
-            {dataPoint.txs.map((tx: any, idx: number) => (
-              <div
-                key={idx}
-                className="flex justify-between items-center gap-4 text-xs"
-              >
-                <span
-                  className={`font-semibold ${tx.type === "BUY" ? "text-emerald-400" : "text-red-400"}`}
+            {dataPoint.txs.map(
+              (tx: { type: string; amount: number }, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex justify-between items-center gap-4 text-xs"
                 >
-                  {tx.type === "BUY" ? "Invested" : "Redeemed"}
-                </span>
-                <span className="font-mono font-bold text-slate-300">
-                  {formatCurrency(tx.amount)}
-                </span>
-              </div>
-            ))}
+                  <span
+                    className={`font-semibold ${tx.type === "BUY" ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {tx.type === "BUY" ? "Invested" : "Redeemed"}
+                  </span>
+                  <span className="font-mono font-bold text-slate-300">
+                    {formatCurrency(tx.amount)}
+                  </span>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>
@@ -190,19 +226,16 @@ export default function FundDetailsClient({
   chartData,
 }: FundDetailsClientProps) {
   const router = useRouter();
-  const params = useParams();
-  const rawId = params?.id as string;
-  const [currentMetrics, setCurrentMetrics] = useState(metrics);
-  const [currentChartData, setCurrentChartData] = useState(chartData);
-  const [currentVolatilityStats, setCurrentVolatilityStats] =
-    useState(volatilityStats);
+  const currentMetrics = metrics;
+  const currentChartData = chartData;
+  const currentVolatilityStats = volatilityStats;
   const [isRefreshingGlobal, setIsRefreshingGlobal] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
     "3y"
   );
 
-  const handleGlobalRefresh = async () => {
+  const handleGlobalRefresh = async (): Promise<void> => {
     if (isRefreshingGlobal) return;
     setIsRefreshingGlobal(true);
     try {
@@ -212,8 +245,10 @@ export default function FundDetailsClient({
       } else {
         alert(res.error || "Failed to refresh global cache");
       }
-    } catch (err: any) {
-      alert("Error: " + (err.message || "Failed to connect to server"));
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to connect to server";
+      alert("Error: " + errorMsg);
     } finally {
       setIsRefreshingGlobal(false);
     }
@@ -342,7 +377,7 @@ export default function FundDetailsClient({
     return null;
   }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
-  const formatDate = (dateStr: string | null) => {
+  const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString("en-IN", {
       day: "2-digit",
@@ -601,7 +636,11 @@ export default function FundDetailsClient({
               {(["3M", "6M", "1Y", "3Y", "MAX"] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => setTimeframe(t.toLowerCase() as any)}
+                  onClick={() =>
+                    setTimeframe(
+                      t.toLowerCase() as "3m" | "6m" | "1y" | "3y" | "max"
+                    )
+                  }
                   className={`px-3 py-1 rounded-md text-[10px] font-extrabold uppercase transition-all duration-200 ${
                     timeframe === t.toLowerCase()
                       ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"

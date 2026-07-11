@@ -247,7 +247,22 @@ function getAssetRatios(subCat: string): {
 }
 
 /* ─── Custom Tooltip ─── */
-const ChartTooltip = ({ active, payload }: any) => {
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    payload: {
+      pct?: number;
+    };
+  }>;
+}
+
+/* ─── Custom Tooltip ─── */
+const ChartTooltip = ({
+  active,
+  payload,
+}: ChartTooltipProps): React.JSX.Element | null => {
   if (!active || !payload?.length) return null;
   const d = payload[0];
   return (
@@ -418,11 +433,16 @@ export default function AllocationClient({
       .join(", ");
   }, [selectedInvestors, isAllSelected]);
 
-  const makeSorter = (setter: any) => (col: string) =>
-    setter((prev: any) => ({
-      col,
-      dir: prev.col === col && prev.dir === "desc" ? "asc" : "desc",
-    }));
+  type SortState = { col: string; dir: "asc" | "desc" };
+
+  const makeSorter =
+    (setter: React.Dispatch<React.SetStateAction<SortState>>) =>
+    (col: string): void => {
+      setter((prev: SortState) => ({
+        col,
+        dir: prev.col === col && prev.dir === "desc" ? "asc" : "desc",
+      }));
+    };
 
   const sortArr = <T extends Record<string, any>>(
     arr: T[],

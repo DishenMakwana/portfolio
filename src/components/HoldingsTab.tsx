@@ -54,8 +54,18 @@ export default function HoldingsTab({
   const initialSearch = searchParams.get("q") || "";
   const initialMemberParam = searchParams.get("member") || initialMember;
   const initialPlan = searchParams.get("plan") || "All";
-  const initialSort = (searchParams.get("sort") as any) || "currentValue";
-  const initialOrder = (searchParams.get("order") as any) || "desc";
+  const rawSort = searchParams.get("sort");
+  const initialSort = (
+    ["currentValue", "xirr", "alpha", "gain", "cagr", "holdingDays"].includes(
+      rawSort || ""
+    )
+      ? rawSort
+      : "currentValue"
+  ) as "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays";
+  const rawOrder = searchParams.get("order");
+  const initialOrder = (
+    rawOrder === "asc" || rawOrder === "desc" ? rawOrder : "desc"
+  ) as "asc" | "desc";
 
   // Local Search & Filter State
   const [searchVal, setSearchVal] = useState(initialSearch); // For instant input typing
@@ -88,8 +98,24 @@ export default function HoldingsTab({
     setSearchQuery(q);
     setMemberFilter(searchParams.get("member") || initialMember);
     setPlanFilter(searchParams.get("plan") || "All");
-    setSortField((searchParams.get("sort") as any) || "currentValue");
-    setSortOrder((searchParams.get("order") as any) || "desc");
+    const rawS = searchParams.get("sort");
+    setSortField(
+      ([
+        "currentValue",
+        "xirr",
+        "alpha",
+        "gain",
+        "cagr",
+        "holdingDays",
+      ].includes(rawS || "")
+        ? rawS
+        : "currentValue") as
+        "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays"
+    );
+    const rawO = searchParams.get("order");
+    setSortOrder(
+      (rawO === "asc" || rawO === "desc" ? rawO : "desc") as "asc" | "desc"
+    );
   }, [searchParams, initialMember]);
 
   // Debounced search query update in URL

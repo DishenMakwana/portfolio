@@ -33,7 +33,7 @@ function MappingLink({ unmappedCount }: { unmappedCount: number }) {
 export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleGlobalRefresh = async () => {
+  const handleGlobalRefresh = async (): Promise<void> => {
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
@@ -41,8 +41,10 @@ export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
       if (!res.success) {
         alert(res.error || "Failed to refresh global cache");
       }
-    } catch (err: any) {
-      alert("Error: " + (err.message || "Failed to connect to server"));
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to connect to server";
+      alert("Error: " + errorMsg);
     } finally {
       setIsRefreshing(false);
     }

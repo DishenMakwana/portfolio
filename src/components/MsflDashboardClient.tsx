@@ -27,9 +27,17 @@ import {
   updateMsflSchemeMappingAction,
 } from "@/app/zerodha/msflActions";
 
+interface MsflScheme {
+  id: number;
+  name: string;
+  category: string;
+  schemeCodeApi: string | null;
+  mappedAt: string | null;
+}
+
 interface MsflDashboardClientProps {
   msflData: MsflDashboardData;
-  allMsflSchemes: any[];
+  allMsflSchemes: MsflScheme[];
 }
 
 function MetricCard({
@@ -489,10 +497,15 @@ export default function MsflDashboardClient({
   };
 
   // Mapping Edit Trigger
-  const handleEditMapping = (h: any) => {
+  const handleEditMapping = (
+    h: import("@/lib/msflService").MsflHoldingData
+  ): void => {
     const scheme = allMsflSchemes.find((s) => s.name === h.symbol) || {
+      id: 0,
       name: h.symbol,
+      category: "Stock",
       schemeCodeApi: `${h.symbol}.NS`,
+      mappedAt: null,
     };
     setEditingScheme(scheme);
     setTickerInput(scheme.schemeCodeApi || "");
@@ -523,8 +536,10 @@ export default function MsflDashboardClient({
   const filteredHoldings = holdings
     .filter((h) => h.symbol.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      let valA: any = a[sortField];
-      let valB: any = b[sortField];
+      let valA =
+        a[sortField as keyof import("@/lib/msflService").MsflHoldingData];
+      let valB =
+        b[sortField as keyof import("@/lib/msflService").MsflHoldingData];
 
       // Handle null CAGR / metrics gracefully
       if (valA === null || valA === undefined) {
@@ -540,7 +555,9 @@ export default function MsflDashboardClient({
           : valB.localeCompare(valA);
       }
 
-      return sortOrder === "asc" ? valA - valB : valB - valA;
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return sortOrder === "asc" ? numA - numB : numB - numA;
     });
 
   return (

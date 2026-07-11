@@ -45,11 +45,14 @@ export default function BullionClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string): void => {
     setToastMessage(msg);
-    const timerId = (window as any).__toastTimer;
+    const customWindow = window as unknown as {
+      __toastTimer?: ReturnType<typeof setTimeout>;
+    };
+    const timerId = customWindow.__toastTimer;
     if (timerId) clearTimeout(timerId);
-    (window as any).__toastTimer = setTimeout(() => {
+    customWindow.__toastTimer = setTimeout(() => {
       setToastMessage(null);
     }, 3000);
   };
@@ -684,8 +687,21 @@ export default function BullionClient({
     return ["PT950", "PT900", "PT850"];
   }
 
+  interface CustomChartTooltipProps {
+    active?: boolean;
+    payload?: Array<{
+      name: string;
+      value: number;
+    }>;
+    label?: string;
+  }
+
   // Custom Chart Tooltip
-  function CustomChartTooltip({ active, payload, label }: any) {
+  function CustomChartTooltip({
+    active,
+    payload,
+    label,
+  }: CustomChartTooltipProps): React.JSX.Element | null {
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-2xl">

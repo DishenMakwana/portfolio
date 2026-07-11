@@ -107,7 +107,33 @@ interface OverviewTabProps {
     xirrDelta: number | null;
     alphaDelta: number | null;
   }[];
-  holdings: any[];
+  holdings: OverviewHolding[];
+}
+
+export interface OverviewHolding {
+  id: number;
+  schemeId: number | null;
+  memberId: number | null;
+  schemeName: string | null;
+  category: string | null;
+  schemeCodeApi: string | null;
+  folioNo: string;
+  balanceUnits: number;
+  purchaseNav: number;
+  purchaseValue: number;
+  currentNav: number;
+  currentValue: number;
+  dividend?: number | null;
+  gain: number;
+  holdingDays: number;
+  absoluteReturn: number;
+  cagr: number;
+  comments: string | null;
+  memberName: string | null;
+  memberPan: string | null;
+  asOfDate?: string | null;
+  xirr?: number | null;
+  alpha?: number | null;
 }
 
 const cardVariants: Variants = {
@@ -119,12 +145,28 @@ const cardVariants: Variants = {
   }),
 };
 
-function CustomAreaTooltip({ active, payload, label }: any) {
+interface CustomTooltipItem {
+  name: string;
+  value: number;
+  dataKey?: string;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: CustomTooltipItem[];
+  label?: string;
+}
+
+function CustomAreaTooltip({
+  active,
+  payload,
+  label,
+}: CustomTooltipProps): React.JSX.Element | null {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl">
         <p className="text-xs text-slate-400 mb-2 font-semibold">{label}</p>
-        {payload.map((p: any, i: number) => {
+        {payload.map((p: CustomTooltipItem, i: number) => {
           const dotBg =
             p.name === "Current Value" ? "bg-teal-400" : "bg-slate-400";
           return (
@@ -143,12 +185,16 @@ function CustomAreaTooltip({ active, payload, label }: any) {
   return null;
 }
 
-function CustomXirrTooltip({ active, payload, label }: any) {
+function CustomXirrTooltip({
+  active,
+  payload,
+  label,
+}: CustomTooltipProps): React.JSX.Element | null {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl">
         <p className="text-xs text-slate-400 mb-2 font-semibold">{label}</p>
-        {payload.map((p: any, i: number) => {
+        {payload.map((p: CustomTooltipItem, i: number) => {
           const dotBg =
             p.dataKey === "portfolioXirr" ? "bg-amber-400" : "bg-violet-400";
           return (
@@ -265,8 +311,8 @@ export default function OverviewTab({
   };
 
   const sortedMembers = [...memberSummaries].sort((a, b) => {
-    let aVal: any = a.name;
-    let bVal: any = b.name;
+    let aVal: string | number = a.name;
+    let bVal: string | number = b.name;
 
     if (investorSort.field === "value") {
       aVal = a.currentValue;
@@ -282,8 +328,8 @@ export default function OverviewTab({
   });
 
   const sortedSubCats = [...capAllocation].sort((a, b) => {
-    let aVal: any = a.name;
-    let bVal: any = b.name;
+    let aVal: string | number = a.name;
+    let bVal: string | number = b.name;
 
     if (subCatSort.field === "value") {
       aVal = a.value;

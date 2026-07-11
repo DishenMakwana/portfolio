@@ -6,11 +6,25 @@ import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
 
+type ZerodhaFundSortField =
+  | "symbol"
+  | "quantity"
+  | "averagePrice"
+  | "currentPrice"
+  | "investedValue"
+  | "currentValue"
+  | "unrealizedPnl"
+  | "unrealizedPnlPct"
+  | "xirr"
+  | "cagr"
+  | "holdingDays"
+  | "alpha";
+
 interface ZerodhaFundsTabProps {
   funds: ZerodhaHolding[];
-  renderFundSortIcon: (field: any) => React.ReactNode;
-  toggleFundSort: (field: any) => void;
-  fundSortField: string;
+  renderFundSortIcon: (field: ZerodhaFundSortField) => React.ReactNode;
+  toggleFundSort: (field: ZerodhaFundSortField) => void;
+  fundSortField: ZerodhaFundSortField;
   fundSortOrder: "asc" | "desc";
 }
 
@@ -27,16 +41,16 @@ export default function ZerodhaFundsTab({
   const filteredFunds = funds
     .filter((f) => f.symbol.toLowerCase().includes(fundSearch.toLowerCase()))
     .sort((a, b) => {
-      let valA: any = a[fundSortField as keyof ZerodhaHolding];
-      let valB: any = b[fundSortField as keyof ZerodhaHolding];
-      if (typeof valA === "string") {
+      const valA = a[fundSortField];
+      const valB = b[fundSortField];
+      if (typeof valA === "string" && typeof valB === "string") {
         return fundSortOrder === "asc"
           ? valA.localeCompare(valB)
           : valB.localeCompare(valA);
       }
-      return fundSortOrder === "asc"
-        ? (valA || 0) - (valB || 0)
-        : (valB || 0) - (valA || 0);
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return fundSortOrder === "asc" ? numA - numB : numB - numA;
     });
 
   return (

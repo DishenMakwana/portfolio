@@ -7,11 +7,24 @@ import { useRouter } from "next/navigation";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
 
+type ZerodhaStockSortField =
+  | "symbol"
+  | "quantity"
+  | "averagePrice"
+  | "currentPrice"
+  | "investedValue"
+  | "currentValue"
+  | "unrealizedPnl"
+  | "unrealizedPnlPct"
+  | "xirr"
+  | "cagr"
+  | "alpha";
+
 interface ZerodhaStocksTabProps {
   stocks: ZerodhaHolding[];
-  renderStockSortIcon: (field: any) => React.ReactNode;
-  toggleStockSort: (field: any) => void;
-  stockSortField: string;
+  renderStockSortIcon: (field: ZerodhaStockSortField) => React.ReactNode;
+  toggleStockSort: (field: ZerodhaStockSortField) => void;
+  stockSortField: ZerodhaStockSortField;
   stockSortOrder: "asc" | "desc";
   formatPrice: (v: number) => string;
 }
@@ -30,16 +43,16 @@ export default function ZerodhaStocksTab({
   const filteredStocks = stocks
     .filter((s) => s.symbol.toLowerCase().includes(stockSearch.toLowerCase()))
     .sort((a, b) => {
-      let valA: any = a[stockSortField as keyof ZerodhaHolding];
-      let valB: any = b[stockSortField as keyof ZerodhaHolding];
-      if (typeof valA === "string") {
+      const valA = a[stockSortField];
+      const valB = b[stockSortField];
+      if (typeof valA === "string" && typeof valB === "string") {
         return stockSortOrder === "asc"
           ? valA.localeCompare(valB)
           : valB.localeCompare(valA);
       }
-      return stockSortOrder === "asc"
-        ? (valA || 0) - (valB || 0)
-        : (valB || 0) - (valA || 0);
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return stockSortOrder === "asc" ? numA - numB : numB - numA;
     });
 
   return (
