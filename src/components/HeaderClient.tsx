@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { globalRefreshAction } from "@/app/actions";
 
 interface HeaderClientProps {
   reportsList?: { id: number; asOfDate: string }[];
@@ -29,6 +31,23 @@ function MappingLink({ unmappedCount }: { unmappedCount: number }) {
 }
 
 export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleGlobalRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const res = await globalRefreshAction();
+      if (!res.success) {
+        alert(res.error || "Failed to refresh global cache");
+      }
+    } catch (err: any) {
+      alert("Error: " + (err.message || "Failed to connect to server"));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <>
       <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
@@ -46,6 +65,23 @@ export default function HeaderClient({ unmappedCount }: HeaderClientProps) {
             </Suspense>
           )}
         </div>
+
+        <button
+          onClick={handleGlobalRefresh}
+          disabled={isRefreshing}
+          className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg border bg-slate-900 border-slate-800 hover:bg-slate-800 hover:border-slate-700 hover:text-indigo-400 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 shadow-md ${
+            isRefreshing ? "text-indigo-400" : ""
+          }`}
+          title="Force refresh entire portfolio caches (live fetch for all items)"
+        >
+          <RefreshCw
+            size={12}
+            className={isRefreshing ? "animate-spin text-indigo-400" : ""}
+          />
+          <span>
+            {isRefreshing ? "Refreshing Caches..." : "Refresh Caches"}
+          </span>
+        </button>
       </header>
     </>
   );

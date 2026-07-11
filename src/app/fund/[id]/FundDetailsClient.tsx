@@ -16,10 +16,7 @@ import {
   ChevronUp,
   RefreshCw,
 } from "lucide-react";
-import {
-  refreshBenchmarkXirrAction,
-  refreshFundHistoryAction,
-} from "@/app/actions";
+import { globalRefreshAction } from "@/app/actions";
 import { isUnlistedStock } from "@/lib/stockApi";
 import {
   ResponsiveContainer,
@@ -100,6 +97,86 @@ interface FundDetailsClientProps {
   }[];
 }
 
+const formatCurrency = (val: number) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(val);
+};
+
+const formatPercent = (val: number) => {
+  return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
+};
+
+const CustomTooltip = ({ active, payload, benchmarkName }: any) => {
+  if (active && payload && payload.length) {
+    const fundVal = payload[0].value;
+    const benchVal = payload[1].value;
+    const dataPoint = payload[0].payload;
+    return (
+      <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-xl shadow-2xl backdrop-blur-md">
+        <p className="text-slate-400 text-xs font-bold mb-2">
+          {dataPoint.date}
+        </p>
+        <div className="space-y-1 text-sm font-medium">
+          <div className="flex justify-between items-center gap-6">
+            <span className="flex items-center gap-1.5 text-teal-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
+              Fund NAV Return:
+            </span>
+            <span className="font-mono text-teal-300 font-bold">
+              ₹
+              {dataPoint.fundNav.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              ({formatPercent(fundVal)})
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-6">
+            <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+              {benchmarkName} Return:
+            </span>
+            <span className="font-mono text-indigo-300 font-bold">
+              ₹
+              {dataPoint.benchNav.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              ({formatPercent(benchVal)})
+            </span>
+          </div>
+        </div>
+        {dataPoint.txs && dataPoint.txs.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-slate-800 space-y-1">
+            <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+              Transactions on date
+            </p>
+            {dataPoint.txs.map((tx: any, idx: number) => (
+              <div
+                key={idx}
+                className="flex justify-between items-center gap-4 text-xs"
+              >
+                <span
+                  className={`font-semibold ${tx.type === "BUY" ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {tx.type === "BUY" ? "Invested" : "Redeemed"}
+                </span>
+                <span className="font-mono font-bold text-slate-300">
+                  {formatCurrency(tx.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function FundDetailsClient({
   holding,
   transactions,
@@ -115,46 +192,26 @@ export default function FundDetailsClient({
   const [currentChartData, setCurrentChartData] = useState(chartData);
   const [currentVolatilityStats, setCurrentVolatilityStats] =
     useState(volatilityStats);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isRefreshingChart, setIsRefreshingChart] = useState(false);
+  const [isRefreshingGlobal, setIsRefreshingGlobal] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
     "3y"
   );
 
-  const handleRefreshBenchmark = async () => {
-    if (isRefreshing || !rawId) return;
-    setIsRefreshing(true);
+  const handleGlobalRefresh = async () => {
+    if (isRefreshingGlobal) return;
+    setIsRefreshingGlobal(true);
     try {
-      const res = await refreshBenchmarkXirrAction(rawId);
-      if (res.success && res.metrics) {
-        setCurrentMetrics(res.metrics);
+      const res = await globalRefreshAction();
+      if (res.success) {
+        router.refresh();
       } else {
-        alert(res.error || "Failed to refresh benchmark data");
+        alert(res.error || "Failed to refresh global cache");
       }
     } catch (err: any) {
       alert("Error: " + (err.message || "Failed to connect to server"));
     } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  const handleRefreshFundHistory = async () => {
-    if (isRefreshingChart || !rawId) return;
-    setIsRefreshingChart(true);
-    try {
-      const res = await refreshFundHistoryAction(rawId);
-      if (res.success && res.chartData) {
-        setCurrentChartData(res.chartData);
-        if (res.metrics) setCurrentMetrics(res.metrics);
-        if (res.volatilityStats) setCurrentVolatilityStats(res.volatilityStats);
-      } else {
-        alert(res.error || "Failed to refresh fund history");
-      }
-    } catch (err: any) {
-      alert("Error: " + (err.message || "Failed to connect to server"));
-    } finally {
-      setIsRefreshingChart(false);
+      setIsRefreshingGlobal(false);
     }
   };
 
@@ -281,18 +338,6 @@ export default function FundDetailsClient({
     return null;
   }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
-
-  const formatPercent = (val: number) => {
-    return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
-  };
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "N/A";
     return new Date(dateStr).toLocaleDateString("en-IN", {
@@ -305,75 +350,6 @@ export default function FundDetailsClient({
   const cleanCategory = holding.category || "N/A";
   const hasHoldingDays =
     Number.isFinite(holding.holdingDays) && holding.holdingDays > 0;
-
-  // Custom chart tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const fundVal = payload[0].value;
-      const benchVal = payload[1].value;
-      const dataPoint = payload[0].payload;
-      return (
-        <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-xl shadow-2xl backdrop-blur-md">
-          <p className="text-slate-400 text-xs font-bold mb-2">
-            {dataPoint.date}
-          </p>
-          <div className="space-y-1 text-sm font-medium">
-            <div className="flex justify-between items-center gap-6">
-              <span className="flex items-center gap-1.5 text-teal-400">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
-                Fund NAV Return:
-              </span>
-              <span className="font-mono text-teal-300 font-bold">
-                ₹
-                {dataPoint.fundNav.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
-                ({formatPercent(fundVal)})
-              </span>
-            </div>
-            <div className="flex justify-between items-center gap-6">
-              <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
-                {factsheetMeta.profile.benchmarkName} Return:
-              </span>
-              <span className="font-mono text-indigo-300 font-bold">
-                ₹
-                {dataPoint.benchNav.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
-                ({formatPercent(benchVal)})
-              </span>
-            </div>
-          </div>
-          {dataPoint.txs && dataPoint.txs.length > 0 && (
-            <div className="mt-3 pt-2 border-t border-slate-800 space-y-1">
-              <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                Transactions on date
-              </p>
-              {dataPoint.txs.map((tx: any, idx: number) => (
-                <div
-                  key={idx}
-                  className="flex justify-between items-center gap-4 text-xs"
-                >
-                  <span
-                    className={`font-semibold ${tx.type === "BUY" ? "text-emerald-400" : "text-red-400"}`}
-                  >
-                    {tx.type === "BUY" ? "Invested" : "Redeemed"}
-                  </span>
-                  <span className="font-mono font-bold text-slate-300">
-                    {formatCurrency(tx.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
@@ -413,14 +389,35 @@ export default function FundDetailsClient({
             </p>
           </div>
         </div>
-        <div className="text-sm text-slate-400 bg-slate-900/60 border border-slate-800/80 px-4 py-2.5 rounded-xl shrink-0 font-medium shadow-inner flex items-center gap-2">
-          <Calendar size={16} className="text-teal-400" />
-          <span>
-            Snapshot Date:{" "}
-            <strong className="text-slate-200">
-              {formatDate(holding.asOfDate)}
-            </strong>
-          </span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-sm text-slate-400 bg-slate-900/60 border border-slate-800/80 px-4 py-2.5 rounded-xl font-medium shadow-inner flex items-center gap-2">
+            <Calendar size={16} className="text-teal-400" />
+            <span>
+              Snapshot Date:{" "}
+              <strong className="text-slate-200">
+                {formatDate(holding.asOfDate)}
+              </strong>
+            </span>
+          </div>
+
+          <button
+            onClick={handleGlobalRefresh}
+            disabled={isRefreshingGlobal}
+            className={`flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border bg-slate-900 border-slate-800 hover:bg-slate-800 hover:border-slate-700 hover:text-indigo-400 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 shadow-md ${
+              isRefreshingGlobal ? "text-indigo-400" : ""
+            }`}
+            title="Force refresh entire portfolio caches (live fetch for all items)"
+          >
+            <RefreshCw
+              size={12}
+              className={
+                isRefreshingGlobal ? "animate-spin text-indigo-400" : ""
+              }
+            />
+            <span>
+              {isRefreshingGlobal ? "Refreshing Caches..." : "Refresh Caches"}
+            </span>
+          </button>
         </div>
       </header>
 
@@ -518,24 +515,14 @@ export default function FundDetailsClient({
 
           {/* Card 5: Benchmark XIRR */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
-            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between w-full">
-              <span className="flex items-center gap-1">
-                {factsheetMeta.profile.benchmarkName
-                  .replace("Index Fund Direct", "")
-                  .trim()}{" "}
-                XIRR
-                <span title="Benchmark return on same cash flow dates">
-                  <Info size={12} className="text-slate-500 cursor-pointer" />
-                </span>
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+              {factsheetMeta.profile.benchmarkName
+                .replace("Index Fund Direct", "")
+                .trim()}{" "}
+              XIRR
+              <span title="Benchmark return on same cash flow dates">
+                <Info size={12} className="text-slate-500 cursor-pointer" />
               </span>
-              <button
-                onClick={handleRefreshBenchmark}
-                disabled={isRefreshing}
-                className={`p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-indigo-400 transition-colors duration-200 ${isRefreshing ? "animate-spin text-indigo-400" : ""}`}
-                title="Force reload live benchmark data"
-              >
-                <RefreshCw size={12} />
-              </button>
             </span>
             <div className="mt-2">
               <div className="text-2xl sm:text-3xl font-black text-indigo-400 tracking-tight">
@@ -598,19 +585,6 @@ export default function FundDetailsClient({
             <h3 className="text-lg font-black text-slate-100 tracking-tight flex items-center gap-2">
               <TrendingUp size={20} className="text-teal-400" />
               <span>Historical Returns Analysis</span>
-              <button
-                onClick={handleRefreshFundHistory}
-                disabled={isRefreshingChart}
-                className="text-slate-500 hover:text-teal-400 transition-colors p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
-                title="Refresh historical returns chart data"
-              >
-                <RefreshCw
-                  size={14}
-                  className={
-                    isRefreshingChart ? "animate-spin text-teal-400" : ""
-                  }
-                />
-              </button>
             </h3>
             <p className="text-xs text-slate-400 mt-1 font-medium text-wrap">
               Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}
@@ -693,7 +667,13 @@ export default function FundDetailsClient({
                   tickFormatter={(v) => `${v}%`}
                   dx={-10}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  content={
+                    <CustomTooltip
+                      benchmarkName={factsheetMeta.profile.benchmarkName}
+                    />
+                  }
+                />
                 <Area
                   type="monotone"
                   dataKey="fundReturn"

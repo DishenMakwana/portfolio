@@ -1033,6 +1033,11 @@ export function clearZerodhaStockCache(ticker: string) {
   zerodhaStockHistoryCache.delete(ticker);
 }
 
+export function clearAllZerodhaCaches() {
+  zerodhaSchemeHistoryCache.clear();
+  zerodhaStockHistoryCache.clear();
+}
+
 async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
   try {
     const data = await fetchStockHistory(ticker);

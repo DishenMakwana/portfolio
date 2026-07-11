@@ -26,6 +26,11 @@ export function clearSchemeCache(schemeCode: string) {
   schemeHistoryCache.delete(schemeCode);
 }
 
+export function clearAllAlphaCaches() {
+  schemeHistoryCache.clear();
+  benchmarkHistoryCache.clear();
+}
+
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */

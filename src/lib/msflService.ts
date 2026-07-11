@@ -338,6 +338,10 @@ export function clearMsflStockCache(ticker: string) {
   msflStockHistoryCache.delete(ticker);
 }
 
+export function clearAllMsflCaches() {
+  msflStockHistoryCache.clear();
+}
+
 async function triggerMsflStockNavCacheUpdate(ticker: string) {
   try {
     const data = await fetchStockHistory(ticker);
