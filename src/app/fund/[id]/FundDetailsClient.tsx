@@ -117,7 +117,11 @@ const CustomTooltip = ({ active, payload, benchmarkName }: any) => {
     return (
       <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-xl shadow-2xl backdrop-blur-md">
         <p className="text-slate-400 text-xs font-bold mb-2">
-          {dataPoint.date}
+          {new Date(dataPoint.timestamp).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
         </p>
         <div className="space-y-1 text-sm font-medium">
           <div className="flex justify-between items-center gap-6">
