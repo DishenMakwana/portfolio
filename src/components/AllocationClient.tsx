@@ -337,16 +337,33 @@ function CardHeader({
   accent,
   title,
   subtitle,
+  collapsed,
+  onToggle,
 }: {
   accent: string;
   title: string;
   subtitle: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
+  const isCollapsible = onToggle !== undefined;
   return (
-    <div className="px-5 py-4 border-b border-slate-800 flex items-center gap-3">
-      <div className={`w-1 h-5 rounded-full ${accent}`} />
+    <div
+      className={`px-5 py-4 border-b border-slate-800 flex items-center gap-3 ${
+        isCollapsible
+          ? "cursor-pointer select-none hover:bg-slate-800/30 transition-colors"
+          : ""
+      }`}
+      onClick={onToggle}
+    >
+      <div className={`w-1 h-5 rounded-full shrink-0 ${accent}`} />
       <h2 className="text-sm font-bold text-slate-200">{title}</h2>
-      <span className="text-xs text-slate-500 ml-1">{subtitle}</span>
+      <span className="text-xs text-slate-500 ml-1 flex-1">{subtitle}</span>
+      {isCollapsible && (
+        <div className="text-slate-400 shrink-0">
+          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -368,6 +385,11 @@ export default function AllocationClient({
     () => new Set(memberSummaries.map((m) => m.name))
   );
   const [hoveredCell, setHoveredCell] = useState<number | null>(null);
+
+  /* ── Card collapse state (collapsed = hidden body) ── */
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [equityCapOpen, setEquityCapOpen] = useState(false);
+  const [schemeScripOpen, setSchemeScripOpen] = useState(false);
 
   /* ── Sort state ── */
   const [investorSort, setInvestorSort] = useState<{
@@ -860,22 +882,33 @@ export default function AllocationClient({
 
               {/* Legend + Pie Chart */}
               <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl p-6 shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300">
-                <div className="flex flex-col lg:flex-row items-center gap-6">
-                  <div className="space-y-3 lg:w-56 w-full">
+                <div className="flex flex-col lg:flex-row items-start gap-6">
+                  <div className="lg:w-56 w-full h-[320px] overflow-y-auto custom-scrollbar [scrollbar-gutter:stable] space-y-0.5 pr-1">
                     {categoryData.map((d, i) => (
-                      <div key={d.name} className="flex items-center gap-3">
+                      <div
+                        key={d.name}
+                        className="flex items-start gap-2.5 py-2 border-b border-slate-800/30 last:border-0"
+                      >
                         <div
-                          className={`w-3 h-3 rounded-full shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                          className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${BG_CLASSES[i % BG_CLASSES.length]}`}
                         />
-                        <span className="text-slate-350 text-sm flex-1">
-                          {d.name}
-                        </span>
-                        <span className="text-slate-200 text-sm tabular-nums font-semibold">
-                          {fmtIN(d.value)}
-                        </span>
-                        <span className="text-slate-400 text-sm tabular-nums w-12 text-right">
-                          {pct2(d.pct)}%
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="text-slate-200 text-xs font-semibold leading-tight truncate"
+                            title={d.name}
+                          >
+                            {d.name}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-slate-300 text-xs tabular-nums font-medium">
+                              {fmtIN(d.value)}
+                            </span>
+                            <span className="text-slate-600 text-xs">·</span>
+                            <span className="text-slate-400 text-xs tabular-nums">
+                              {pct2(d.pct)}%
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1063,146 +1096,161 @@ export default function AllocationClient({
               accent="bg-blue-400"
               title="Category"
               subtitle="— asset class breakdown per scheme (Debt / Equity / Global Equity / Gold / Other)"
+              collapsed={!categoryOpen}
+              onToggle={() => setCategoryOpen((v) => !v)}
             />
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/40">
-                    <SortTh
-                      label="Scheme Name"
-                      col="schemeName"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-left text-slate-400 min-w-52"
-                    />
-                    <SortTh
-                      label="Sub Category"
-                      col="subCat"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-left text-slate-400 min-w-36"
-                    />
-                    <SortTh
-                      label="Debt"
-                      col="debt"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Equity"
-                      col="equity"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Global Equity"
-                      col="globalEquity"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Gold"
-                      col="gold"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Other"
-                      col="other"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Total"
-                      col="total"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Share(%)"
-                      col="total"
-                      sortCol={catSort.col}
-                      sortDir={catSort.dir}
-                      onSort={makeSorter(setCatSort)}
-                      className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
-                    />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="bg-teal-500 text-slate-950">
-                    <td
-                      className="px-4 py-3 font-extrabold text-sm"
-                      colSpan={2}
-                    >
-                      Total
-                    </td>
-                    {[
-                      catTotals.debt,
-                      catTotals.equity,
-                      catTotals.globalEquity,
-                      catTotals.gold,
-                      catTotals.other,
-                      catTotals.total,
-                    ].map((v, i) => (
-                      <td
-                        key={i}
-                        className="px-4 py-3 text-right font-extrabold tabular-nums"
-                      >
-                        {fmtIN(v)}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
-                      100.00
-                    </td>
-                  </tr>
-                  {sortedCat.map((r, i) => (
-                    <tr
-                      key={r.schemeName}
-                      className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                    >
-                      <td className="px-4 py-3 text-slate-200 font-medium text-xs">
-                        {r.schemeName}
-                      </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">
-                        {r.subCat}
-                      </td>
-                      {[
-                        r.debt,
-                        r.equity,
-                        r.globalEquity,
-                        r.gold,
-                        r.other,
-                        r.total,
-                      ].map((v, j) => (
-                        <td
-                          key={j}
-                          className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
-                        >
-                          {v > 0 ? fmtIN(v) : "0"}
-                        </td>
-                      ))}
-                      <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                        {pct2(r.pct)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <AnimatePresence initial={false}>
+              {categoryOpen && (
+                <motion.div
+                  key="category-body"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-950/40">
+                          <SortTh
+                            label="Scheme Name"
+                            col="schemeName"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-left text-slate-400 min-w-52"
+                          />
+                          <SortTh
+                            label="Sub Category"
+                            col="subCat"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-left text-slate-400 min-w-36"
+                          />
+                          <SortTh
+                            label="Debt"
+                            col="debt"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Equity"
+                            col="equity"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Global Equity"
+                            col="globalEquity"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Gold"
+                            col="gold"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Other"
+                            col="other"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Total"
+                            col="total"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Share(%)"
+                            col="total"
+                            sortCol={catSort.col}
+                            sortDir={catSort.dir}
+                            onSort={makeSorter(setCatSort)}
+                            className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
+                          />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-teal-500 text-slate-950">
+                          <td
+                            className="px-4 py-3 font-extrabold text-sm"
+                            colSpan={2}
+                          >
+                            Total
+                          </td>
+                          {[
+                            catTotals.debt,
+                            catTotals.equity,
+                            catTotals.globalEquity,
+                            catTotals.gold,
+                            catTotals.other,
+                            catTotals.total,
+                          ].map((v, i) => (
+                            <td
+                              key={i}
+                              className="px-4 py-3 text-right font-extrabold tabular-nums"
+                            >
+                              {fmtIN(v)}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
+                            100.00
+                          </td>
+                        </tr>
+                        {sortedCat.map((r, i) => (
+                          <tr
+                            key={r.schemeName}
+                            className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
+                          >
+                            <td className="px-4 py-3 text-slate-200 font-medium text-xs">
+                              {r.schemeName}
+                            </td>
+                            <td className="px-4 py-3 text-slate-400 text-xs">
+                              {r.subCat}
+                            </td>
+                            {[
+                              r.debt,
+                              r.equity,
+                              r.globalEquity,
+                              r.gold,
+                              r.other,
+                              r.total,
+                            ].map((v, j) => (
+                              <td
+                                key={j}
+                                className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
+                              >
+                                {v > 0 ? fmtIN(v) : "0"}
+                              </td>
+                            ))}
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
+                              {pct2(r.pct)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {/* ════════════════════════════════════════
@@ -1218,126 +1266,141 @@ export default function AllocationClient({
               accent="bg-emerald-400"
               title="Equity Cap for Mutual Fund"
               subtitle="— large cap / mid cap / small cap breakdown per scheme"
+              collapsed={!equityCapOpen}
+              onToggle={() => setEquityCapOpen((v) => !v)}
             />
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/40">
-                    <SortTh
-                      label="Scheme Name"
-                      col="schemeName"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-left text-slate-400 min-w-52"
-                    />
-                    <SortTh
-                      label="Sub Category"
-                      col="subCat"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-left text-slate-400 min-w-36"
-                    />
-                    <SortTh
-                      label="Equity Large Cap"
-                      col="large"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Equity Mid Cap"
-                      col="mid"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Equity Small Cap"
-                      col="small"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Total"
-                      col="total"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-right text-slate-400"
-                    />
-                    <SortTh
-                      label="Share(%)"
-                      col="total"
-                      sortCol={capSort.col}
-                      sortDir={capSort.dir}
-                      onSort={makeSorter(setCapSort)}
-                      className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
-                    />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="bg-teal-500 text-slate-950">
-                    <td
-                      className="px-4 py-3 font-extrabold text-sm"
-                      colSpan={2}
-                    >
-                      Total
-                    </td>
-                    {[
-                      capTotals.large,
-                      capTotals.mid,
-                      capTotals.small,
-                      capTotals.total,
-                    ].map((v, i) => (
-                      <td
-                        key={i}
-                        className="px-4 py-3 text-right font-extrabold tabular-nums"
-                      >
-                        <div>{fmtIN(v)}</div>
-                        {capTotals.total > 0 && (
-                          <div className="text-[10px] font-semibold opacity-75">
-                            ({((v / capTotals.total) * 100).toFixed(2)}%)
-                          </div>
-                        )}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
-                      100.00
-                    </td>
-                  </tr>
-                  {sortedCap.map((r, i) => (
-                    <tr
-                      key={r.schemeName}
-                      className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                    >
-                      <td className="px-4 py-3 text-slate-200 font-medium text-xs">
-                        {r.schemeName}
-                      </td>
-                      <td className="px-4 py-3 text-slate-400 text-xs">
-                        {r.subCat}
-                      </td>
-                      {[r.large, r.mid, r.small, r.total].map((v, j) => (
-                        <td
-                          key={j}
-                          className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
-                        >
-                          {v > 0 ? fmtIN(v) : "0"}
-                        </td>
-                      ))}
-                      <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                        {pct2(r.pct)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <AnimatePresence initial={false}>
+              {equityCapOpen && (
+                <motion.div
+                  key="equitycap-body"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-950/40">
+                          <SortTh
+                            label="Scheme Name"
+                            col="schemeName"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-left text-slate-400 min-w-52"
+                          />
+                          <SortTh
+                            label="Sub Category"
+                            col="subCat"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-left text-slate-400 min-w-36"
+                          />
+                          <SortTh
+                            label="Equity Large Cap"
+                            col="large"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Equity Mid Cap"
+                            col="mid"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Equity Small Cap"
+                            col="small"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Total"
+                            col="total"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-right text-slate-400"
+                          />
+                          <SortTh
+                            label="Share(%)"
+                            col="total"
+                            sortCol={capSort.col}
+                            sortDir={capSort.dir}
+                            onSort={makeSorter(setCapSort)}
+                            className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
+                          />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-teal-500 text-slate-950">
+                          <td
+                            className="px-4 py-3 font-extrabold text-sm"
+                            colSpan={2}
+                          >
+                            Total
+                          </td>
+                          {[
+                            capTotals.large,
+                            capTotals.mid,
+                            capTotals.small,
+                            capTotals.total,
+                          ].map((v, i) => (
+                            <td
+                              key={i}
+                              className="px-4 py-3 text-right font-extrabold tabular-nums"
+                            >
+                              <div>{fmtIN(v)}</div>
+                              {capTotals.total > 0 && (
+                                <div className="text-[10px] font-semibold opacity-75">
+                                  ({((v / capTotals.total) * 100).toFixed(2)}%)
+                                </div>
+                              )}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
+                            100.00
+                          </td>
+                        </tr>
+                        {sortedCap.map((r, i) => (
+                          <tr
+                            key={r.schemeName}
+                            className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
+                          >
+                            <td className="px-4 py-3 text-slate-200 font-medium text-xs">
+                              {r.schemeName}
+                            </td>
+                            <td className="px-4 py-3 text-slate-400 text-xs">
+                              {r.subCat}
+                            </td>
+                            {[r.large, r.mid, r.small, r.total].map((v, j) => (
+                              <td
+                                key={j}
+                                className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
+                              >
+                                {v > 0 ? fmtIN(v) : "0"}
+                              </td>
+                            ))}
+                            <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
+                              {pct2(r.pct)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {/* ════════════════════════════════════════
@@ -1353,68 +1416,83 @@ export default function AllocationClient({
               accent="bg-violet-400"
               title="Scheme / Scrip"
               subtitle="— grouped by sub-category with sub-totals"
+              collapsed={!schemeScripOpen}
+              onToggle={() => setSchemeScripOpen((v) => !v)}
             />
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/40">
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400">
-                      Scheme / Scrip
-                    </th>
-                    <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28 whitespace-nowrap">
-                      Share(%)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <TotalRow
-                    cells={["Grand Total :", fmtIN(grandTotal), "100.00"]}
-                  />
-                  {schemeGrouped.map((group) => (
-                    <Fragment key={group.subCat}>
-                      <tr className="border-t border-slate-700/50 bg-slate-800/40">
-                        <td
-                          colSpan={3}
-                          className="px-5 py-2.5 text-sm font-bold text-teal-400"
-                        >
-                          {group.subCat}
-                        </td>
-                      </tr>
-                      {group.funds.map((f) => (
-                        <tr
-                          key={f.name}
-                          className="border-t border-slate-800/30 hover:bg-slate-800/20 transition"
-                        >
-                          <td className="px-8 py-2.5 text-slate-300 text-xs">
-                            {f.name}
-                          </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                            {fmtIN(f.value)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-slate-400 text-xs border-l border-teal-500/10 w-28">
-                            {pct2(f.pct)}
-                          </td>
+            <AnimatePresence initial={false}>
+              {schemeScripOpen && (
+                <motion.div
+                  key="schemescrip-body"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-800 bg-slate-950/40">
+                          <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400">
+                            Scheme / Scrip
+                          </th>
+                          <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400">
+                            Amount
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28 whitespace-nowrap">
+                            Share(%)
+                          </th>
                         </tr>
-                      ))}
-                      <tr className="border-t border-slate-700/60 bg-slate-900/60 font-bold">
-                        <td className="px-5 py-2.5 text-xs text-slate-400">
-                          Sub Total :
-                        </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                          {fmtIN(group.subTotal)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-300 text-xs bg-teal-500/5 border-l border-teal-500/10 w-28">
-                          {pct2(group.pct)}
-                        </td>
-                      </tr>
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </thead>
+                      <tbody>
+                        <TotalRow
+                          cells={["Grand Total :", fmtIN(grandTotal), "100.00"]}
+                        />
+                        {schemeGrouped.map((group) => (
+                          <Fragment key={group.subCat}>
+                            <tr className="border-t border-slate-700/50 bg-slate-800/40">
+                              <td
+                                colSpan={3}
+                                className="px-5 py-2.5 text-sm font-bold text-teal-400"
+                              >
+                                {group.subCat}
+                              </td>
+                            </tr>
+                            {group.funds.map((f) => (
+                              <tr
+                                key={f.name}
+                                className="border-t border-slate-800/30 hover:bg-slate-800/20 transition"
+                              >
+                                <td className="px-8 py-2.5 text-slate-300 text-xs">
+                                  {f.name}
+                                </td>
+                                <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
+                                  {fmtIN(f.value)}
+                                </td>
+                                <td className="px-4 py-2.5 text-right tabular-nums text-slate-400 text-xs border-l border-teal-500/10 w-28">
+                                  {pct2(f.pct)}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="border-t border-slate-700/60 bg-slate-900/60 font-bold">
+                              <td className="px-5 py-2.5 text-xs text-slate-400">
+                                Sub Total :
+                              </td>
+                              <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
+                                {fmtIN(group.subTotal)}
+                              </td>
+                              <td className="px-4 py-2.5 text-right tabular-nums text-slate-300 text-xs bg-teal-500/5 border-l border-teal-500/10 w-28">
+                                {pct2(group.pct)}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </>
       )}

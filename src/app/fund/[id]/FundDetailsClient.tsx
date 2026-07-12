@@ -291,6 +291,48 @@ export default function FundDetailsClient({
     });
   }, [currentChartData, timeframe, holding.asOfDate]);
 
+  const isApproximateProxy = useMemo(() => {
+    const cat = (holding.category || "").toLowerCase();
+    return (
+      cat.includes("multi asset") ||
+      cat.includes("sif") ||
+      cat.includes("specialised")
+    );
+  }, [holding.category]);
+
+  const dateRangeLabel = useMemo(() => {
+    if (filteredChartData.length < 2) return null;
+    const startPt = filteredChartData[0];
+    const endPt = filteredChartData[filteredChartData.length - 1];
+
+    const diffMs = endPt.timestamp - startPt.timestamp;
+    const diffDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
+
+    const startDateStr = new Date(startPt.timestamp).toLocaleDateString(
+      "en-IN",
+      {
+        month: "short",
+        year: "numeric",
+      }
+    );
+
+    let isTruncated = false;
+    if (timeframe === "3y" && diffDays < 3 * 365 - 30) {
+      isTruncated = true;
+    } else if (timeframe === "1y" && diffDays < 365 - 15) {
+      isTruncated = true;
+    } else if (timeframe === "6m" && diffDays < 180 - 10) {
+      isTruncated = true;
+    } else if (timeframe === "3m" && diffDays < 90 - 5) {
+      isTruncated = true;
+    }
+
+    if (isTruncated || timeframe === "max") {
+      return `Plotted from ${startDateStr} due to benchmark listing history constraints`;
+    }
+    return null;
+  }, [filteredChartData, timeframe]);
+
   // Find the entry point to display as a marker on the chart (only if it falls within the selected timeline)
   const entryPoint = useMemo(() => {
     if (!filteredChartData.length || !currentChartData.length) return null;
@@ -628,6 +670,12 @@ export default function FundDetailsClient({
             <p className="text-xs text-slate-400 mt-1 font-medium text-wrap">
               Growth Comparison of Fund vs {factsheetMeta.profile.benchmarkName}
             </p>
+            {dateRangeLabel && (
+              <p className="text-[10px] text-amber-400/90 mt-1 font-semibold flex items-center gap-1">
+                <AlertTriangle size={12} className="animate-pulse" />
+                <span>{dateRangeLabel}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
@@ -786,6 +834,20 @@ export default function FundDetailsClient({
             <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
               Please map this scheme to an AMFI Scheme Code in the mapping tab
               to unlock dynamic line chart visualisations and comparison stats.
+            </p>
+          </div>
+        )}
+
+        {isApproximateProxy && (
+          <div className="mt-4 px-4 py-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-2.5">
+            <AlertTriangle
+              className="text-indigo-400 shrink-0 mt-0.5"
+              size={16}
+            />
+            <p className="text-xs text-indigo-300 leading-relaxed font-medium">
+              {holding.category?.toLowerCase().includes("multi asset")
+                ? "Approximate Proxy: No clean passive equivalent or index fund exists for the Multi Asset Allocation category. ICICI Prudential Equity & Debt (Aggressive Hybrid) is used as a proxy, so alpha figures represent an approximation."
+                : "Strategy Mismatch: This is a Long-Short / Specialized SIF strategy, which targets absolute/hedged returns rather than traditional long-only benchmarks. Comparing performance to the Nifty 50 TRI is for informational purposes only and alpha metrics are not directly comparable to regular long-only mutual funds."}
             </p>
           </div>
         )}

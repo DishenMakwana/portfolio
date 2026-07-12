@@ -19,14 +19,15 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  Layers,
 } from "lucide-react";
 import type { InsightsData } from "@/lib/insightsService";
 
 // ─── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtInr(val: number): string {
-  if (val >= 1_00_00_000) return `₹${(val / 1_00_00_000).toFixed(2)} Cr`;
-  if (val >= 1_00_000) return `₹${(val / 1_00_000).toFixed(2)} L`;
+  if (val >= 1_00_00_000) return `₹${(val / 1_00_00_000).toFixed(2)}\u00A0Cr`;
+  if (val >= 1_00_000) return `₹${(val / 1_00_00_000).toFixed(2)}\u00A0L`;
   return `₹${val.toLocaleString("en-IN")}`;
 }
 
@@ -36,7 +37,7 @@ function fmtPct(val: number): string {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "funds" | "members" | "sip" | "actions";
+type Tab = "overview" | "funds" | "members" | "sip" | "actions" | "overlaps";
 type SortKey =
   | "scheme"
   | "category"
@@ -519,6 +520,25 @@ function futureValueGrowingAnnuity(
   return pmt * ((Math.pow(1 + r, n) - Math.pow(1 + g, n)) / (r - g));
 }
 
+// ─── Category colour palette (one distinct colour per SEBI category) ───────────
+const CAT_PALETTE = [
+  "#14b8a6", // teal
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#ec4899", // pink
+  "#22d3ee", // cyan
+  "#a78bfa", // violet
+  "#34d399", // emerald
+  "#fb923c", // orange
+  "#f87171", // red
+  "#60a5fa", // blue
+  "#facc15", // yellow
+  "#4ade80", // green
+  "#e879f9", // fuchsia
+  "#2dd4bf", // teal-light
+  "#818cf8", // indigo-light
+];
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -534,7 +554,9 @@ export default function InsightsDashboard({ data }: Props) {
   const tabParam = searchParams.get("tab") as Tab | null;
   const activeTab =
     tabParam &&
-    ["overview", "funds", "members", "sip", "actions"].includes(tabParam)
+    ["overview", "funds", "members", "sip", "actions", "overlaps"].includes(
+      tabParam
+    )
       ? tabParam
       : "overview";
 
@@ -567,7 +589,211 @@ export default function InsightsDashboard({ data }: Props) {
     { id: "members", label: "Members", icon: Users },
     { id: "sip", label: "SIP Planner", icon: CalendarRange },
     { id: "actions", label: "Actions", icon: Zap },
+    { id: "overlaps", label: "Overlaps", icon: Layers },
   ];
+
+  // Decompiled reverse engineering portfolio insights
+  const reverseInsights = useMemo(() => {
+    let ashokVal = 0;
+    let totalMsfl = 0;
+    const msflStocks: Record<string, number> = {};
+    for (const h of data.msflHoldings || []) {
+      const val = (h.quantity || 0) * (h.currentPrice || 0);
+      totalMsfl += val;
+      if (h.symbol === "ASHOKLEY") {
+        ashokVal = val;
+      }
+      msflStocks[h.symbol] = (msflStocks[h.symbol] || 0) + val;
+    }
+    const ashokPct = totalMsfl > 0 ? (ashokVal / totalMsfl) * 100 : 0;
+
+    const sortedMsfl = Object.entries(msflStocks).sort((a, b) => b[1] - a[1]);
+    const top3MsflVal = sortedMsfl
+      .slice(0, 3)
+      .reduce((sum, s) => sum + s[1], 0);
+    const top3MsflPct = totalMsfl > 0 ? (top3MsflVal / totalMsfl) * 100 : 0;
+
+    let totalRegularVal = 0;
+    for (const s of data.schemes || []) {
+      const name = s.scheme.toLowerCase();
+      if (
+        (name.includes("reg") || name.includes("regular")) &&
+        !name.includes("direct")
+      ) {
+        totalRegularVal += s.current;
+      }
+    }
+    const annualDrag = totalRegularVal * 0.01;
+
+    const overlaps: Array<{
+      category: string;
+      count: number;
+      funds: string[];
+    }> = [];
+    const catMap: Record<string, string[]> = {};
+    for (const s of data.schemes || []) {
+      if (!catMap[s.category]) {
+        catMap[s.category] = [];
+      }
+      catMap[s.category].push(s.scheme);
+    }
+    for (const [cat, funds] of Object.entries(catMap)) {
+      if (funds.length > 1) {
+        overlaps.push({
+          category: cat,
+          count: funds.length,
+          funds,
+        });
+      }
+    }
+
+    let sonalbenVal = 0;
+    let totalMf = 0;
+    for (const s of data.schemes || []) {
+      totalMf += s.current;
+      for (const h of s.holdings || []) {
+        if (h.memberName.toLowerCase().includes("sonalben")) {
+          sonalbenVal += h.current;
+        }
+      }
+    }
+    const sonalbenPct = totalMf > 0 ? (sonalbenVal / totalMf) * 100 : 0;
+
+    return {
+      ashokPct,
+      top3MsflPct,
+      totalRegularVal,
+      annualDrag,
+      overlaps: overlaps.sort((a, b) => b.count - a.count),
+      sonalbenPct,
+    };
+  }, [data]);
+
+  // Group mutual funds by category for overlap analysis
+  const subCategoryGroups = useMemo(() => {
+    const groups: Record<
+      string,
+      Array<{
+        schemeName: string;
+        cagr: number;
+        holders: string[];
+        totalValue: number;
+        avgHoldingDays: number;
+      }>
+    > = {};
+
+    for (const s of data.schemes || []) {
+      const name = s.scheme;
+      let subCat = "Other Equity";
+      const nameLower = name.toLowerCase();
+      const catLower = s.category.toLowerCase();
+
+      if (
+        catLower.includes("ulip") ||
+        catLower.includes("insurance") ||
+        nameLower.includes("ulis") ||
+        nameLower.includes("ulip") ||
+        nameLower.includes("unit linked")
+      ) {
+        subCat = "ULIP / Insurance-Linked";
+      } else if (catLower.includes("multi asset")) {
+        subCat = "Multi Asset Allocation";
+      } else if (catLower.includes("aggressive hybrid")) {
+        subCat = "Aggressive Hybrid";
+      } else if (
+        catLower.includes("large & mid") ||
+        catLower.includes("large and mid") ||
+        nameLower.includes("large & mid") ||
+        nameLower.includes("large and mid")
+      ) {
+        subCat = "Large & Mid Cap";
+      } else if (
+        catLower.includes("mid cap") ||
+        catLower.includes("midcap") ||
+        nameLower.includes("mid cap") ||
+        nameLower.includes("midcap")
+      ) {
+        subCat = "Mid Cap";
+      } else if (catLower.includes("flexi") || nameLower.includes("flexi")) {
+        subCat = "Flexi Cap";
+      } else if (
+        catLower.includes("multi cap") ||
+        catLower.includes("multicap") ||
+        nameLower.includes("multi cap") ||
+        nameLower.includes("multicap")
+      ) {
+        subCat = "Multi Cap";
+      } else if (
+        catLower.includes("focused") ||
+        nameLower.includes("focused")
+      ) {
+        subCat = "Focused Equity";
+      } else if (
+        catLower.includes("thematic") ||
+        catLower.includes("opportunity") ||
+        catLower.includes("opportunities") ||
+        nameLower.includes("opportunities") ||
+        nameLower.includes("opportunity") ||
+        nameLower.includes("thematic")
+      ) {
+        subCat = "Thematic / Opportunities";
+      } else if (
+        catLower.includes("long-short") ||
+        catLower.includes("aif") ||
+        nameLower.includes("long-short") ||
+        nameLower.includes("long short")
+      ) {
+        subCat = "Specialized Investment Fund - SIF";
+      } else if (
+        catLower.includes("large") ||
+        nameLower.includes("large cap")
+      ) {
+        subCat = "Large Cap";
+      } else if (catLower.includes("small") || nameLower.includes("smallcap")) {
+        subCat = "Small Cap";
+      } else if (catLower.includes("debt") || catLower.includes("liquid")) {
+        subCat = "Debt & Liquid";
+      } else if (
+        catLower.includes("hybrid") ||
+        catLower.includes("balanced") ||
+        catLower.includes("alloc")
+      ) {
+        subCat = "Hybrid & Multi Asset";
+      }
+
+      if (!groups[subCat]) {
+        groups[subCat] = [];
+      }
+
+      const totalValue = s.current;
+      const holders = s.holdings.map((h) => h.memberName);
+
+      // Calculate weighted average holding days
+      let totalHoldingDays = 0;
+      let totalHoldingWeight = 0;
+      for (const h of s.holdings) {
+        totalHoldingDays += (h.holdingDays || 0) * h.current;
+        totalHoldingWeight += h.current;
+      }
+      const avgHoldingDays =
+        totalHoldingWeight > 0 ? totalHoldingDays / totalHoldingWeight : 0;
+
+      groups[subCat].push({
+        schemeName: name,
+        cagr: s.avgCagr,
+        holders,
+        totalValue,
+        avgHoldingDays,
+      });
+    }
+
+    // Sort funds in each category by CAGR descending
+    for (const cat of Object.keys(groups)) {
+      groups[cat].sort((a, b) => b.cagr - a.cagr);
+    }
+
+    return groups;
+  }, [data]);
 
   // Sorted + filtered schemes
   const filteredSchemes = useMemo(() => {
@@ -624,12 +850,14 @@ export default function InsightsDashboard({ data }: Props) {
     });
   }, [baseSip, stepUpPct]);
 
-  // Category colors
-  const catColors: Record<string, string> = {
-    Equity: "#14b8a6",
-    Hybrid: "#6366f1",
-    Debt: "#f59e0b",
-  };
+  // Category colors — dynamically mapped from the module-level CAT_PALETTE constant
+  const catColors = useMemo(() => {
+    const map: Record<string, string> = {};
+    data.categoryAllocation.forEach((c, i) => {
+      map[c.category] = CAT_PALETTE[i % CAT_PALETTE.length];
+    });
+    return map;
+  }, [data.categoryAllocation]);
 
   function handleSort(key: SortKey) {
     setSort((prev) =>
@@ -758,23 +986,48 @@ export default function InsightsDashboard({ data }: Props) {
 
               {/* Category Allocation + Donut */}
               <div className="grid lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 space-y-4 shadow-xl">
-                  <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                <div className="lg:col-span-2 rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 shadow-xl">
+                  <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">
                     Category Allocation
                   </h2>
-                  {data.categoryAllocation.map((cat) => (
-                    <div key={cat.category} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold text-slate-200">
-                          {cat.category}
-                        </span>
-                        <span className="text-slate-400 text-xs">
-                          {fmtInr(cat.invested)} invested ·{" "}
-                          {fmtInr(cat.current)} current
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-3 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar [scrollbar-gutter:stable]">
+                    {data.categoryAllocation.map((cat) => (
+                      <div key={cat.category} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{
+                                background:
+                                  catColors[cat.category] ?? "#64748b",
+                              }}
+                            />
+                            <span
+                              className="font-semibold text-slate-200 truncate"
+                              title={cat.category}
+                            >
+                              {cat.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 ml-3 shrink-0">
+                            <span className="text-slate-500 hidden sm:inline">
+                              {fmtInr(cat.current)}
+                            </span>
+                            <span
+                              className={`font-semibold text-xs ${
+                                cat.gain >= 0
+                                  ? "text-emerald-400"
+                                  : "text-rose-400"
+                              }`}
+                            >
+                              {cat.absReturn}%
+                            </span>
+                            <span className="font-bold text-slate-300 w-12 text-right tabular-nums">
+                              {cat.allocation}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex-1 h-2 bg-slate-700/60 rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${cat.allocation}%` }}
@@ -785,56 +1038,44 @@ export default function InsightsDashboard({ data }: Props) {
                             }}
                           />
                         </div>
-                        <span className="text-xs font-bold text-slate-300 w-14 text-right">
-                          {cat.allocation}%
-                        </span>
                       </div>
-                      <div className="flex gap-4 text-xs text-slate-500">
-                        <span>
-                          Abs Return:{" "}
-                          <span className="text-emerald-400 font-semibold">
-                            {cat.absReturn}%
-                          </span>
-                        </span>
-                        <span>
-                          Gain:{" "}
-                          <span className="text-emerald-400 font-semibold">
-                            {fmtInr(cat.gain)}
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 {/* Donut */}
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 flex flex-col items-center justify-center shadow-xl">
-                  <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3 self-start">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 flex flex-col shadow-xl">
+                  <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">
                     Allocation Mix
                   </h2>
-                  <div className="w-36 h-36">
-                    <DonutChart
-                      slices={data.categoryAllocation.map((c) => ({
-                        label: c.category,
-                        value: c.allocation,
-                        color: catColors[c.category] ?? "#64748b",
-                      }))}
-                    />
+                  <div className="flex justify-center">
+                    <div className="w-36 h-36">
+                      <DonutChart
+                        slices={data.categoryAllocation.map((c) => ({
+                          label: c.category,
+                          value: c.allocation,
+                          color: catColors[c.category] ?? "#64748b",
+                        }))}
+                      />
+                    </div>
                   </div>
-                  <div className="flex gap-4 mt-3">
+                  <div className="mt-4 space-y-1.5 max-h-[180px] overflow-y-auto custom-scrollbar [scrollbar-gutter:stable]">
                     {data.categoryAllocation.map((c) => (
-                      <div
-                        key={c.category}
-                        className="flex items-center gap-1.5"
-                      >
+                      <div key={c.category} className="flex items-center gap-2">
                         <div
-                          className="w-2.5 h-2.5 rounded-full"
+                          className="w-2 h-2 rounded-full shrink-0"
                           style={{
                             background: catColors[c.category] ?? "#64748b",
                           }}
                         />
-                        <span className="text-xs text-slate-400">
+                        <span
+                          className="text-xs text-slate-400 truncate flex-1"
+                          title={c.category}
+                        >
                           {c.category}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-300 tabular-nums shrink-0">
+                          {c.allocation}%
                         </span>
                       </div>
                     ))}
@@ -1058,7 +1299,7 @@ export default function InsightsDashboard({ data }: Props) {
                               </td>
                               <td className="px-4 py-3">
                                 <span
-                                  className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                                  className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
                                   style={{
                                     background: `${catColors[s.category] ?? "#64748b"}22`,
                                     color: catColors[s.category] ?? "#94a3b8",
@@ -1406,6 +1647,151 @@ export default function InsightsDashboard({ data }: Props) {
           {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
           {activeTab === "actions" && (
             <div className="space-y-6">
+              {/* Reverse Engineering & Strategic Portfolio Audit */}
+              <div className="rounded-2xl border border-indigo-500/25 bg-slate-900/70 backdrop-blur-md p-5 space-y-4 shadow-xl">
+                <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Zap size={14} className="text-indigo-400 animate-pulse" />
+                  Decompiled Portfolio Audit & Strategic Insights
+                </h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Ashok Leyland stock concentration */}
+                  {reverseInsights.ashokPct > 0 && (
+                    <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                          Single-Stock Concentration
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold uppercase">
+                          High Risk
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        Ashok Leyland constitutes{" "}
+                        <span className="text-rose-400 font-bold">
+                          {reverseInsights.ashokPct.toFixed(1)}%
+                        </span>{" "}
+                        of your MSFL stock portfolio.
+                      </p>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Top 3 stock positions in MSFL (Ashok Leyland, Reliance,
+                        and NTPC) represent{" "}
+                        <span className="text-slate-300 font-semibold">
+                          {reverseInsights.top3MsflPct.toFixed(1)}%
+                        </span>
+                        . Scale back Ashok Leyland to under 15% of the account
+                        to diversify sector risk.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Regular plan fee drag */}
+                  {reverseInsights.totalRegularVal > 0 && (
+                    <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                          Expense Ratio Optimization
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold uppercase">
+                          Distributor Commission
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        You have{" "}
+                        <span className="text-amber-400 font-bold">
+                          {fmtInr(reverseInsights.totalRegularVal)}
+                        </span>{" "}
+                        locked in Regular Plans.
+                      </p>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Switching to commission-free Direct Plans can save you
+                        approximately{" "}
+                        <span className="text-emerald-400 font-bold">
+                          {fmtInr(reverseInsights.annualDrag)} every single year
+                        </span>
+                        . Over 10 years compounding, this drag costs{" "}
+                        <span className="text-slate-300 font-semibold">
+                          ₹70 Lakhs+
+                        </span>{" "}
+                        in potential wealth.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Closet Indexing / Scheme overlaps */}
+                  {reverseInsights.overlaps.length > 0 && (
+                    <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-2 col-span-1 md:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                          Closet Indexing & Scheme Redundancy
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase">
+                          Portfolio Clutter
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        You hold multiple active schemes in overlapping
+                        categories.
+                      </p>
+                      <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                        {reverseInsights.overlaps.slice(0, 3).map((ov) => (
+                          <div
+                            key={ov.category}
+                            className="bg-slate-900/60 border border-slate-800 p-2.5 rounded-lg"
+                          >
+                            <div className="flex justify-between text-xs font-bold text-slate-200">
+                              <span>{ov.category}</span>
+                              <span className="text-indigo-400">
+                                {ov.count} Funds
+                              </span>
+                            </div>
+                            <p
+                              className="text-[10px] text-slate-500 mt-1 leading-normal truncate"
+                              title={ov.funds.join(", ")}
+                            >
+                              {ov.funds.join(" · ")}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed mt-1">
+                        Consolidate these overlapping holdings. Holding 7
+                        broad-market funds in identical styles dilutes active
+                        outperformance and multiplies platform overhead. Keep
+                        only 1 high-conviction fund per category.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Tax bracket optimization */}
+                  {reverseInsights.sonalbenPct > 0 && (
+                    <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-xl space-y-2 col-span-1 md:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                          Tax Bracket Optimization
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 font-bold uppercase">
+                          PAN Exposure
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        Sonalben holds{" "}
+                        <span className="text-teal-400 font-bold">
+                          {reverseInsights.sonalbenPct.toFixed(1)}%
+                        </span>{" "}
+                        of the family mutual fund assets.
+                      </p>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        This concentrates the future capital gains tax liability
+                        (12.5% LTCG) heavily under one PAN. Distribute future
+                        SIP allocations or rebalanced proceeds under other
+                        family members (e.g. Alpeshkumar who holds just 1.4%) to
+                        utilize lower-income slabs and save tax outgo.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Scale Up */}
               <div className="rounded-2xl border border-emerald-500/25 bg-slate-900/70 backdrop-blur-md p-5 space-y-4 shadow-xl">
                 <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
@@ -1533,6 +1919,198 @@ export default function InsightsDashboard({ data }: Props) {
                   📊 = Semi-annual portfolio review · ⚡ = Quarterly SIP step-up
                   check · ✅ = Regular SIP debit
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── OVERLAPS ──────────────────────────────────────────────────────── */}
+          {activeTab === "overlaps" && (
+            <div className="space-y-6">
+              {/* Overlaps Header Card */}
+              <div className="rounded-2xl border border-teal-500/25 bg-slate-900/70 backdrop-blur-md p-5 space-y-3 shadow-xl">
+                <div className="flex items-center gap-2">
+                  <Layers className="text-teal-400" size={18} />
+                  <h2 className="text-base font-bold text-slate-100">
+                    Category Overlaps & Lumpsum Priorities
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  This overview groups all your mutual funds into asset
+                  sub-categories. The best performing fund in each group
+                  (highest CAGR) is highlighted as the{" "}
+                  <strong>Lumpsum Priority choice</strong> to help consolidate
+                  family allocations.
+                </p>
+              </div>
+
+              {/* Sub-Category Grids */}
+              <div className="grid gap-6">
+                {Object.entries(subCategoryGroups).map(
+                  ([categoryName, schemes]) => {
+                    if (schemes.length === 0) return null;
+                    return (
+                      <div
+                        key={categoryName}
+                        className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-5 space-y-4"
+                      >
+                        <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                          {categoryName} ({schemes.length} Funds)
+                        </h3>
+
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-slate-800">
+                            <thead>
+                              <tr className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <th className="pb-3 pr-4">Scheme Name</th>
+                                <th className="pb-3 px-4">Holders</th>
+                                <th className="pb-3 px-4 text-right">Value</th>
+                                <th className="pb-3 px-4 text-right">
+                                  Holding Period
+                                </th>
+                                <th className="pb-3 px-4 text-right">
+                                  Avg CAGR
+                                </th>
+                                <th className="pb-3 pl-4 text-right">
+                                  Action / Recommendation
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/60 text-sm">
+                              {schemes.map((s, idx) => {
+                                const isWinner =
+                                  idx === 0 && schemes.length > 1;
+                                const isRegular =
+                                  s.schemeName.toLowerCase().includes("reg") ||
+                                  s.schemeName
+                                    .toLowerCase()
+                                    .includes("regular");
+
+                                const formatHoldingDays = (days: number) => {
+                                  return `${Math.round(days).toLocaleString("en-IN")} days`;
+                                };
+
+                                let recTag = "Consolidate / Switch";
+                                let tagClass =
+                                  "bg-slate-800/50 text-slate-400 border-slate-700/50";
+                                if (isWinner) {
+                                  if (s.avgHoldingDays < 365) {
+                                    recTag = "🏆 Priority (Short History ⚠️)";
+                                    tagClass =
+                                      "bg-amber-500/15 text-amber-300 border-amber-500/25 font-semibold";
+                                  } else {
+                                    recTag = "🏆 Lumpsum Priority";
+                                    tagClass =
+                                      "bg-teal-500/15 text-teal-300 border-teal-500/20 font-bold";
+                                  }
+                                } else if (schemes.length === 1) {
+                                  recTag = "Single Fund";
+                                  tagClass =
+                                    "bg-slate-800/60 text-slate-300 border-slate-700";
+                                } else if (s.cagr < 8) {
+                                  recTag = "Avoid / Underperforming";
+                                  tagClass =
+                                    "bg-rose-500/15 text-rose-400 border-rose-500/20";
+                                }
+
+                                return (
+                                  <tr
+                                    key={s.schemeName}
+                                    className="hover:bg-slate-800/20 transition-colors"
+                                  >
+                                    <td
+                                      className="py-3 pr-4 font-semibold text-slate-200"
+                                      title={s.schemeName}
+                                    >
+                                      {s.schemeName}
+                                      {isRegular && (
+                                        <span className="text-[10px] ml-2 px-1 py-0.25 bg-amber-500/10 text-amber-400 border border-amber-500/25 rounded uppercase">
+                                          Reg
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4 text-slate-400 text-xs">
+                                      {s.holders.join(", ")}
+                                    </td>
+                                    <td className="py-3 px-4 text-right font-medium text-slate-300">
+                                      {fmtInr(s.totalValue)}
+                                    </td>
+                                    <td className="py-3 px-4 text-right text-xs text-slate-400">
+                                      {formatHoldingDays(s.avgHoldingDays)}
+                                    </td>
+                                    <td className="py-3 px-4 text-right font-bold text-slate-100">
+                                      {s.cagr.toFixed(2)}%
+                                    </td>
+                                    <td className="py-3 pl-4 text-right">
+                                      <span
+                                        className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${tagClass}`}
+                                      >
+                                        {recTag}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+
+                              {/* Total / Average Row */}
+                              {schemes.length > 0 &&
+                                (() => {
+                                  const totalValueSum = schemes.reduce(
+                                    (sum, s) => sum + s.totalValue,
+                                    0
+                                  );
+                                  const avgCagr =
+                                    totalValueSum > 0
+                                      ? schemes.reduce(
+                                          (sum, s) =>
+                                            sum + s.cagr * s.totalValue,
+                                          0
+                                        ) / totalValueSum
+                                      : 0;
+                                  const avgHoldingDays =
+                                    totalValueSum > 0
+                                      ? schemes.reduce(
+                                          (sum, s) =>
+                                            sum +
+                                            (s.avgHoldingDays || 0) *
+                                              s.totalValue,
+                                          0
+                                        ) / totalValueSum
+                                      : 0;
+                                  return (
+                                    <tr className="bg-slate-900/90 border-t-2 border-slate-800 font-bold text-slate-200">
+                                      <td className="py-4 pr-4 text-[10px] uppercase tracking-wider text-slate-400 font-bold pl-4">
+                                        Total / Weighted Avg
+                                      </td>
+                                      <td className="py-4 px-4 text-xs text-slate-500 font-semibold">
+                                        {schemes.length} Funds
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-teal-400 font-black text-sm">
+                                        {fmtInr(totalValueSum)}
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
+                                        {Math.round(
+                                          avgHoldingDays
+                                        ).toLocaleString("en-IN")}{" "}
+                                        days
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
+                                        {avgCagr.toFixed(2)}%
+                                      </td>
+                                      <td className="py-4 pl-4 text-right pr-4">
+                                        <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 font-bold uppercase tracking-wider">
+                                          Summary
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  }
+                )}
               </div>
             </div>
           )}

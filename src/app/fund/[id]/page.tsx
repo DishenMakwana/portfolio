@@ -297,15 +297,33 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   const benchNavHistory = benchDetails?.data || [];
 
   // 6. Calculate Volatility Stats
-  const oldestFundNavDate =
-    fundNavHistory.length > 0
-      ? fundNavHistory[fundNavHistory.length - 1].date
-      : null;
+  // Find the true oldest date from the NAV history points
+  let oldestDateObj: Date | null = null;
+  if (fundNavHistory.length > 0) {
+    let minTime = Infinity;
+    for (const p of fundNavHistory) {
+      const parts = p.date.split("-");
+      let dObj: Date;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          dObj = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          dObj = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      } else {
+        dObj = new Date(p.date);
+      }
+      const t = dObj.getTime();
+      if (!isNaN(t) && t < minTime) {
+        minTime = t;
+        oldestDateObj = dObj;
+      }
+    }
+  }
+
   let formattedLaunchDate = "";
-  if (oldestFundNavDate) {
-    const [d, m, y] = oldestFundNavDate.split("-");
-    const dateObj = new Date(`${y}-${m}-${d}`);
-    formattedLaunchDate = dateObj.toLocaleDateString("en-IN", {
+  if (oldestDateObj) {
+    formattedLaunchDate = oldestDateObj.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
       year: "numeric",

@@ -1008,19 +1008,29 @@ export function generateFactsheetChartData(
   const targetDate = new Date(asOfDate);
   const weeksToFetch = 156; // 3 years of weekly data
 
-  // Find earliest date when fund has history data
+  // Find earliest date when fund has history data (by comparing parsed date timestamps)
   let earliestFundDate = new Date(0);
   if (fundNavHistory.length > 0) {
-    const earliestStr = fundNavHistory[fundNavHistory.length - 1].date;
-    const parts = earliestStr.split("-");
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        earliestFundDate = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+    let minTime = Infinity;
+    for (const p of fundNavHistory) {
+      const parts = p.date.split("-");
+      let d: Date;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
       } else {
-        earliestFundDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        d = new Date(p.date);
       }
-    } else {
-      earliestFundDate = new Date(earliestStr);
+      const t = d.getTime();
+      if (!isNaN(t) && t < minTime) {
+        minTime = t;
+      }
+    }
+    if (minTime !== Infinity) {
+      earliestFundDate = new Date(minTime);
     }
   }
 
@@ -1123,8 +1133,17 @@ export function getBenchmarkCodeForCategory(
   if (cat.includes("small")) {
     return "147623"; // Nifty Smallcap 250
   }
+  if (cat.includes("large & mid") || cat.includes("large and mid")) {
+    return "152156"; // NIFTY Large Midcap 250 TRI
+  }
   if (cat.includes("mid")) {
     return "147622"; // Nifty Midcap 150
+  }
+  if (cat.includes("multi cap") || cat.includes("multicap")) {
+    return "152778"; // Nifty 500 Multicap 50:25:25 TRI
+  }
+  if (cat.includes("large")) {
+    return "149868"; // Nifty 100 TRI
   }
   if (
     cat.includes("hybrid") ||
@@ -1143,19 +1162,20 @@ export function getBenchmarkCodeForCategory(
   ) {
     return "120197"; // ICICI Prudential Liquid Fund Direct Growth (proxy for Nifty Short/Ultra Short Duration indices)
   }
-  if (cat.includes("large") || cat.includes("index")) {
-    return "120716"; // Nifty 50
-  }
   return "147625"; // Default to Nifty 500 to match the UI factsheet default (NSE - Nifty 500 TRI)
 }
 
 export function getBenchmarkNameForCode(code: string): string {
-  if (code === "120261") return "CRISIL Hybrid 35+65 - Aggressive Index";
+  if (code === "120261") return "CRISIL Hybrid 35+65 - Aggressive TRI";
   if (code === "147623") return "Nifty Smallcap 250 Index";
   if (code === "147622") return "Nifty Midcap 150 Index";
   if (code === "120251") return "Nifty 50 Hybrid Composite debt 65:35 Index";
   if (code === "120197") return "Nifty Short/Ultra Short Duration Debt Index";
   if (code === "147625") return "Nifty 500 Index";
+  if (code === "152156") return "Nifty LargeMidcap 250 Index";
+  if (code === "152778") return "Nifty 500 Multicap 50:25:25 Index";
+  if (code === "149868") return "Nifty 100 Index";
+  if (code === "120716") return "Nifty 50 Index";
   return "Nifty 50 Index";
 }
 
@@ -1169,5 +1189,11 @@ export function getBenchmarkFundNameForCode(code: string): string {
     return "ICICI Prudential Equity & Debt Fund Direct Growth";
   if (code === "120197") return "ICICI Prudential Liquid Fund Direct Growth";
   if (code === "147625") return "Motilal Oswal Nifty 500 Index Fund Direct";
+  if (code === "152156")
+    return "Zerodha Nifty LargeMidcap 250 Index Fund Direct";
+  if (code === "152778")
+    return "HDFC Nifty500 Multicap 50:25:25 Index Fund Direct";
+  if (code === "149868") return "HDFC Nifty 100 Index Fund Direct";
+  if (code === "120716") return "UTI Nifty 50 Index Fund Direct";
   return "UTI Nifty 50 Index Fund Direct";
 }
