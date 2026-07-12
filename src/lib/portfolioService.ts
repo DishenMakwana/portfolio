@@ -234,6 +234,7 @@ export async function rebuildAllTransactions(): Promise<void> {
         await db.insert(transactions).values({
           memberId: holding.memberId,
           schemeId: holding.schemeId,
+          folioNo: holding.folioNo,
           date: purchaseDate,
           type: "BUY",
           units: holding.balanceUnits,
@@ -279,6 +280,7 @@ export async function rebuildAllTransactions(): Promise<void> {
             await db.insert(transactions).values({
               memberId: holding.memberId,
               schemeId: holding.schemeId,
+              folioNo: holding.folioNo,
               date: currentReport.asOfDate,
               type: "BUY",
               units: diffUnits,
@@ -294,6 +296,7 @@ export async function rebuildAllTransactions(): Promise<void> {
             await db.insert(transactions).values({
               memberId: holding.memberId,
               schemeId: holding.schemeId,
+              folioNo: holding.folioNo,
               date: currentReport.asOfDate,
               type: "SELL",
               units: unitsSold,
@@ -311,6 +314,7 @@ export async function rebuildAllTransactions(): Promise<void> {
           await db.insert(transactions).values({
             memberId: holding.memberId,
             schemeId: holding.schemeId,
+            folioNo: holding.folioNo,
             date: purchaseDate,
             type: "BUY",
             units: holding.balanceUnits,
@@ -330,6 +334,7 @@ export async function rebuildAllTransactions(): Promise<void> {
           await db.insert(transactions).values({
             memberId: prevHolding.memberId,
             schemeId: prevHolding.schemeId,
+            folioNo: prevHolding.folioNo,
             date: currentReport.asOfDate,
             type: "SELL",
             units: prevHolding.balanceUnits,

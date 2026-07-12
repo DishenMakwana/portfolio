@@ -227,7 +227,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  const benchmarkCode = getBenchmarkCodeForCategory(holding.category);
+  const benchmarkCode = getBenchmarkCodeForCategory(
+    holding.category,
+    holding.schemeName
+  );
   const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel
@@ -241,6 +244,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             and(
               eq(transactions.schemeId, holding.schemeId),
               eq(transactions.memberId, holding.memberId),
+              eq(transactions.folioNo, holding.folioNo || ""),
               lte(transactions.date, holding.asOfDate)
             )
           )
@@ -326,7 +330,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             other: 0,
           },
         }
-      : getFactsheetMetadata(holding.category, formattedLaunchDate);
+      : getFactsheetMetadata(
+          holding.category,
+          formattedLaunchDate,
+          holding.schemeName
+        );
 
   const volatilityStats =
     fundNavHistory.length > 0 && benchNavHistory.length > 0

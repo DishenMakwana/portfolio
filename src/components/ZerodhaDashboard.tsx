@@ -89,6 +89,15 @@ interface ZerodhaDashboardProps {
       fundsInvested: number;
       fundsCurrentValue: number;
       fundsGain: number;
+      portfolioXirr: number;
+      benchmarkXirr: number;
+      alpha: number;
+    };
+    metricDeltas: {
+      previousDate: string | null;
+      portfolioXirr: number | null;
+      benchmarkXirr: number | null;
+      alpha: number | null;
     };
     sectorAllocation: { name: string; value: number }[];
     categoryAllocation: { name: string; value: number }[];

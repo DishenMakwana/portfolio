@@ -205,16 +205,8 @@ export function getBenchmarkHistory(
         }
       }
 
-      // Fetch last 5 years for benchmark comparison
-      const nowTime = new Date();
-      const fiveYearsAgo = new Date(
-        nowTime.getFullYear() - 5,
-        nowTime.getMonth(),
-        nowTime.getDate()
-      );
-      const fiveYearsAgoStr = fiveYearsAgo.toISOString().split("T")[0];
-
-      const data = await fetchMfDetails(benchmarkCode, fiveYearsAgoStr);
+      // Fetch full history for benchmark comparison
+      const data = await fetchMfDetails(benchmarkCode);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
           await db
@@ -325,16 +317,8 @@ export function getSchemeHistoryForDbCode(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      // If no data exists, fetch only the last 3 years to keep payload fast and prevent timeouts
-      const nowTime = new Date();
-      const threeYearsAgo = new Date(
-        nowTime.getFullYear() - 3,
-        nowTime.getMonth(),
-        nowTime.getDate()
-      );
-      const threeYearsAgoStr = threeYearsAgo.toISOString().split("T")[0];
-
-      const data = await fetchMfDetails(schemeCode, threeYearsAgoStr);
+      // Fetch full history to ensure returns graphs work correctly for long-term/insurance portfolios
+      const data = await fetchMfDetails(schemeCode);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
           // Upsert scheme cache metadata
@@ -739,18 +723,29 @@ export interface AssetAllocation {
 
 export function getFactsheetMetadata(
   category: string | null,
-  launchDateStr: string | null
+  launchDateStr: string | null,
+  schemeName?: string | null
 ): {
   profile: FactsheetProfile;
   allocation: AssetAllocation;
 } {
   const cleanCat = (category || "").toLowerCase();
+  const cleanName = (schemeName || "").toLowerCase();
 
   // Default values
   let corpusCr = 12500;
   let expenseRatio = 1.25;
   let exitLoad = "1% for redemption within 365 days";
   let benchmarkName = "NSE - Nifty 500 TRI";
+
+  if (
+    cleanName.includes("lic ulis") ||
+    cleanName.includes("uniform cover") ||
+    cleanName.includes("uti unit linked") ||
+    cleanName.includes("insurance plan")
+  ) {
+    benchmarkName = "CRISIL Hybrid 35+65 - Aggressive Index";
+  }
 
   let allocation: AssetAllocation = {
     equity: 98.2,
@@ -838,7 +833,16 @@ export function getFactsheetMetadata(
     corpusCr = 14200;
     expenseRatio = 1.18;
     exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty 50 Hybrid Composite debt 65:35 Index";
+    if (
+      cleanName.includes("lic ulis") ||
+      cleanName.includes("uniform cover") ||
+      cleanName.includes("uti unit linked") ||
+      cleanName.includes("insurance plan")
+    ) {
+      benchmarkName = "CRISIL Hybrid 35+65 - Aggressive Index";
+    } else {
+      benchmarkName = "Nifty 50 Hybrid Composite debt 65:35 Index";
+    }
     allocation = {
       equity: 65.5,
       debt: 31.0,
@@ -1101,7 +1105,20 @@ export function generateFactsheetChartData(
   return chartData;
 }
 
-export function getBenchmarkCodeForCategory(category: string | null): string {
+export function getBenchmarkCodeForCategory(
+  category: string | null,
+  schemeName?: string | null
+): string {
+  const name = (schemeName || "").toLowerCase();
+  if (
+    name.includes("lic ulis") ||
+    name.includes("uniform cover") ||
+    name.includes("uti unit linked") ||
+    name.includes("insurance plan")
+  ) {
+    return "120261"; // CRISIL Hybrid 35+65 - Aggressive Index (LIC MF Aggressive Hybrid proxy)
+  }
+
   const cat = (category || "").toLowerCase();
   if (cat.includes("small")) {
     return "147623"; // Nifty Smallcap 250
@@ -1133,6 +1150,7 @@ export function getBenchmarkCodeForCategory(category: string | null): string {
 }
 
 export function getBenchmarkNameForCode(code: string): string {
+  if (code === "120261") return "CRISIL Hybrid 35+65 - Aggressive Index";
   if (code === "147623") return "Nifty Smallcap 250 Index";
   if (code === "147622") return "Nifty Midcap 150 Index";
   if (code === "120251") return "Nifty 50 Hybrid Composite debt 65:35 Index";
@@ -1142,6 +1160,7 @@ export function getBenchmarkNameForCode(code: string): string {
 }
 
 export function getBenchmarkFundNameForCode(code: string): string {
+  if (code === "120261") return "LIC MF Aggressive Hybrid Fund Direct Growth";
   if (code === "147623")
     return "Motilal Oswal Nifty Smallcap 250 Index Fund Direct";
   if (code === "147622")

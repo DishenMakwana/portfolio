@@ -76,6 +76,15 @@ export interface ZerodhaDashboardData {
     fundsInvested: number;
     fundsCurrentValue: number;
     fundsGain: number;
+    portfolioXirr: number;
+    benchmarkXirr: number;
+    alpha: number;
+  };
+  metricDeltas: {
+    previousDate: string | null;
+    portfolioXirr: number | null;
+    benchmarkXirr: number | null;
+    alpha: number | null;
   };
   sectorAllocation: { name: string; value: number }[];
   categoryAllocation: { name: string; value: number }[];
@@ -408,6 +417,106 @@ async function getZerodhaSnapshotTotals(reportId: number) {
   return { invested, currentValue, gain, absoluteReturn };
 }
 
+async function getZerodhaReportWeightedMetrics(
+  reportId: number,
+  asOfDate: string,
+  schemesList: {
+    name: string;
+    category: string;
+    schemeCodeApi: string | null;
+  }[]
+): Promise<{ portfolioXirr: number; benchmarkXirr: number; alpha: number }> {
+  const rawHoldings = await db
+    .select()
+    .from(zerodhaHoldings)
+    .where(eq(zerodhaHoldings.reportId, reportId));
+
+  const enrichedHoldings = await Promise.all(
+    rawHoldings.map(async (h) => {
+      const scheme = schemesList.find((s) => s.name === h.symbol);
+      const category =
+        scheme?.category ||
+        h.instrumentType ||
+        (h.holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
+      const benchmarkCode = getBenchmarkCodeForCategory(category);
+
+      if (h.holdingType === "mutual_fund") {
+        if (scheme && scheme.schemeCodeApi) {
+          const [fundDetails, benchDetails] = await Promise.all([
+            getZerodhaSchemeHistoryForDbCode(scheme.schemeCodeApi),
+            getBenchmarkHistory(benchmarkCode),
+          ]);
+          if (fundDetails && fundDetails.data && fundDetails.data.length > 0) {
+            const metrics = calculateFundMetrics(
+              h.averagePrice,
+              h.currentPrice,
+              asOfDate,
+              fundDetails.data,
+              benchDetails?.data || []
+            );
+            return {
+              currentValue: h.currentValue,
+              xirr: metrics.xirr,
+              benchmarkXirr: metrics.benchmarkXirr,
+            };
+          }
+        }
+      } else if (h.holdingType === "equity") {
+        const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
+        const [stockDetails, benchDetails] = await Promise.all([
+          getZerodhaStockHistoryForSymbol(ticker),
+          getBenchmarkHistory(benchmarkCode),
+        ]);
+        if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
+          const metrics = calculateFundMetrics(
+            h.averagePrice,
+            h.currentPrice,
+            asOfDate,
+            stockDetails.data,
+            benchDetails?.data || []
+          );
+          return {
+            currentValue: h.currentValue,
+            xirr: metrics.xirr,
+            benchmarkXirr: metrics.benchmarkXirr,
+          };
+        }
+      }
+      return {
+        currentValue: h.currentValue,
+        xirr: null,
+        benchmarkXirr: null,
+      };
+    })
+  );
+
+  const validXirrHoldings = enrichedHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const portfolioXirr =
+    validXirrHoldings.length > 0
+      ? validXirrHoldings.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validBenchXirrHoldings = enrichedHoldings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const benchmarkXirr =
+    validBenchXirrHoldings.length > 0
+      ? validBenchXirrHoldings.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validBenchXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const alpha = portfolioXirr - benchmarkXirr;
+
+  return { portfolioXirr, benchmarkXirr, alpha };
+}
+
 export async function getZerodhaDashboardData(
   reportId?: number
 ): Promise<ZerodhaDashboardData> {
@@ -436,6 +545,15 @@ export async function getZerodhaDashboardData(
         fundsInvested: 0,
         fundsCurrentValue: 0,
         fundsGain: 0,
+        portfolioXirr: 0,
+        benchmarkXirr: 0,
+        alpha: 0,
+      },
+      metricDeltas: {
+        previousDate: null,
+        portfolioXirr: null,
+        benchmarkXirr: null,
+        alpha: null,
       },
       sectorAllocation: [],
       categoryAllocation: [],
@@ -770,6 +888,52 @@ export async function getZerodhaDashboardData(
     },
   };
 
+  // Calculate weighted XIRR, benchmark XIRR, and Alpha for current snapshot
+  const validXirrHoldings = holdings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const portfolioXirr =
+    validXirrHoldings.length > 0
+      ? validXirrHoldings.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validBenchXirrHoldings = holdings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const benchmarkXirr =
+    validBenchXirrHoldings.length > 0
+      ? validBenchXirrHoldings.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validBenchXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const alpha = portfolioXirr - benchmarkXirr;
+
+  let metricDeltas = {
+    previousDate: previousReport?.asOfDate ?? null,
+    portfolioXirr: null as number | null,
+    benchmarkXirr: null as number | null,
+    alpha: null as number | null,
+  };
+
+  if (previousReport) {
+    const prevMetrics = await getZerodhaReportWeightedMetrics(
+      previousReport.id,
+      previousReport.asOfDate,
+      schemesList
+    );
+    metricDeltas = {
+      previousDate: previousReport.asOfDate,
+      portfolioXirr: portfolioXirr - prevMetrics.portfolioXirr,
+      benchmarkXirr: benchmarkXirr - prevMetrics.benchmarkXirr,
+      alpha: alpha - prevMetrics.alpha,
+    };
+  }
+
   return {
     firstCasReportDate,
     reportsList,
@@ -786,7 +950,11 @@ export async function getZerodhaDashboardData(
       fundsInvested,
       fundsCurrentValue,
       fundsGain,
+      portfolioXirr,
+      benchmarkXirr,
+      alpha,
     },
+    metricDeltas,
     sectorAllocation,
     categoryAllocation,
     assetSplit,

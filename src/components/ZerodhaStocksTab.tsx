@@ -224,7 +224,15 @@ export default function ZerodhaStocksTab({
                     </div>
                   </td>
                   {/* XIRR */}
-                  <td className="p-4 text-right font-bold text-teal-400">
+                  <td
+                    className={`p-4 text-right font-bold ${
+                      s.xirr !== null && s.xirr !== undefined && s.xirr >= 0
+                        ? "text-teal-400"
+                        : s.xirr !== null && s.xirr !== undefined
+                          ? "text-red-400"
+                          : "text-teal-400"
+                    }`}
+                  >
                     {s.xirr !== null && s.xirr !== undefined
                       ? formatPercent(s.xirr)
                       : "-"}

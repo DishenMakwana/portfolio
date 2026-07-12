@@ -186,12 +186,28 @@ export default function ZerodhaFundsTab({
                   <td className="p-4 font-bold text-slate-200 whitespace-nowrap">
                     {f.holdingDays ?? "-"}
                   </td>
-                  <td className="p-4 font-bold text-slate-200">
+                  <td
+                    className={`p-4 font-bold ${
+                      f.cagr !== null && f.cagr !== undefined && f.cagr >= 0
+                        ? "text-slate-200"
+                        : f.cagr !== null && f.cagr !== undefined
+                          ? "text-red-400"
+                          : "text-slate-200"
+                    }`}
+                  >
                     {f.cagr !== null && f.cagr !== undefined
                       ? formatPercent(f.cagr)
                       : "-"}
                   </td>
-                  <td className="p-4 font-bold text-teal-400">
+                  <td
+                    className={`p-4 font-bold ${
+                      f.xirr !== null && f.xirr !== undefined && f.xirr >= 0
+                        ? "text-teal-400"
+                        : f.xirr !== null && f.xirr !== undefined
+                          ? "text-red-400"
+                          : "text-teal-400"
+                    }`}
+                  >
                     {f.xirr !== null && f.xirr !== undefined
                       ? formatPercent(f.xirr)
                       : "-"}

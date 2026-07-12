@@ -402,6 +402,7 @@ export async function getDashboardDataAction(
     id: number;
     memberId: number | null;
     schemeId: number | null;
+    folioNo: string | null;
     date: string;
     type: string;
     units: number;
@@ -619,14 +620,20 @@ export async function getDashboardDataAction(
   const detailedHoldings = await Promise.all(
     holdings.map(async (h) => {
       const schemeTxs = getPortfolioTransactions(
-        (tx) => tx.schemeId === h.schemeId && tx.memberId === h.memberId
+        (tx) =>
+          tx.schemeId === h.schemeId &&
+          tx.memberId === h.memberId &&
+          tx.folioNo === h.folioNo
       );
 
       let schemeXirr = h.cagr;
       let schemeAlpha = 0;
 
       if (schemeTxs.length >= 1) {
-        const benchmarkCode = getBenchmarkCodeForCategory(h.category);
+        const benchmarkCode = getBenchmarkCodeForCategory(
+          h.category,
+          h.schemeName
+        );
         const metrics = await calculateAlpha(
           schemeTxs,
           selectedReport.asOfDate,

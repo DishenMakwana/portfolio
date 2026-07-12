@@ -13,10 +13,12 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   BarChart3,
-  Award,
   Search,
   ChevronUp,
   ChevronDown,
+  Target,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
@@ -33,6 +35,40 @@ interface MsflScheme {
   category: string;
   schemeCodeApi: string | null;
   mappedAt: string | null;
+}
+
+function formatPointDelta(delta: number) {
+  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
+}
+
+function DeltaBadge({
+  delta,
+  label = "vs prev",
+}: {
+  delta: number | null;
+  label?: string;
+}) {
+  if (delta === null) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+        No prior snapshot
+      </span>
+    );
+  }
+
+  const isUp = delta >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+        isUp
+          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+          : "border-red-500/20 bg-red-500/10 text-red-400"
+      }`}
+    >
+      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+      {formatPointDelta(delta)} {label}
+    </span>
+  );
 }
 
 interface MsflDashboardClientProps {
@@ -419,7 +455,14 @@ export default function MsflDashboardClient({
   const [tickerInput, setTickerInput] = useState("");
   const [isSavingMapping, setIsSavingMapping] = useState(false);
 
-  const { reportsList, selectedReport, holdings, totals, insights } = msflData;
+  const {
+    reportsList,
+    selectedReport,
+    holdings,
+    totals,
+    insights,
+    metricDeltas,
+  } = msflData;
 
   const benchmark = insights.benchmarkReturns.cagr3Y ?? 12;
   const benchmarkLabel =
@@ -429,8 +472,6 @@ export default function MsflDashboardClient({
 
   const mfCagrDelta =
     insights.weightedCagr !== null ? insights.weightedCagr - benchmark : null;
-  const beatsBenchmark =
-    insights.weightedCagr !== null && insights.weightedCagr >= benchmark;
 
   // Beating vs Lagging
   const cagrHoldings = holdings
@@ -575,26 +616,31 @@ export default function MsflDashboardClient({
           </div>
           {reportsList.length > 0 && selectedReport && (
             <div className="flex items-center gap-2">
-              <select
-                value={selectedReport.id}
-                onChange={(e) => handleSnapshotChange(Number(e.target.value))}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
-              >
-                {reportsList.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.filename} (
-                    {new Date(r.asOfDate).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    )
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedReport.id}
+                  onChange={(e) => handleSnapshotChange(Number(e.target.value))}
+                  className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-9 h-[38px] transition"
+                >
+                  {reportsList.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.filename} (
+                      {new Date(r.asOfDate).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                      )
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
               <button
                 onClick={handleDeleteSnapshot}
-                className="p-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition cursor-pointer"
+                className="p-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition cursor-pointer h-[38px] w-[38px] flex items-center justify-center"
                 title="Delete Snapshot"
               >
                 <Trash size={14} />
@@ -690,98 +736,79 @@ export default function MsflDashboardClient({
           {/* Balanced 2-Column Section for Benchmark comparison + Portfolio Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Benchmark beats card */}
-            <section
-              className={`rounded-2xl border p-5 flex flex-col justify-between shadow-xl backdrop-blur-md transition ${
-                beatsBenchmark
-                  ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/30"
-                  : "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/30"
-              }`}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+              className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl"
             >
-              <div>
-                <h3 className="mb-4 flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  {beatsBenchmark ? (
-                    <Award className="text-emerald-400" size={15} />
-                  ) : (
-                    <AlertTriangle className="text-amber-400" size={15} />
-                  )}
-                  Benchmark Comparison
-                </h3>
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-14 h-14 rounded-full border-2 flex items-center justify-center font-black text-sm shrink-0 ${
-                      beatsBenchmark
-                        ? "border-emerald-400 bg-emerald-500/10 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
-                        : "border-amber-400 bg-amber-500/10 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                    }`}
-                  >
-                    {beatsBenchmark ? "BEAT" : "LAG"}
-                  </div>
-                  <div>
-                    <p className="text-base font-bold text-slate-100 leading-tight">
-                      {beatsBenchmark
-                        ? "Your MSFL portfolio beats the Nifty 50."
-                        : "Your MSFL portfolio lags the Nifty 50 Index."}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      MSFL CAGR is{" "}
-                      <span
-                        className={`font-bold ${beatsBenchmark ? "text-emerald-400" : "text-amber-400"}`}
-                      >
-                        {insights.weightedCagr !== null
-                          ? `${insights.weightedCagr.toFixed(2)}%`
-                          : "0.00%"}
-                      </span>{" "}
-                      vs Nifty benchmark's{" "}
-                      <span className="font-bold text-slate-300">
-                        {benchmark.toFixed(2)}%
-                      </span>
-                      .
-                    </p>
-                  </div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest">
+                  XIRR vs Benchmark
+                </h4>
+                <div className="bg-teal-500/10 p-1.5 rounded-lg">
+                  <Target size={14} className="text-teal-400" />
                 </div>
               </div>
-
-              {/* Progress bar visual */}
-              <div className="space-y-1.5 mt-5">
-                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  <span>Weighted Return Spread</span>
-                  <span
-                    className={
-                      beatsBenchmark ? "text-emerald-400" : "text-amber-400"
-                    }
-                  >
-                    {insights.weightedCagr !== null
-                      ? insights.weightedCagr.toFixed(2)
-                      : "0.00"}
-                    % / {benchmark.toFixed(2)}%
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-slate-400">Your Portfolio</span>
+                    <span className="flex items-center gap-2 font-bold text-teal-400">
+                      {formatPercent(totals.portfolioXirr)}
+                      <DeltaBadge delta={metricDeltas.portfolioXirr} label="" />
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-teal-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${Math.min(Math.max(totals.portfolioXirr, 0) * 2.5, 100)}%`,
+                      }}
+                      transition={{ delay: 0.3, duration: 0.7 }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-slate-400">Nifty 50 Index</span>
+                    <span className="flex items-center gap-2 font-bold text-violet-400">
+                      {formatPercent(totals.benchmarkXirr)}
+                      <DeltaBadge delta={metricDeltas.benchmarkXirr} label="" />
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-violet-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${Math.min(Math.max(totals.benchmarkXirr, 0) * 2.5, 100)}%`,
+                      }}
+                      transition={{ delay: 0.4, duration: 0.7 }}
+                    />
+                  </div>
+                </div>
+                <div
+                  className={`text-center text-[11px] font-bold py-1.5 rounded-lg ${
+                    totals.alpha >= 0
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-red-500/10 text-red-400"
+                  }`}
+                >
+                  <span>
+                    Alpha: {totals.alpha >= 0 ? "+" : ""}
+                    {totals.alpha.toFixed(2)}% —{" "}
+                    {totals.alpha >= 0
+                      ? "Beating the market"
+                      : "Lagging behind"}
+                  </span>
+                  <span className="ml-2 inline-flex align-middle">
+                    <DeltaBadge delta={metricDeltas.alpha} label="" />
                   </span>
                 </div>
-                <div className="h-2 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700/30">
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-20"
-                    style={{
-                      left: `${Math.min(100, (benchmark / Math.max(insights.weightedCagr || 0, benchmark, 1)) * 90)}%`,
-                    }}
-                  />
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${Math.min(100, ((insights.weightedCagr || 0) / Math.max(insights.weightedCagr || 0, benchmark, 1)) * 90)}%`,
-                    }}
-                    transition={{ duration: 0.8 }}
-                    className={`h-full rounded-full ${
-                      beatsBenchmark
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-400"
-                        : "bg-gradient-to-r from-amber-500 to-orange-400"
-                    }`}
-                  />
-                </div>
-                <div className="flex justify-between text-[8px] text-slate-500 font-bold uppercase tracking-wider">
-                  <span>MSFL Portfolio</span>
-                  <span>Nifty Index Line</span>
-                </div>
               </div>
-            </section>
+            </motion.div>
 
             {/* Portfolio Summary Stats */}
             <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 flex flex-col justify-between shadow-xl">
@@ -1002,7 +1029,17 @@ export default function MsflDashboardClient({
                             {h.unrealizedPnlPct.toFixed(1)}%
                           </div>
                         </td>
-                        <td className="p-4 text-right font-bold text-teal-400">
+                        <td
+                          className={`p-4 text-right font-bold ${
+                            h.cagr !== null &&
+                            h.cagr !== undefined &&
+                            h.cagr >= 0
+                              ? "text-teal-400"
+                              : h.cagr !== null && h.cagr !== undefined
+                                ? "text-red-400"
+                                : "text-teal-400"
+                          }`}
+                        >
                           {h.cagr !== null && h.cagr !== undefined
                             ? `${h.cagr.toFixed(2)}%`
                             : "-"}

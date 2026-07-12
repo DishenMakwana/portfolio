@@ -11,7 +11,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart2, Activity } from "lucide-react";
+import {
+  BarChart2,
+  Activity,
+  Target,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react";
+import { motion } from "framer-motion";
 import { formatCurrency } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaHolding } from "./ZerodhaDashboard";
@@ -32,6 +39,15 @@ interface ZerodhaOverviewTabProps {
       fundsInvested: number;
       fundsCurrentValue: number;
       fundsGain: number;
+      portfolioXirr: number;
+      benchmarkXirr: number;
+      alpha: number;
+    };
+    metricDeltas: {
+      previousDate: string | null;
+      portfolioXirr: number | null;
+      benchmarkXirr: number | null;
+      alpha: number | null;
     };
     timelineData: {
       date: string;
@@ -116,6 +132,46 @@ const CustomPerformanceTooltip = ({
   }
   return null;
 };
+
+function formatPercent(value: number | null): string {
+  return value === null
+    ? "N/A"
+    : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatPointDelta(delta: number) {
+  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
+}
+
+function DeltaBadge({
+  delta,
+  label = "vs prev",
+}: {
+  delta: number | null;
+  label?: string;
+}) {
+  if (delta === null) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+        No prior snapshot
+      </span>
+    );
+  }
+
+  const isUp = delta >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+        isUp
+          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+          : "border-red-500/20 bg-red-500/10 text-red-400"
+      }`}
+    >
+      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+      {formatPointDelta(delta)} {label}
+    </span>
+  );
+}
 
 export default function ZerodhaOverviewTab({
   data,
@@ -514,6 +570,85 @@ export default function ZerodhaOverviewTab({
 
       {/* Side summary details */}
       <div className="space-y-6">
+        {/* XIRR Comparison */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest">
+              XIRR vs Benchmark
+            </h4>
+            <div className="bg-teal-500/10 p-1.5 rounded-lg">
+              <Target size={14} className="text-teal-400" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="text-slate-400">Your Portfolio</span>
+                <span className="flex items-center gap-2 font-bold text-teal-400">
+                  {formatPercent(totals.portfolioXirr)}
+                  <DeltaBadge
+                    delta={data.metricDeltas.portfolioXirr}
+                    label=""
+                  />
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-teal-500 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{
+                    width: `${Math.min(Math.max(totals.portfolioXirr, 0) * 2.5, 100)}%`,
+                  }}
+                  transition={{ delay: 0.3, duration: 0.7 }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="text-slate-400">Nifty 50 Index</span>
+                <span className="flex items-center gap-2 font-bold text-violet-400">
+                  {formatPercent(totals.benchmarkXirr)}
+                  <DeltaBadge
+                    delta={data.metricDeltas.benchmarkXirr}
+                    label=""
+                  />
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-violet-500 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{
+                    width: `${Math.min(Math.max(totals.benchmarkXirr, 0) * 2.5, 100)}%`,
+                  }}
+                  transition={{ delay: 0.4, duration: 0.7 }}
+                />
+              </div>
+            </div>
+            <div
+              className={`text-center text-[11px] font-bold py-1.5 rounded-lg ${
+                totals.alpha >= 0
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : "bg-red-500/10 text-red-400"
+              }`}
+            >
+              <span>
+                Alpha: {totals.alpha >= 0 ? "+" : ""}
+                {totals.alpha.toFixed(2)}% —{" "}
+                {totals.alpha >= 0 ? "Beating the market" : "Lagging behind"}
+              </span>
+              <span className="ml-2 inline-flex align-middle">
+                <DeltaBadge delta={data.metricDeltas.alpha} label="" />
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Mutual Fund Category Allocation list */}
         <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
           <h3 className="text-sm font-bold text-slate-100 mb-4">

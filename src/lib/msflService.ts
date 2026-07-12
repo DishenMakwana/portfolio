@@ -78,6 +78,15 @@ export interface MsflDashboardData {
     currentValue: number;
     gain: number;
     absoluteReturn: number;
+    portfolioXirr: number;
+    benchmarkXirr: number;
+    alpha: number;
+  };
+  metricDeltas: {
+    previousDate: string | null;
+    portfolioXirr: number | null;
+    benchmarkXirr: number | null;
+    alpha: number | null;
   };
   timelineData: {
     date: string;
@@ -541,6 +550,72 @@ function emptyMsflInsightsData(): MsflInsightsData {
   };
 }
 
+async function getMsflReportWeightedMetrics(
+  reportId: number,
+  asOfDate: string,
+  schemesList: {
+    name: string;
+    category: string;
+    schemeCodeApi: string | null;
+  }[],
+  niftyData: { date: string; nav: string }[]
+): Promise<{ portfolioXirr: number; benchmarkXirr: number; alpha: number }> {
+  const rawHoldings = await db
+    .select()
+    .from(msflHoldings)
+    .where(eq(msflHoldings.reportId, reportId));
+
+  const enrichedHoldings = await Promise.all(
+    rawHoldings.map(async (h) => {
+      const scheme = schemesList.find((s) => s.name === h.symbol);
+      const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
+
+      const stockDetails = await getMsflStockHistoryForSymbol(ticker);
+      if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
+        const metrics = calculateFundMetrics(
+          h.averagePrice,
+          h.currentPrice,
+          asOfDate,
+          stockDetails.data,
+          niftyData
+        );
+        return {
+          currentValue: h.currentValue,
+          xirr: metrics.xirr,
+          alpha: metrics.alpha,
+        };
+      }
+      return { currentValue: h.currentValue, xirr: null, alpha: null };
+    })
+  );
+
+  const validXirrHoldings = enrichedHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const portfolioXirr =
+    validXirrHoldings.length > 0
+      ? validXirrHoldings.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validAlphaHoldings = enrichedHoldings.filter(
+    (h) => typeof h.alpha === "number" && h.currentValue > 0
+  );
+  const alpha =
+    validAlphaHoldings.length > 0
+      ? validAlphaHoldings.reduce(
+          (sum, h) => sum + (h.alpha ?? 0) * h.currentValue,
+          0
+        ) / validAlphaHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const benchmarkXirr = portfolioXirr - alpha;
+
+  return { portfolioXirr, benchmarkXirr, alpha };
+}
+
 export async function getMsflDashboardData(
   reportId?: number
 ): Promise<MsflDashboardData> {
@@ -554,7 +629,21 @@ export async function getMsflDashboardData(
       reportsList: [],
       selectedReport: null,
       holdings: [],
-      totals: { invested: 0, currentValue: 0, gain: 0, absoluteReturn: 0 },
+      totals: {
+        invested: 0,
+        currentValue: 0,
+        gain: 0,
+        absoluteReturn: 0,
+        portfolioXirr: 0,
+        benchmarkXirr: 0,
+        alpha: 0,
+      },
+      metricDeltas: {
+        previousDate: null,
+        portfolioXirr: null,
+        benchmarkXirr: null,
+        alpha: null,
+      },
       timelineData: [],
       insights: emptyMsflInsightsData(),
     };
@@ -611,11 +700,38 @@ export async function getMsflDashboardData(
   const gain = currentValue - invested;
   const absoluteReturn = invested > 0 ? (gain / invested) * 100 : 0;
 
+  const validXirrHoldings = holdings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const portfolioXirr =
+    validXirrHoldings.length > 0
+      ? validXirrHoldings.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validXirrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validAlphaHoldings = holdings.filter(
+    (h) => typeof h.alpha === "number" && h.currentValue > 0
+  );
+  const alpha =
+    validAlphaHoldings.length > 0
+      ? validAlphaHoldings.reduce(
+          (sum, h) => sum + (h.alpha ?? 0) * h.currentValue,
+          0
+        ) / validAlphaHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const benchmarkXirr = portfolioXirr - alpha;
+
   const totals = {
     invested: round2(invested),
     currentValue: round2(currentValue),
     gain: round2(gain),
     absoluteReturn: round2(absoluteReturn),
+    portfolioXirr: round2(portfolioXirr),
+    benchmarkXirr: round2(benchmarkXirr),
+    alpha: round2(alpha),
   };
 
   // Timeline Data
@@ -709,11 +825,34 @@ export async function getMsflDashboardData(
     previousSnapshot,
   };
 
+  let metricDeltas = {
+    previousDate: previousReport?.asOfDate ?? null,
+    portfolioXirr: null as number | null,
+    benchmarkXirr: null as number | null,
+    alpha: null as number | null,
+  };
+
+  if (previousReport) {
+    const prevMetrics = await getMsflReportWeightedMetrics(
+      previousReport.id,
+      previousReport.asOfDate,
+      schemesList,
+      niftyData
+    );
+    metricDeltas = {
+      previousDate: previousReport.asOfDate,
+      portfolioXirr: round2(totals.portfolioXirr - prevMetrics.portfolioXirr),
+      benchmarkXirr: round2(totals.benchmarkXirr - prevMetrics.benchmarkXirr),
+      alpha: round2(totals.alpha - prevMetrics.alpha),
+    };
+  }
+
   return {
     reportsList,
     selectedReport,
     holdings,
     totals,
+    metricDeltas,
     timelineData,
     insights,
   };

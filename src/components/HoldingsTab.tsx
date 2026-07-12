@@ -363,12 +363,20 @@ export default function HoldingsTab({
                       {h.holdingDays}
                     </td>
                     <td className="p-4">
-                      <div className="font-bold text-slate-200">
+                      <div
+                        className={`font-bold ${
+                          h.cagr >= 0 ? "text-slate-200" : "text-red-400"
+                        }`}
+                      >
                         {formatPercent(h.cagr)}
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="font-bold text-teal-400">
+                      <div
+                        className={`font-bold ${
+                          h.xirr >= 0 ? "text-teal-400" : "text-red-400"
+                        }`}
+                      >
                         {formatPercent(h.xirr)}
                       </div>
                     </td>

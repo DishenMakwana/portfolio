@@ -87,6 +87,7 @@ export const transactions = mySchema.table(
     id: serial("id").primaryKey(),
     memberId: integer("member_id").references(() => familyMembers.id),
     schemeId: integer("scheme_id").references(() => schemes.id),
+    folioNo: text("folio_no"),
     date: text("date").notNull(),
     type: text("type").notNull(), // 'BUY', 'SELL'
     units: doublePrecision("units").notNull(),
