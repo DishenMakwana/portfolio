@@ -13,6 +13,7 @@ import {
   parseAndSortNavHistory,
   findSyntheticInvestmentEntry,
   calculateCagr,
+  calculateXirrFromNav,
 } from "./alpha";
 import type { MfDetailsResponse } from "./mfApi";
 
@@ -123,20 +124,30 @@ function calculateFundMetrics(
     return { xirr: 0, cagr: 0, alpha: null };
   }
 
-  const parseApiDateLocal = (s: string) => {
-    const [dd, mm, yyyy] = s.split("-");
-    return new Date(`${yyyy}-${mm}-${dd}`);
-  };
-
-  const sorted = parseAndSortNavHistory(fundNavHistory, parseApiDateLocal);
+  const sorted = parseAndSortNavHistory(fundNavHistory, parseApiDate);
   const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
 
   if (!entry) {
     return { xirr: 0, cagr: 0, alpha: null };
   }
 
+  if (benchmarkNavHistory && benchmarkNavHistory.length > 0) {
+    const metrics = calculateXirrFromNav(
+      purchaseNav,
+      currentNav,
+      asOfDate,
+      fundNavHistory,
+      benchmarkNavHistory
+    );
+    return {
+      xirr: metrics.portfolioXirr,
+      cagr: metrics.portfolioXirr,
+      alpha: metrics.alpha,
+    };
+  }
+
+  // Fallback to simple CAGR if benchmark history isn't available
   const investDate = entry.date;
-  const actualPurchaseNav = entry.nav;
   const exitDate = new Date(asOfDate);
   const msDiff = exitDate.getTime() - investDate.getTime();
   const years = msDiff / (365.25 * 24 * 60 * 60 * 1000);
@@ -145,49 +156,11 @@ function calculateFundMetrics(
     return { xirr: 0, cagr: 0, alpha: null };
   }
 
-  const cagrValue = calculateCagr(currentNav, actualPurchaseNav, years);
-
-  let alpha: number | null = null;
-  if (benchmarkNavHistory && benchmarkNavHistory.length > 0) {
-    const sortedBenchmark = benchmarkNavHistory
-      .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
-      .filter((p) => !isNaN(p.nav) && p.nav > 0)
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    if (sortedBenchmark.length > 0) {
-      // Find benchmark price closest to investDate
-      let startBenchmarkPrice = sortedBenchmark[0].nav;
-      for (let i = sortedBenchmark.length - 1; i >= 0; i--) {
-        if (sortedBenchmark[i].date <= investDate) {
-          startBenchmarkPrice = sortedBenchmark[i].nav;
-          break;
-        }
-      }
-
-      // Find benchmark price closest to exitDate
-      let endBenchmarkPrice = sortedBenchmark[sortedBenchmark.length - 1].nav;
-      for (let i = sortedBenchmark.length - 1; i >= 0; i--) {
-        if (sortedBenchmark[i].date <= exitDate) {
-          endBenchmarkPrice = sortedBenchmark[i].nav;
-          break;
-        }
-      }
-
-      if (startBenchmarkPrice > 0 && endBenchmarkPrice > 0) {
-        const benchmarkCagr = calculateCagr(
-          endBenchmarkPrice,
-          startBenchmarkPrice,
-          years
-        );
-        alpha = cagrValue - benchmarkCagr;
-      }
-    }
-  }
-
+  const cagrValue = calculateCagr(currentNav, entry.nav, years);
   return {
     xirr: cagrValue,
     cagr: cagrValue,
-    alpha,
+    alpha: null,
   };
 }
 

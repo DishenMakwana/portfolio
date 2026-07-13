@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
@@ -350,6 +350,85 @@ export default function OverviewTab({
   const stcgGain = holdings
     .filter((h) => h.holdingDays <= 365)
     .reduce((acc, h) => acc + h.gain, 0);
+
+  const taxableLtcg = useMemo(() => {
+    const memberLtcgMap: Record<string, number> = {};
+    for (const h of holdings) {
+      if (h.holdingDays > 365) {
+        const name = h.memberName || "Unknown";
+        memberLtcgMap[name] = (memberLtcgMap[name] || 0) + h.gain;
+      }
+    }
+    return Object.values(memberLtcgMap).reduce(
+      (sum, memberGain) => sum + Math.max(0, memberGain - 125000),
+      0
+    );
+  }, [holdings]);
+
+  const concentrationInsights = useMemo(() => {
+    if (holdings.length === 0) {
+      return {
+        count: 0,
+        top3Pct: 0,
+        status: "No Data",
+        statusColor: "text-slate-400",
+        topAmc: "—",
+        amcPct: 0,
+        avgDays: 0,
+      };
+    }
+
+    const totalVal = holdings.reduce((sum, h) => sum + h.currentValue, 0);
+
+    const sortedHoldings = [...holdings].sort(
+      (a, b) => b.currentValue - a.currentValue
+    );
+    const top3Val = sortedHoldings
+      .slice(0, 3)
+      .reduce((sum, h) => sum + h.currentValue, 0);
+    const top3Pct = totalVal > 0 ? (top3Val / totalVal) * 100 : 0;
+
+    let status = "Well Diversified";
+    let statusColor = "text-emerald-400";
+    if (top3Pct > 70) {
+      status = "Highly Concentrated";
+      statusColor = "text-amber-400";
+    } else if (top3Pct > 45) {
+      status = "Moderately Concentrated";
+      statusColor = "text-teal-400";
+    }
+
+    const amcMap: Record<string, number> = {};
+    for (const h of holdings) {
+      if (h.schemeName) {
+        const amc = h.schemeName.split(" ")[0];
+        amcMap[amc] = (amcMap[amc] || 0) + h.currentValue;
+      }
+    }
+    let topAmc = "—";
+    let topAmcVal = 0;
+    for (const [name, val] of Object.entries(amcMap)) {
+      if (val > topAmcVal) {
+        topAmc = name;
+        topAmcVal = val;
+      }
+    }
+    const amcPct = totalVal > 0 ? (topAmcVal / totalVal) * 100 : 0;
+
+    const totalDays = holdings.reduce((sum, h) => sum + h.holdingDays, 0);
+    const avgDays =
+      holdings.length > 0 ? Math.round(totalDays / holdings.length) : 0;
+
+    return {
+      count: holdings.length,
+      top3Pct,
+      status,
+      statusColor,
+      topAmc,
+      amcPct,
+      avgDays,
+    };
+  }, [holdings]);
 
   const topFund =
     holdings.length > 0
@@ -920,7 +999,7 @@ export default function OverviewTab({
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="space-y-2 mt-2">
+          <div className="space-y-2 mt-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar [scrollbar-gutter:stable]">
             {categoryAllocation.map((cat, i) => {
               const pct =
                 totalCurrentValue > 0
@@ -958,13 +1037,13 @@ export default function OverviewTab({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.4 }}
-          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl"
+          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col"
         >
-          <h4 className="font-bold text-slate-100 mb-4 flex items-center gap-2 text-xs uppercase tracking-widest">
+          <h4 className="font-bold text-slate-100 mb-5 flex items-center gap-2 text-xs uppercase tracking-widest">
             <span className="w-1 h-4 rounded-full bg-teal-400 inline-block" />
             AMC Exposure
           </h4>
-          <div className="space-y-5 max-h-80 overflow-y-auto pr-4 [scrollbar-gutter:stable]">
+          <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar [scrollbar-gutter:stable]">
             {amcAllocation.map((amc, i) => {
               const pct =
                 totalCurrentValue > 0
@@ -972,15 +1051,20 @@ export default function OverviewTab({
                   : 0;
               return (
                 <div key={amc.name}>
-                  <div className="flex justify-between gap-4 text-xs mb-2.5">
-                    <span className="font-medium text-slate-300 truncate max-w-[60%]">
+                  <div className="flex justify-between gap-3 text-xs mb-2">
+                    <span className="font-medium text-slate-200 truncate max-w-[55%]">
                       {amc.name}
                     </span>
-                    <span className="text-slate-400 font-bold shrink-0 tabular-nums">
-                      {pct.toFixed(1)}%
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-slate-500 tabular-nums text-[10px]">
+                        {formatCurrency(amc.value)}
+                      </span>
+                      <span className="text-slate-300 font-bold tabular-nums w-10 text-right">
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-800/80 h-3 rounded-full overflow-hidden">
                     <motion.div
                       className={`h-full rounded-full bg-gradient-to-r ${GRAD_CLASSES[i % GRAD_CLASSES.length]}`}
                       initial={{ width: 0 }}
@@ -1007,37 +1091,67 @@ export default function OverviewTab({
             transition={{ delay: 0.45, duration: 0.4 }}
             className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex-1"
           >
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1 h-4 rounded-full bg-amber-400 inline-block" />
                 Capital Gains
               </h4>
               <div className="bg-amber-500/10 p-1.5 rounded-lg">
                 <IndianRupee size={14} className="text-amber-400" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                <div className="text-[11px] text-slate-400 font-medium">
-                  LTCG (&gt;1 year)
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {/* LTCG */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  LTCG &gt;1 yr
                 </div>
-                <div className="text-sm font-bold text-slate-200 mt-1">
+                <div className="text-lg font-extrabold text-slate-100 tabular-nums leading-tight">
                   {formatCurrency(ltcgGain)}
                 </div>
-                <span className="text-[10px] text-emerald-400/80 mt-0.5 block">
-                  Exempt upto ₹1.25L
-                </span>
-              </div>
-              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                <div className="text-[11px] text-slate-400 font-medium">
-                  STCG (≤1 year)
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                  <span className="text-[10px] text-emerald-400 font-medium">
+                    Exempt up to ₹1.25L / person
+                  </span>
                 </div>
-                <div className="text-sm font-bold text-amber-400 mt-1">
+                <div className="text-[10px] text-slate-500 font-medium">
+                  Taxable:{" "}
+                  <span className="text-slate-300">
+                    {formatCurrency(taxableLtcg)}
+                  </span>
+                </div>
+              </div>
+              {/* STCG */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-amber-500/20 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  STCG ≤1 yr
+                </div>
+                <div className="text-lg font-extrabold text-amber-400 tabular-nums leading-tight">
                   {formatCurrency(stcgGain)}
                 </div>
-                <span className="text-[10px] text-amber-400/70 mt-0.5 block">
-                  Flat 20% tax
-                </span>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                  <span className="text-[10px] text-amber-400 font-medium">
+                    Flat 20% tax
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  Tax est:{" "}
+                  <span className="text-amber-300/80">
+                    {formatCurrency(stcgGain * 0.2)}
+                  </span>
+                </div>
               </div>
+            </div>
+            {/* Total */}
+            <div className="flex items-center justify-between bg-slate-800/40 rounded-xl px-4 py-2.5 border border-slate-700/40">
+              <span className="text-xs text-slate-400 font-medium">
+                Total Gains
+              </span>
+              <span className="text-sm font-extrabold text-slate-100 tabular-nums">
+                {formatCurrency(ltcgGain + stcgGain)}
+              </span>
             </div>
           </motion.div>
 
@@ -1048,26 +1162,32 @@ export default function OverviewTab({
             transition={{ delay: 0.5, duration: 0.4 }}
             className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex-1"
           >
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-bold text-slate-100 text-xs uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1 h-4 rounded-full bg-teal-400 inline-block" />
                 XIRR vs Benchmark
               </h4>
               <div className="bg-teal-500/10 p-1.5 rounded-lg">
                 <Target size={14} className="text-teal-400" />
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Portfolio */}
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-400">Your Portfolio</span>
-                  <span className="flex items-center gap-2 font-bold text-teal-400">
-                    {formatPercent(totals.portfolioXirr)}
+                <div className="flex justify-between items-baseline text-xs mb-2">
+                  <span className="text-slate-400 font-medium">
+                    Your Portfolio
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xl font-extrabold text-teal-400 tabular-nums leading-none">
+                      {formatPercent(totals.portfolioXirr)}
+                    </span>
                     <DeltaBadge delta={metricDeltas.portfolioXirr} label="" />
                   </span>
                 </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-800 h-3.5 rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-teal-500 rounded-full"
+                    className="h-full bg-gradient-to-r from-teal-600 to-teal-400 rounded-full"
                     initial={{ width: 0 }}
                     animate={{
                       width: `${Math.min(Math.max(totals.portfolioXirr, 0) * 2.5, 100)}%`,
@@ -1076,17 +1196,22 @@ export default function OverviewTab({
                   />
                 </div>
               </div>
+              {/* Benchmark */}
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-400">Nifty 50 Index</span>
-                  <span className="flex items-center gap-2 font-bold text-violet-400">
-                    {formatPercent(totals.benchmarkXirr)}
+                <div className="flex justify-between items-baseline text-xs mb-2">
+                  <span className="text-slate-400 font-medium">
+                    Nifty 50 Index
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xl font-extrabold text-violet-400 tabular-nums leading-none">
+                      {formatPercent(totals.benchmarkXirr)}
+                    </span>
                     <DeltaBadge delta={metricDeltas.benchmarkXirr} label="" />
                   </span>
                 </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-800 h-3.5 rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-violet-500 rounded-full"
+                    className="h-full bg-gradient-to-r from-violet-600 to-violet-400 rounded-full"
                     initial={{ width: 0 }}
                     animate={{
                       width: `${Math.min(Math.max(totals.benchmarkXirr, 0) * 2.5, 100)}%`,
@@ -1095,17 +1220,35 @@ export default function OverviewTab({
                   />
                 </div>
               </div>
+              {/* Alpha banner */}
               <div
-                className={`text-center text-[11px] font-bold py-1.5 rounded-lg ${isAlphaPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}
+                className={`flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm ${
+                  isAlphaPositive
+                    ? "bg-emerald-500/10 border border-emerald-500/20"
+                    : "bg-red-500/10 border border-red-500/20"
+                }`}
               >
-                <span>
-                  Alpha: {totals.alpha >= 0 ? "+" : ""}
-                  {totals.alpha.toFixed(2)}% —{" "}
-                  {isAlphaPositive ? "Beating the market" : "Lagging behind"}
-                </span>
-                <span className="ml-2 inline-flex align-middle">
+                <div className="flex flex-col">
+                  <span
+                    className={`text-[10px] uppercase tracking-widest font-semibold ${isAlphaPositive ? "text-emerald-500/60" : "text-red-500/60"}`}
+                  >
+                    Alpha
+                  </span>
+                  <span
+                    className={`text-lg font-extrabold tabular-nums ${isAlphaPositive ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {totals.alpha >= 0 ? "+" : ""}
+                    {totals.alpha.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span
+                    className={`text-xs font-semibold ${isAlphaPositive ? "text-emerald-300" : "text-red-300"}`}
+                  >
+                    {isAlphaPositive ? "Beating market 🏆" : "Lagging behind"}
+                  </span>
                   <DeltaBadge delta={metricDeltas.alpha} label="" />
-                </span>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -1243,123 +1386,230 @@ export default function OverviewTab({
           </table>
         </motion.div>
 
-        {/* Sub Category (Cap) Allocation Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.4 }}
-          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl"
-        >
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800/60">
-            <PieIcon size={15} className="text-violet-400" />
-            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
-              Sub Category Allocation
-            </h4>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-950/60">
-                <th
-                  onClick={() => handleSubCatSort("name")}
-                  className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
-                >
-                  Category {renderSortIcon(subCatSort, "name")}
-                </th>
-                <th
-                  onClick={() => handleSubCatSort("value")}
-                  className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
-                >
-                  Current Value {renderSortIcon(subCatSort, "value")}
-                </th>
-                <th
-                  onClick={() => handleSubCatSort("value")}
-                  className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
-                >
-                  Share {renderSortIcon(subCatSort, "value")}
-                </th>
-                <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Bar
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {sortedSubCats.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-5 py-6 text-center text-slate-500 text-xs"
+        {/* Column 2: Sub Category Allocation + Insights */}
+        <div className="space-y-5">
+          {/* Sub Category (Cap) Allocation Table */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.4 }}
+            className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl"
+          >
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800/60">
+              <PieIcon size={15} className="text-violet-400" />
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
+                Sub Category Allocation
+              </h4>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-950/60">
+                  <th
+                    onClick={() => handleSubCatSort("name")}
+                    className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
                   >
-                    No data
-                  </td>
+                    Category {renderSortIcon(subCatSort, "name")}
+                  </th>
+                  <th
+                    onClick={() => handleSubCatSort("value")}
+                    className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
+                  >
+                    Current Value {renderSortIcon(subCatSort, "value")}
+                  </th>
+                  <th
+                    onClick={() => handleSubCatSort("value")}
+                    className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors"
+                  >
+                    Share {renderSortIcon(subCatSort, "value")}
+                  </th>
+                  <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Bar
+                  </th>
                 </tr>
-              ) : (
-                sortedSubCats.map((cat, i) => {
-                  const share =
-                    totalCurrentValue > 0
-                      ? (cat.value / totalCurrentValue) * 100
-                      : 0;
-                  return (
-                    <tr
-                      key={cat.name}
-                      className={
-                        i % 2 === 0 ? "bg-transparent" : "bg-slate-950/30"
-                      }
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {sortedSubCats.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-5 py-6 text-center text-slate-500 text-xs"
                     >
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
-                          />
-                          <span className="font-semibold text-slate-200">
-                            {cat.name}
+                      No data
+                    </td>
+                  </tr>
+                ) : (
+                  sortedSubCats.map((cat, i) => {
+                    const share =
+                      totalCurrentValue > 0
+                        ? (cat.value / totalCurrentValue) * 100
+                        : 0;
+                    return (
+                      <tr
+                        key={cat.name}
+                        className={
+                          i % 2 === 0 ? "bg-transparent" : "bg-slate-950/30"
+                        }
+                      >
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                            />
+                            <span className="font-semibold text-slate-200">
+                              {cat.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-slate-100">
+                          {formatCurrency(cat.value)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <span className="text-violet-400 font-semibold">
+                            {share.toFixed(1)}%
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-right font-bold text-slate-100">
-                        {formatCurrency(cat.value)}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <span className="text-violet-400 font-semibold">
-                          {share.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right w-24">
-                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                          <motion.div
-                            className={`h-full rounded-full ${BG_CLASSES[i % BG_CLASSES.length]}`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${share}%` }}
-                            transition={{
-                              delay: 0.6 + i * 0.07,
-                              duration: 0.5,
-                              ease: "easeOut",
-                            }}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                        </td>
+                        <td className="px-5 py-3 text-right w-24">
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <motion.div
+                              className={`h-full rounded-full ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${share}%` }}
+                              transition={{
+                                delay: 0.6 + i * 0.07,
+                                duration: 0.5,
+                                ease: "easeOut",
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {capAllocation.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-slate-700/60 bg-slate-950/40">
+                    <td className="px-5 py-3 text-xs font-bold text-slate-400 uppercase">
+                      Total
+                    </td>
+                    <td className="px-5 py-3 text-right font-extrabold text-slate-100">
+                      {formatCurrency(totalCurrentValue)}
+                    </td>
+                    <td className="px-5 py-3 text-right font-bold text-violet-400">
+                      100%
+                    </td>
+                    <td className="px-5 py-3" />
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {capAllocation.length > 0 && (
-              <tfoot>
-                <tr className="border-t border-slate-700/60 bg-slate-950/40">
-                  <td className="px-5 py-3 text-xs font-bold text-slate-400 uppercase">
-                    Total
-                  </td>
-                  <td className="px-5 py-3 text-right font-extrabold text-slate-100">
-                    {formatCurrency(totalCurrentValue)}
-                  </td>
-                  <td className="px-5 py-3 text-right font-bold text-violet-400">
-                    100%
-                  </td>
-                  <td className="px-5 py-3" />
-                </tr>
-              </tfoot>
+            </table>
+          </motion.div>
+
+          {/* Portfolio Insights Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.65, duration: 0.4 }}
+            className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col gap-3 hover:border-slate-700/80 transition-all duration-300"
+          >
+            <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3">
+              <Activity size={15} className="text-violet-400 animate-pulse" />
+              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
+                Portfolio Insights & Health
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Diversification */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  Diversification
+                </div>
+                <div className="text-base font-extrabold text-slate-100">
+                  {concentrationInsights.count} Funds
+                </div>
+                <div
+                  className={`text-[10px] font-bold ${concentrationInsights.statusColor}`}
+                >
+                  {concentrationInsights.status}
+                </div>
+              </div>
+
+              {/* Concentration */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  Top 3 Concentration
+                </div>
+                <div className="text-base font-extrabold text-slate-100">
+                  {concentrationInsights.top3Pct.toFixed(1)}%
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  of total portfolio value
+                </div>
+              </div>
+
+              {/* Top AMC Exposure */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  Top AMC Exposure
+                </div>
+                <div
+                  className="text-sm font-extrabold text-slate-100 truncate"
+                  title={concentrationInsights.topAmc}
+                >
+                  {concentrationInsights.topAmc}
+                </div>
+                <div className="text-[10px] text-teal-400 font-bold">
+                  {concentrationInsights.amcPct.toFixed(1)}% share
+                </div>
+              </div>
+
+              {/* Avg Holding Period */}
+              <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                  Avg Holding Age
+                </div>
+                <div className="text-base font-extrabold text-slate-100">
+                  {concentrationInsights.avgDays} Days
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  per mutual fund scheme
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Performance Summary */}
+            {topFund && worstFund && (
+              <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 font-medium">
+                    Top Performer
+                  </span>
+                  <span
+                    className="text-emerald-400 font-bold truncate max-w-[180px] text-right"
+                    title={topFund.schemeName || ""}
+                  >
+                    {topFund.schemeName?.split(" ")[0]} (
+                    {topFund.absoluteReturn.toFixed(1)}% abs)
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
+                  <span className="text-slate-400 font-medium">
+                    Underperformer
+                  </span>
+                  <span
+                    className="text-red-400 font-bold truncate max-w-[180px] text-right"
+                    title={worstFund.schemeName || ""}
+                  >
+                    {worstFund.schemeName?.split(" ")[0]} (
+                    {worstFund.absoluteReturn.toFixed(1)}% abs)
+                  </span>
+                </div>
+              </div>
             )}
-          </table>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
     </motion.div>
   );

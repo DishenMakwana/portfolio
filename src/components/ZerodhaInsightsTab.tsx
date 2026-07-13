@@ -533,25 +533,36 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
               </span>
             </div>
             <div className="h-2 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700/30">
-              {/* Benchmark target line indicator */}
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-20"
-                style={{
-                  left: `${Math.min(100, (benchmark / Math.max(mfWeightedCagr || 0, benchmark, 1)) * 90)}%`,
-                }}
-              />
-              {/* CAGR progress fill */}
+              {/* CAGR progress fill (Green) */}
               <motion.div
                 initial={{ width: 0 }}
                 animate={{
                   width: `${Math.min(100, ((mfWeightedCagr || 0) / Math.max(mfWeightedCagr || 0, benchmark, 1)) * 90)}%`,
                 }}
                 transition={{ duration: 0.8 }}
-                className={`h-full rounded-full ${
-                  beatsBenchmark
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-400"
-                    : "bg-gradient-to-r from-amber-500 to-orange-400"
+                className={`absolute top-0 bottom-0 left-0 h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 ${
+                  beatsBenchmark ? "z-10" : "z-20"
                 }`}
+              />
+
+              {/* Benchmark target fill (Yellow/Amber) */}
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(100, (benchmark / Math.max(mfWeightedCagr || 0, benchmark, 1)) * 90)}%`,
+                }}
+                transition={{ duration: 0.8 }}
+                className={`absolute top-0 bottom-0 left-0 h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 ${
+                  beatsBenchmark ? "z-20" : "z-10"
+                }`}
+              />
+
+              {/* Benchmark target line indicator */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-30"
+                style={{
+                  left: `${Math.min(100, (benchmark / Math.max(mfWeightedCagr || 0, benchmark, 1)) * 90)}%`,
+                }}
               />
             </div>
             <div className="flex justify-between text-[8px] text-slate-500 font-bold uppercase tracking-wider">
@@ -592,12 +603,12 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between">
-            <div>
+          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 Top Performing Scheme
               </p>
-              <p className="text-sm font-bold text-slate-200 mt-0.5 truncate max-w-[200px]">
+              <p className="text-sm font-bold text-slate-200 mt-0.5 break-words">
                 {topPerformer ? topPerformer.symbol : "None"}
               </p>
             </div>

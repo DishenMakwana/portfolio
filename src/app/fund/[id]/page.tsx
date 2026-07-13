@@ -227,10 +227,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  const benchmarkCode = getBenchmarkCodeForCategory(
-    holding.category,
-    holding.schemeName
-  );
+  const benchmarkCode = isMsfl
+    ? "120716"
+    : getBenchmarkCodeForCategory(holding.category, holding.schemeName);
   const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel

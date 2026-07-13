@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import {
   PieChart,
   Pie,
@@ -180,6 +181,89 @@ export default function ZerodhaOverviewTab({
 }: ZerodhaOverviewTabProps) {
   const router = useRouter();
   const totals = data.totals;
+
+  const insights = useMemo(() => {
+    const stockHoldings = holdings.filter((h) => h.holdingType === "equity");
+    const fundHoldings = holdings.filter(
+      (h) => h.holdingType === "mutual_fund"
+    );
+
+    const totalVal = holdings.reduce((sum, h) => sum + h.currentValue, 0);
+
+    const sortedStocks = [...stockHoldings].sort(
+      (a, b) => b.currentValue - a.currentValue
+    );
+    const topStock = sortedStocks[0] || null;
+
+    const sortedFunds = [...fundHoldings].sort(
+      (a, b) => b.currentValue - a.currentValue
+    );
+    const topFund = sortedFunds[0] || null;
+
+    const sortedAll = [...holdings].sort(
+      (a, b) => b.currentValue - a.currentValue
+    );
+    const top3Val = sortedAll
+      .slice(0, 3)
+      .reduce((sum, h) => sum + h.currentValue, 0);
+    const top3Pct = totalVal > 0 ? (top3Val / totalVal) * 100 : 0;
+
+    let diversificationStatus = "Well Diversified";
+    let statusColor = "text-emerald-400";
+    if (top3Pct > 70) {
+      diversificationStatus = "Highly Concentrated";
+      statusColor = "text-amber-400";
+    } else if (top3Pct > 45) {
+      diversificationStatus = "Moderately Concentrated";
+      statusColor = "text-teal-400";
+    }
+
+    const amcMap: Record<string, number> = {};
+    for (const h of fundHoldings) {
+      if (h.symbol) {
+        const amc = h.symbol.split(" ")[0];
+        amcMap[amc] = (amcMap[amc] || 0) + h.currentValue;
+      }
+    }
+    let topAmc = "—";
+    let topAmcVal = 0;
+    for (const [name, val] of Object.entries(amcMap)) {
+      if (val > topAmcVal) {
+        topAmc = name;
+        topAmcVal = val;
+      }
+    }
+    const amcPct = totalVal > 0 ? (topAmcVal / totalVal) * 100 : 0;
+
+    const fundHoldingsWithDays = fundHoldings.filter(
+      (h) => h.holdingDays !== null && h.holdingDays !== undefined
+    );
+    const fundDays = fundHoldingsWithDays.reduce(
+      (sum, h) => sum + (h.holdingDays || 0),
+      0
+    );
+    const avgDays =
+      fundHoldingsWithDays.length > 0
+        ? Math.round(fundDays / fundHoldingsWithDays.length)
+        : 0;
+
+    return {
+      stocksCount: stockHoldings.length,
+      fundsCount: fundHoldings.length,
+      topStock,
+      topStockPct:
+        topStock && totalVal > 0 ? (topStock.currentValue / totalVal) * 100 : 0,
+      topFund,
+      topFundPct:
+        topFund && totalVal > 0 ? (topFund.currentValue / totalVal) * 100 : 0,
+      top3Pct,
+      diversificationStatus,
+      statusColor,
+      topAmc,
+      amcPct,
+      avgDays,
+    };
+  }, [holdings]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -726,6 +810,124 @@ export default function ZerodhaOverviewTab({
             )}
           </div>
         </div>
+
+        {/* Portfolio Stats & Insights Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col gap-3 hover:border-slate-700/80 transition-all duration-300"
+        >
+          <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3">
+            <Activity size={15} className="text-teal-400 animate-pulse" />
+            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
+              Portfolio Stats & Insights
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Holdings Count */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Holdings Count
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.stocksCount} Stocks / {insights.fundsCount} Funds
+              </div>
+              <div className="text-[10px] text-slate-500">
+                Active positions in account
+              </div>
+            </div>
+
+            {/* Concentration */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Top 3 Concentration
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.top3Pct.toFixed(1)}%
+              </div>
+              <div className={`text-[10px] font-bold ${insights.statusColor}`}>
+                {insights.diversificationStatus}
+              </div>
+            </div>
+
+            {/* Top AMC Exposure */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Top AMC Exposure
+              </div>
+              <div
+                className="text-base font-extrabold text-slate-100 truncate"
+                title={insights.topAmc}
+              >
+                {insights.topAmc}
+              </div>
+              <div className="text-[10px] text-teal-400 font-bold">
+                {insights.amcPct.toFixed(1)}% share
+              </div>
+            </div>
+
+            {/* Avg Holding Period */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Avg Holding Age
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.avgDays} Days
+              </div>
+              <div className="text-[10px] text-slate-500">
+                per mutual fund scheme
+              </div>
+            </div>
+          </div>
+
+          {/* Top Assets */}
+          <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
+            {insights.topStock ? (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-medium">
+                  Top Stock Asset
+                </span>
+                <span
+                  className="text-teal-400 font-bold truncate max-w-[180px] text-right"
+                  title={insights.topStock.symbol}
+                >
+                  {insights.topStock.symbol} ({insights.topStockPct.toFixed(1)}%
+                  share)
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-medium">
+                  Top Stock Asset
+                </span>
+                <span className="text-slate-500">—</span>
+              </div>
+            )}
+            {insights.topFund ? (
+              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
+                <span className="text-slate-400 font-medium">
+                  Top Mutual Fund
+                </span>
+                <span
+                  className="text-violet-400 font-bold truncate max-w-[180px] text-right"
+                  title={insights.topFund.symbol}
+                >
+                  {insights.topFund.symbol.split(" ")[0]} (
+                  {insights.topFundPct.toFixed(1)}% share)
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
+                <span className="text-slate-400 font-medium">
+                  Top Mutual Fund
+                </span>
+                <span className="text-slate-500">—</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
       </div>
     </div>
   );
