@@ -4,40 +4,11 @@ import { useState } from "react";
 import { Search, Clock3, FileSpreadsheet, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import DeleteReportButton from "./DeleteReportButton";
-
-interface ReportRow {
-  id: number;
-  asOfDate: string;
-  uploadedAt: string;
-  filename: string;
-  cagr: number | null;
-}
-
-interface UploadedFilesListProps {
-  reportsList: ReportRow[];
-}
-
-function parseLocalDate(date: string) {
-  return new Date(`${date}T00:00:00`);
-}
-
-function formatDate(date: string) {
-  return parseLocalDate(date).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatUploadedAt(date: string) {
-  return new Date(date).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+import type { UploadedFilesListProps } from "@/types/upload-tracker";
+import {
+  formatLocalDateStr as formatDate,
+  formatUploadedAt,
+} from "@/helpers/formatters";
 
 export default function UploadedFilesList({
   reportsList,

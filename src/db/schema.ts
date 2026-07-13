@@ -324,3 +324,23 @@ export const msflSchemeNavHistory = mySchema.table(
     ),
   ]
 );
+
+export const benchmarkRules = mySchema.table("benchmark_rules", {
+  id: serial("id").primaryKey(),
+  categoryPattern: text("category_pattern"),
+  schemeNamePattern: text("scheme_name_pattern"),
+  benchmarkCode: text("benchmark_code").notNull(),
+  benchmarkName: text("benchmark_name").notNull(),
+  benchmarkFundName: text("benchmark_fund_name").notNull(),
+  priority: integer("priority").default(0).notNull(),
+  corpusCr: doublePrecision("corpus_cr"),
+  expenseRatio: doublePrecision("expense_ratio"),
+  exitLoad: text("exit_load"),
+  allocationEquity: doublePrecision("allocation_equity").default(0).notNull(),
+  allocationDebt: doublePrecision("allocation_debt").default(0).notNull(),
+  allocationGold: doublePrecision("allocation_gold").default(0).notNull(),
+  allocationGlobalEquity: doublePrecision("allocation_global_equity")
+    .default(0)
+    .notNull(),
+  allocationOther: doublePrecision("allocation_other").default(0).notNull(),
+});

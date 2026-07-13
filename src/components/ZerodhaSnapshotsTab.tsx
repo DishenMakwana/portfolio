@@ -13,84 +13,21 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
+import type { ZerodhaSnapshotsTabProps } from "@/types/zerodha";
+import {
+  formatLocalDateStr as formatDate,
+  formatUploadedAt,
+  parseLocalDate,
+} from "@/helpers/formatters";
 
-interface SnapshotReport {
-  id: number;
-  asOfDate: string;
-  filename: string;
-  uploadedAt: string;
-}
-
-interface ZerodhaSnapshotsTabProps {
-  reportsList: SnapshotReport[];
-  handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleDeleteReport: (id: number) => void;
-  firstCasReportDate?: string | null;
-}
+import {
+  toDateKey,
+  startOfMonth,
+  eachMonth,
+  eachDay,
+} from "@/helpers/dates";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function parseLocalDate(date: string) {
-  return new Date(`${date}T00:00:00`);
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDate(date: string) {
-  return parseLocalDate(date).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatUploadedAt(date: string) {
-  return new Date(date).toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, months: number) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-
-function eachMonth(start: Date, end: Date) {
-  const months = [];
-  let cursor = startOfMonth(start);
-  const last = startOfMonth(end);
-
-  while (cursor <= last) {
-    months.push(new Date(cursor));
-    cursor = addMonths(cursor, 1);
-  }
-
-  return months;
-}
-
-function eachDay(start: Date, end: Date) {
-  const days = [];
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    days.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return days;
-}
 
 function getCalendarDays(month: Date) {
   const firstDay = startOfMonth(month);

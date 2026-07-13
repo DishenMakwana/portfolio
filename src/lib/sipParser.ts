@@ -1,21 +1,5 @@
 import * as XLSX from "xlsx";
-
-export interface SipRow {
-  srNo: number;
-  investorName: string; // e.g. "John Doe"
-  schemeName: string; // e.g. "Aditya Birla SL Flexi Cap Fund Reg (G)"
-  folioNo: string; // e.g. "1018789079"
-  monthlyAmount: number; // canonical fixed SIP amount (most common non-zero)
-  monthlyHistory: Record<string, number>; // { "APR 26": 5000, "MAY 26": 5000, ... }
-  startMonth: string; // first month column name
-  isActive: boolean; // latest month column was non-zero
-}
-
-export interface SipParsed {
-  asOfDate: string; // ISO date extracted from header
-  sourceFile: string;
-  sips: SipRow[];
-}
+import type { SipParsed, SipRow } from "@/types/sip-parser";
 
 export function parseSipExcel(buffer: Buffer, filename: string): SipParsed {
   const wb = XLSX.read(buffer, { type: "buffer" });

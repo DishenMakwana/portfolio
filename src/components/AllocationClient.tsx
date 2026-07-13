@@ -2,7 +2,8 @@
 
 import { useState, useMemo, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Sector, Tooltip, ResponsiveContainer } from "recharts";
+import type { PieSectorDataItem } from "recharts";
 import {
   ChevronDown,
   ChevronUp,
@@ -10,67 +11,20 @@ import {
   CheckSquare,
   Square,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
-import type { HoldingDetails } from "@/lib/portfolioService";
-
-/* ─── Types ─── */
-interface MemberSummary {
-  name: string;
-  pan: string | null;
-  invested: number;
-  currentValue: number;
-  gain: number;
-  cagr: number;
-  xirr: number;
-}
-interface AllocationClientProps {
-  memberSummaries: MemberSummary[];
-  holdings: (HoldingDetails & { xirr: number; alpha: number })[];
-  categoryAllocation: { name: string; value: number }[];
-  capAllocation: { name: string; value: number }[];
-  amcAllocation: { name: string; value: number }[];
-  totals: {
-    invested: number;
-    currentValue: number;
-    gain: number;
-    absoluteReturn: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-  };
-  selectedReport: { id: number; asOfDate: string } | null;
-}
-
-/* ─── Palette ─── */
-const PALETTE = [
-  "#22c55e",
-  "#3b82f6",
-  "#1d4ed8",
-  "#eab308",
-  "#ec4899",
-  "#14b8a6",
-  "#f97316",
-  "#8b5cf6",
-  "#06b6d4",
-  "#84cc16",
-];
-const BG_CLASSES = [
-  "bg-green-500",
-  "bg-blue-500",
-  "bg-blue-700",
-  "bg-yellow-500",
-  "bg-pink-500",
-  "bg-teal-500",
-  "bg-orange-500",
-  "bg-violet-500",
-  "bg-cyan-500",
-  "bg-lime-500",
-];
-
-/* ─── Helpers ─── */
-const fmtIN = (v: number) =>
-  v === 0 ? "—" : v.toLocaleString("en-IN", { maximumFractionDigits: 0 });
-const pct2 = (v: number) => v.toFixed(2);
+import {
+  formatCurrency,
+  formatIndianNumber,
+  formatPct,
+} from "@/helpers/formatters";
+import {
+  ALLOCATION_BG_CLASSES,
+  ALLOCATION_PALETTE,
+  AllocationClientProps,
+  ChartTooltipProps,
+  SortableRecord,
+  SortState,
+} from "@/types/allocation";
+import { AssetAllocation } from "@/types/portfolio";
 
 function getSubCategory(name: string, category: string): string {
   const n = name.toLowerCase();
@@ -212,13 +166,7 @@ function getCapRatios(subCat: string): {
   }
 }
 
-function getAssetRatios(subCat: string): {
-  debt: number;
-  equity: number;
-  globalEquity: number;
-  gold: number;
-  other: number;
-} {
+function getAssetRatios(subCat: string): AssetAllocation {
   if (subCat === "Debt")
     return { debt: 1, equity: 0, globalEquity: 0, gold: 0, other: 0 };
   if (subCat === "Gold")
@@ -244,18 +192,6 @@ function getAssetRatios(subCat: string): {
   if (subCat.startsWith("Equity") || subCat === "SIF: Equity LS")
     return { debt: 0, equity: 1, globalEquity: 0, gold: 0, other: 0 };
   return { debt: 0, equity: 0.8, globalEquity: 0, gold: 0, other: 0.2 };
-}
-
-/* ─── Custom Tooltip ─── */
-interface ChartTooltipProps {
-  active?: boolean;
-  payload?: Array<{
-    name: string;
-    value: number;
-    payload: {
-      pct?: number;
-    };
-  }>;
 }
 
 /* ─── Custom Tooltip ─── */
@@ -455,8 +391,6 @@ export default function AllocationClient({
       .join(", ");
   }, [selectedInvestors, isAllSelected]);
 
-  type SortState = { col: string; dir: "asc" | "desc" };
-
   const makeSorter =
     (setter: React.Dispatch<React.SetStateAction<SortState>>) =>
     (col: string): void => {
@@ -466,16 +400,18 @@ export default function AllocationClient({
       }));
     };
 
-  const sortArr = <T extends Record<string, any>>(
+  const sortArr = <T extends SortableRecord>(
     arr: T[],
     col: string,
     dir: "asc" | "desc"
   ) =>
     [...arr].sort((a, b) => {
+      const aValue = a[col];
+      const bValue = b[col];
       const v =
-        typeof a[col] === "string"
-          ? a[col].localeCompare(b[col])
-          : (b[col] as number) - (a[col] as number);
+        typeof aValue === "string" && typeof bValue === "string"
+          ? aValue.localeCompare(bValue)
+          : Number(bValue) - Number(aValue);
       return dir === "asc" ? -v : v;
     });
 
@@ -823,7 +759,13 @@ export default function AllocationClient({
                     </tr>
                   </thead>
                   <tbody>
-                    <TotalRow cells={["Total", fmtIN(grandTotal), "100.00"]} />
+                    <TotalRow
+                      cells={[
+                        "Total",
+                        formatIndianNumber(grandTotal),
+                        "100.00",
+                      ]}
+                    />
                     {sortedMembers.map((m, i) => (
                       <tr
                         key={m.name}
@@ -833,10 +775,10 @@ export default function AllocationClient({
                           {m.name}
                         </td>
                         <td className="px-5 py-3 text-right text-slate-200 tabular-nums font-medium">
-                          {fmtIN(m.value)}
+                          {formatIndianNumber(m.value)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {pct2(m.pct)}
+                          {formatPct(m.pct)}
                         </td>
                       </tr>
                     ))}
@@ -864,13 +806,19 @@ export default function AllocationClient({
                     </tr>
                   </thead>
                   <tbody>
-                    <TotalRow cells={["Total", fmtIN(grandTotal), "100.00"]} />
+                    <TotalRow
+                      cells={[
+                        "Total",
+                        formatIndianNumber(grandTotal),
+                        "100.00",
+                      ]}
+                    />
                     <tr className="border-t border-slate-800/60 hover:bg-slate-800/20 transition">
                       <td className="px-5 py-3 text-slate-300 font-medium">
                         Mutual Fund
                       </td>
                       <td className="px-5 py-3 text-right text-slate-300 tabular-nums">
-                        {fmtIN(grandTotal)}
+                        {formatIndianNumber(grandTotal)}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 tabular-nums">
                         100.00
@@ -890,7 +838,7 @@ export default function AllocationClient({
                         className="flex items-start gap-2.5 py-2 border-b border-slate-800/30 last:border-0"
                       >
                         <div
-                          className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                          className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${ALLOCATION_BG_CLASSES[i % ALLOCATION_BG_CLASSES.length]}`}
                         />
                         <div className="flex-1 min-w-0">
                           <div
@@ -901,11 +849,11 @@ export default function AllocationClient({
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-slate-300 text-xs tabular-nums font-medium">
-                              {fmtIN(d.value)}
+                              {formatIndianNumber(d.value)}
                             </span>
                             <span className="text-slate-600 text-xs">·</span>
                             <span className="text-slate-400 text-xs tabular-nums">
-                              {pct2(d.pct)}%
+                              {formatPct(d.pct)}%
                             </span>
                           </div>
                         </div>
@@ -925,22 +873,30 @@ export default function AllocationClient({
                           stroke="none"
                           startAngle={90}
                           endAngle={-270}
-                        >
-                          {categoryData.map((_, i) => (
-                            <Cell
-                              key={i}
-                              fill={PALETTE[i % PALETTE.length]}
-                              opacity={
-                                hoveredCell === null || hoveredCell === i
-                                  ? 1
-                                  : 0.4
-                              }
-                              className="transition-opacity duration-200 cursor-pointer"
-                              onMouseEnter={() => setHoveredCell(i)}
-                              onMouseLeave={() => setHoveredCell(null)}
-                            />
-                          ))}
-                        </Pie>
+                          shape={(
+                            props: PieSectorDataItem & { index: number }
+                          ) => {
+                            const { index } = props;
+                            const opacity =
+                              hoveredCell === null || hoveredCell === index
+                                ? 1
+                                : 0.4;
+                            return (
+                              <Sector
+                                {...props}
+                                fill={
+                                  ALLOCATION_PALETTE[
+                                    index % ALLOCATION_PALETTE.length
+                                  ]
+                                }
+                                opacity={opacity}
+                                className="transition-opacity duration-200 cursor-pointer"
+                                onMouseEnter={() => setHoveredCell(index)}
+                                onMouseLeave={() => setHoveredCell(null)}
+                              />
+                            );
+                          }}
+                        />
                         <Tooltip content={<ChartTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -995,7 +951,13 @@ export default function AllocationClient({
                     </tr>
                   </thead>
                   <tbody>
-                    <TotalRow cells={["Total", fmtIN(grandTotal), "100.00"]} />
+                    <TotalRow
+                      cells={[
+                        "Total",
+                        formatIndianNumber(grandTotal),
+                        "100.00",
+                      ]}
+                    />
                     {sortedSubCat.map((s, i) => (
                       <tr
                         key={s.name}
@@ -1005,10 +967,10 @@ export default function AllocationClient({
                           {s.name}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                          {fmtIN(s.value)}
+                          {formatIndianNumber(s.value)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {pct2(s.pct)}
+                          {formatPct(s.pct)}
                         </td>
                       </tr>
                     ))}
@@ -1060,7 +1022,13 @@ export default function AllocationClient({
                     </tr>
                   </thead>
                   <tbody>
-                    <TotalRow cells={["Total", fmtIN(grandTotal), "100.00"]} />
+                    <TotalRow
+                      cells={[
+                        "Total",
+                        formatIndianNumber(grandTotal),
+                        "100.00",
+                      ]}
+                    />
                     {sortedAmc.map((a, i) => (
                       <tr
                         key={a.name}
@@ -1070,10 +1038,10 @@ export default function AllocationClient({
                           {a.name}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                          {fmtIN(a.value)}
+                          {formatIndianNumber(a.value)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {pct2(a.pct)}
+                          {formatPct(a.pct)}
                         </td>
                       </tr>
                     ))}
@@ -1207,7 +1175,7 @@ export default function AllocationClient({
                               key={i}
                               className="px-4 py-3 text-right font-extrabold tabular-nums"
                             >
-                              {fmtIN(v)}
+                              {formatIndianNumber(v)}
                             </td>
                           ))}
                           <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
@@ -1237,11 +1205,11 @@ export default function AllocationClient({
                                 key={j}
                                 className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
                               >
-                                {v > 0 ? fmtIN(v) : "0"}
+                                {v > 0 ? formatIndianNumber(v) : "0"}
                               </td>
                             ))}
                             <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                              {pct2(r.pct)}
+                              {formatPct(r.pct)}
                             </td>
                           </tr>
                         ))}
@@ -1359,7 +1327,7 @@ export default function AllocationClient({
                               key={i}
                               className="px-4 py-3 text-right font-extrabold tabular-nums"
                             >
-                              <div>{fmtIN(v)}</div>
+                              <div>{formatIndianNumber(v)}</div>
                               {capTotals.total > 0 && (
                                 <div className="text-[10px] font-semibold opacity-75">
                                   ({((v / capTotals.total) * 100).toFixed(2)}%)
@@ -1387,11 +1355,11 @@ export default function AllocationClient({
                                 key={j}
                                 className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
                               >
-                                {v > 0 ? fmtIN(v) : "0"}
+                                {v > 0 ? formatIndianNumber(v) : "0"}
                               </td>
                             ))}
                             <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                              {pct2(r.pct)}
+                              {formatPct(r.pct)}
                             </td>
                           </tr>
                         ))}
@@ -1446,7 +1414,11 @@ export default function AllocationClient({
                       </thead>
                       <tbody>
                         <TotalRow
-                          cells={["Grand Total :", fmtIN(grandTotal), "100.00"]}
+                          cells={[
+                            "Grand Total :",
+                            formatIndianNumber(grandTotal),
+                            "100.00",
+                          ]}
                         />
                         {schemeGrouped.map((group) => (
                           <Fragment key={group.subCat}>
@@ -1467,10 +1439,10 @@ export default function AllocationClient({
                                   {f.name}
                                 </td>
                                 <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                                  {fmtIN(f.value)}
+                                  {formatIndianNumber(f.value)}
                                 </td>
                                 <td className="px-4 py-2.5 text-right tabular-nums text-slate-400 text-xs border-l border-teal-500/10 w-28">
-                                  {pct2(f.pct)}
+                                  {formatPct(f.pct)}
                                 </td>
                               </tr>
                             ))}
@@ -1479,10 +1451,10 @@ export default function AllocationClient({
                                 Sub Total :
                               </td>
                               <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                                {fmtIN(group.subTotal)}
+                                {formatIndianNumber(group.subTotal)}
                               </td>
                               <td className="px-4 py-2.5 text-right tabular-nums text-slate-300 text-xs bg-teal-500/5 border-l border-teal-500/10 w-28">
-                                {pct2(group.pct)}
+                                {formatPct(group.pct)}
                               </td>
                             </tr>
                           </Fragment>

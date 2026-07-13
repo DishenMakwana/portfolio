@@ -6,12 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { globalRefreshAction } from "@/app/actions";
-
-interface HeaderClientProps {
-  reportsList?: { id: number; asOfDate: string }[];
-  selectedReport?: { id: number; asOfDate: string } | null;
-  unmappedCount: number;
-}
+import type { HeaderClientProps } from "@/types/upload-tracker";
 
 function MappingLink({ unmappedCount }: { unmappedCount: number }) {
   const searchParams = useSearchParams();

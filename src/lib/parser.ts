@@ -1,30 +1,5 @@
 import * as XLSX from "xlsx";
-
-export interface HoldingParsed {
-  schemeName: string;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  dividend: number;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments: string | null;
-  category: string;
-  memberName: string;
-  memberPan: string;
-}
-
-export interface ParseResult {
-  asOfDate: string; // YYYY-MM-DD
-  holdings: HoldingParsed[];
-  familyCagr?: number;
-  memberCagrs?: { memberName: string; cagr: number }[];
-}
+import type { HoldingParsed, ParseResult } from "@/types/parser";
 
 export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });

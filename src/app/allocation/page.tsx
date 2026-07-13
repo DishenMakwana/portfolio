@@ -2,13 +2,10 @@ import { getDashboardDataAction } from "@/app/actions";
 import { getSchemes } from "@/lib/portfolioService";
 import HeaderClient from "@/components/HeaderClient";
 import AllocationClient from "@/components/AllocationClient";
+import {PageProps} from "@/types/allocation";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Asset Allocation — Family Portfolio" };
-
-interface PageProps {
-  searchParams: Promise<{ reportId?: string }>;
-}
 
 export default async function AllocationPage({ searchParams }: PageProps) {
   const params = await searchParams;

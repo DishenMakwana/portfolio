@@ -4,51 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
-
-import type { OverviewHolding } from "./OverviewTab";
-
-interface MemberSummary {
-  name: string;
-  pan: string | null;
-  invested: number;
-  currentValue: number;
-  gain: number;
-  cagr: number;
-  xirr: number;
-  alpha: number;
-  cagrDelta: number | null;
-  xirrDelta: number | null;
-  alphaDelta: number | null;
-}
-
-interface Totals {
-  invested: number;
-  currentValue: number;
-  gain: number;
-  absoluteReturn: number;
-  portfolioXirr: number;
-  benchmarkXirr: number;
-  alpha: number;
-  cagr?: number | null;
-}
-
-interface MembersTabProps {
-  memberSummaries: MemberSummary[];
-  totals: Totals;
-  metricDeltas: {
-    previousDate: string | null;
-    portfolioXirr: number | null;
-    benchmarkXirr: number | null;
-    alpha: number | null;
-    cagr: number | null;
-  };
-  holdings: OverviewHolding[];
-}
-
-function formatPointDelta(delta: number) {
-  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
-}
+import {
+  formatCurrency,
+  formatPercent,
+  formatPointDelta,
+} from "@/helpers/formatters";
+import type { MembersTabProps } from "@/types/members";
 
 function DeltaBadge({
   delta,

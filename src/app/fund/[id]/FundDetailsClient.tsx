@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { globalRefreshAction } from "@/app/actions";
 import { isUnlistedStock } from "@/lib/stockApi";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
+import {
+  FundDetailsClientProps,
+  CustomTooltipProps,
+} from "@/types/fund-details";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -29,115 +34,6 @@ import {
   ReferenceDot,
   ReferenceLine,
 } from "recharts";
-
-interface FundDetailsClientProps {
-  holding: {
-    id: number;
-    schemeId: number | null;
-    memberId: number | null;
-    schemeName: string | null;
-    category: string | null;
-    schemeCodeApi: string | null;
-    folioNo?: string | null;
-    balanceUnits: number;
-    purchaseNav: number;
-    purchaseValue: number;
-    currentNav: number;
-    currentValue: number;
-    dividend: number | null;
-    gain: number;
-    holdingDays: number;
-    absoluteReturn: number;
-    cagr: number;
-    comments: string | null;
-    memberName: string | null;
-    memberPan: string | null;
-    asOfDate: string | null;
-  };
-  transactions: Array<{
-    id: number;
-    memberId: number | null;
-    schemeId: number | null;
-    date: string;
-    type: string;
-    units: number;
-    nav: number;
-    amount: number;
-    sourceReportId: number | null;
-  }>;
-  metrics: {
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-  };
-  factsheetMeta: {
-    profile: {
-      launchDate: string;
-      corpusCr: number;
-      expenseRatio: number;
-      exitLoad: string;
-      benchmarkName: string;
-    };
-    allocation: {
-      equity: number;
-      debt: number;
-      gold: number;
-      globalEquity: number;
-      other: number;
-    };
-  };
-  volatilityStats: {
-    alpha: number;
-    sharpe: number;
-    mean: number;
-    beta: number;
-    stdDev: number;
-    ytm: number;
-    modifiedDuration: number;
-    avgMaturity: number;
-  };
-  chartData: {
-    date: string;
-    timestamp: number;
-    fundNav: number;
-    benchNav: number;
-    fundReturn: number;
-    benchReturn: number;
-    txs?: { type: string; amount: number }[];
-  }[];
-}
-
-const formatCurrency = (val: number): string => {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(val);
-};
-
-const formatPercent = (val: number): string => {
-  return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
-};
-
-interface CustomTooltipPoint {
-  date: string;
-  timestamp: number;
-  fundNav: number;
-  benchNav: number;
-  fundReturn: number;
-  benchReturn: number;
-  txs?: Array<{ type: string; amount: number }>;
-}
-
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: Array<{
-    value: number;
-    name: string;
-    payload: CustomTooltipPoint;
-  }>;
-  benchmarkName?: string;
-}
 
 const CustomTooltip = ({
   active,
@@ -476,7 +372,7 @@ export default function FundDetailsClient({
             <span>
               Snapshot Date:{" "}
               <strong className="text-slate-200">
-                {formatDate(holding.asOfDate)}
+                {formatDate(holding.asOfDate || null)}
               </strong>
             </span>
           </div>
@@ -839,12 +735,12 @@ export default function FundDetailsClient({
         )}
 
         {isApproximateProxy && (
-          <div className="mt-4 px-4 py-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-2.5">
+          <div className="mt-4 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5">
             <AlertTriangle
-              className="text-indigo-400 shrink-0 mt-0.5"
+              className="text-amber-400 shrink-0 mt-0.5"
               size={16}
             />
-            <p className="text-xs text-indigo-300 leading-relaxed font-medium">
+            <p className="text-xs text-amber-300 leading-relaxed font-medium">
               {holding.category?.toLowerCase().includes("multi asset")
                 ? "Approximate Proxy: No clean passive equivalent or index fund exists for the Multi Asset Allocation category. ICICI Prudential Equity & Debt (Aggressive Hybrid) is used as a proxy, so alpha figures represent an approximation."
                 : "Strategy Mismatch: This is a Long-Short / Specialized SIF strategy, which targets absolute/hedged returns rather than traditional long-only benchmarks. Comparing performance to the Nifty 50 TRI is for informational purposes only and alpha metrics are not directly comparable to regular long-only mutual funds."}

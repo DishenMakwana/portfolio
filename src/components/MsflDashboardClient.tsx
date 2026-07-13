@@ -20,26 +20,23 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatPointDelta,
+} from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
-import type { MsflDashboardData } from "@/lib/msflService";
+import type {
+  MsflHoldingData,
+  MsflDashboardClientProps,
+  MsflScheme,
+  MsflSortField,
+} from "@/types/msfl";
 import {
   uploadMsflHoldingsAction,
   deleteMsflHoldingsAction,
   updateMsflSchemeMappingAction,
 } from "@/app/zerodha/msflActions";
-
-interface MsflScheme {
-  id: number;
-  name: string;
-  category: string;
-  schemeCodeApi: string | null;
-  mappedAt: string | null;
-}
-
-function formatPointDelta(delta: number) {
-  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
-}
 
 function DeltaBadge({
   delta,
@@ -69,11 +66,6 @@ function DeltaBadge({
       {formatPointDelta(delta)} {label}
     </span>
   );
-}
-
-interface MsflDashboardClientProps {
-  msflData: MsflDashboardData;
-  allMsflSchemes: MsflScheme[];
 }
 
 function MetricCard({
@@ -416,17 +408,7 @@ export default function MsflDashboardClient({
   const [searchQuery, setSearchQuery] = useState("");
 
   // Sorting state for MSFL Stock Holdings
-  const [sortField, setSortField] = useState<
-    | "symbol"
-    | "quantity"
-    | "averagePrice"
-    | "currentPrice"
-    | "investedValue"
-    | "currentValue"
-    | "unrealizedPnl"
-    | "cagr"
-    | "alpha"
-  >("currentValue");
+  const [sortField, setSortField] = useState<MsflSortField>("currentValue");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const toggleSort = (field: typeof sortField) => {
@@ -451,7 +433,7 @@ export default function MsflDashboardClient({
   };
 
   // Mapping modal states
-  const [editingScheme, setEditingScheme] = useState<any | null>(null);
+  const [editingScheme, setEditingScheme] = useState<MsflScheme | null>(null);
   const [tickerInput, setTickerInput] = useState("");
   const [isSavingMapping, setIsSavingMapping] = useState(false);
 
@@ -538,9 +520,7 @@ export default function MsflDashboardClient({
   };
 
   // Mapping Edit Trigger
-  const handleEditMapping = (
-    h: import("@/lib/msflService").MsflHoldingData
-  ): void => {
+  const handleEditMapping = (h: MsflHoldingData): void => {
     const scheme = allMsflSchemes.find((s) => s.name === h.symbol) || {
       id: 0,
       name: h.symbol,
@@ -577,10 +557,8 @@ export default function MsflDashboardClient({
   const filteredHoldings = holdings
     .filter((h) => h.symbol.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      let valA =
-        a[sortField as keyof import("@/lib/msflService").MsflHoldingData];
-      let valB =
-        b[sortField as keyof import("@/lib/msflService").MsflHoldingData];
+      let valA = a[sortField as keyof MsflHoldingData];
+      let valB = b[sortField as keyof MsflHoldingData];
 
       // Handle null CAGR / metrics gracefully
       if (valA === null || valA === undefined) {

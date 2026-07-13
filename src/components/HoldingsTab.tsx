@@ -6,40 +6,7 @@ import { motion } from "framer-motion";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
-
-interface Holding {
-  id: number;
-  schemeId: number;
-  memberId: number;
-  schemeName: string;
-  category: string;
-  schemeCodeApi?: string | null;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments: string | null;
-  memberName: string;
-  memberPan: string | null;
-  xirr: number;
-  alpha: number;
-}
-
-interface MemberSummary {
-  name: string;
-}
-
-interface HoldingsTabProps {
-  holdings: Holding[];
-  memberSummaries: MemberSummary[];
-  initialMember?: string;
-}
+import type { HoldingsSortField, HoldingsTabProps } from "@/types/holdings";
 
 export default function HoldingsTab({
   holdings,
@@ -61,7 +28,7 @@ export default function HoldingsTab({
     )
       ? rawSort
       : "currentValue"
-  ) as "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays";
+  ) as HoldingsSortField;
   const rawOrder = searchParams.get("order");
   const initialOrder = (
     rawOrder === "asc" || rawOrder === "desc" ? rawOrder : "desc"
@@ -72,9 +39,7 @@ export default function HoldingsTab({
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
-  const [sortField, setSortField] = useState<
-    "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays"
-  >(initialSort);
+  const [sortField, setSortField] = useState<HoldingsSortField>(initialSort);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
 
   // Helper to update query string parameters in the URL
@@ -109,8 +74,7 @@ export default function HoldingsTab({
         "holdingDays",
       ].includes(rawS || "")
         ? rawS
-        : "currentValue") as
-        "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays"
+        : "currentValue") as HoldingsSortField
     );
     const rawO = searchParams.get("order");
     setSortOrder(

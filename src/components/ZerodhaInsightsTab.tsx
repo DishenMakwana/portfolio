@@ -10,18 +10,8 @@ import {
   TrendingUp,
   Award,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
-import type { ZerodhaDashboardData } from "@/lib/zerodhaService";
-
-interface ZerodhaInsightsTabProps {
-  data: ZerodhaDashboardData;
-}
-
-function formatPercent(value: number | null): string {
-  return value === null
-    ? "N/A"
-    : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-}
+import { formatCurrency, formatNullablePercent } from "@/helpers/formatters";
+import type { ZerodhaInsightsTabProps } from "@/types/zerodha";
 
 function getShortFundName(fullName: string): string {
   const parts = fullName.split(" ");
@@ -444,7 +434,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
         <MetricCard
           label="MF Total Gain"
           value={formatCurrency(totals.fundsGain)}
-          sub={`${formatPercent(mfAbsReturn)} absolute return`}
+          sub={`${formatNullablePercent(mfAbsReturn)} absolute return`}
           positive={totals.fundsGain >= 0}
           icon={TrendingUp}
           accentColor={totals.fundsGain >= 0 ? "emerald" : "rose"}
@@ -457,7 +447,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
           sub={
             mfCagrDelta === null
               ? benchmarkLabel
-              : `${formatPercent(mfCagrDelta)} vs benchmark`
+              : `${formatNullablePercent(mfCagrDelta)} vs benchmark`
           }
           positive={mfCagrDelta === null ? undefined : mfCagrDelta >= 0}
           icon={BarChart3}

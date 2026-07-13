@@ -1,9 +1,10 @@
 "use client";
+
 import { useMemo } from "react";
 import {
   PieChart,
   Pie,
-  Cell,
+  Sector,
   Tooltip,
   ResponsiveContainer,
   LineChart,
@@ -20,76 +21,19 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { formatCurrency } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatPointDelta,
+  formatNullablePercent,
+} from "@/helpers/formatters";
 import { useRouter } from "next/navigation";
-import type { ZerodhaHolding } from "./ZerodhaDashboard";
-
-interface ZerodhaOverviewTabProps {
-  data: {
-    assetSplit: { name: string; value: number }[];
-    sectorAllocation: { name: string; value: number }[];
-    categoryAllocation: { name: string; value: number }[];
-    totals: {
-      currentValue: number;
-      invested: number;
-      gain: number;
-      absoluteReturn: number;
-      stocksInvested: number;
-      stocksCurrentValue: number;
-      stocksGain: number;
-      fundsInvested: number;
-      fundsCurrentValue: number;
-      fundsGain: number;
-      portfolioXirr: number;
-      benchmarkXirr: number;
-      alpha: number;
-    };
-    metricDeltas: {
-      previousDate: string | null;
-      portfolioXirr: number | null;
-      benchmarkXirr: number | null;
-      alpha: number | null;
-    };
-    timelineData: {
-      date: string;
-      equity: number;
-      mutualFunds: number;
-      nifty50: number;
-      equityReturn: number;
-      fundsReturn: number;
-      niftyReturn: number;
-    }[];
-  };
-  holdings: ZerodhaHolding[];
-  COLORS: string[];
-}
-
-interface CustomPerformanceTooltipProps {
-  active?: boolean;
-  payload?: ReadonlyArray<{
-    payload: {
-      date: string;
-      equity: number;
-      equityReturn: number;
-      mutualFunds: number;
-      fundsReturn: number;
-      nifty50: number;
-      niftyReturn: number;
-    };
-  }>;
-}
-
-interface SimplePieTooltipProps {
-  active?: boolean;
-  payload?: ReadonlyArray<{
-    name?: any;
-    value?: any;
-    payload?: {
-      name: string;
-      value: number;
-    };
-  }>;
-}
+import type { PieSectorDataItem } from "recharts";
+import type {
+  CustomPerformanceTooltipProps,
+  SimplePiePayload,
+  SimplePieTooltipProps,
+  ZerodhaOverviewTabProps,
+} from "@/types/zerodha";
 
 const CustomPerformanceTooltip = ({
   active,
@@ -133,16 +77,6 @@ const CustomPerformanceTooltip = ({
   }
   return null;
 };
-
-function formatPercent(value: number | null): string {
-  return value === null
-    ? "N/A"
-    : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-}
-
-function formatPointDelta(delta: number) {
-  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
-}
 
 function DeltaBadge({
   delta,
@@ -290,14 +224,13 @@ export default function ZerodhaOverviewTab({
                       paddingAngle={3}
                       dataKey="value"
                       strokeWidth={0}
-                    >
-                      {data.assetSplit.map((entry, index) => (
-                        <Cell
-                          key={`asset-${entry.name}`}
-                          fill={COLORS[index % COLORS.length]}
+                      shape={(props: PieSectorDataItem & { index: number }) => (
+                        <Sector
+                          {...props}
+                          fill={COLORS[props.index % COLORS.length]}
                         />
-                      ))}
-                    </Pie>
+                      )}
+                    />
                     <Tooltip
                       content={({
                         active,
@@ -309,7 +242,7 @@ export default function ZerodhaOverviewTab({
                           payload.length &&
                           payload[0].payload
                         ) {
-                          const entry = payload[0].payload;
+                          const entry = payload[0].payload as SimplePiePayload;
                           return (
                             <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-xs">
                               <p className="font-bold text-slate-100">
@@ -390,14 +323,13 @@ export default function ZerodhaOverviewTab({
                       paddingAngle={2}
                       dataKey="value"
                       strokeWidth={0}
-                    >
-                      {data.sectorAllocation.slice(0, 5).map((entry, index) => (
-                        <Cell
-                          key={`sector-${entry.name}`}
-                          fill={COLORS[(index + 2) % COLORS.length]}
+                      shape={(props: PieSectorDataItem & { index: number }) => (
+                        <Sector
+                          {...props}
+                          fill={COLORS[(props.index + 2) % COLORS.length]}
                         />
-                      ))}
-                    </Pie>
+                      )}
+                    />
                     <Tooltip
                       content={({
                         active,
@@ -409,7 +341,7 @@ export default function ZerodhaOverviewTab({
                           payload.length &&
                           payload[0].payload
                         ) {
-                          const entry = payload[0].payload;
+                          const entry = payload[0].payload as SimplePiePayload;
                           return (
                             <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-xs">
                               <p className="font-bold text-slate-100">
@@ -674,7 +606,7 @@ export default function ZerodhaOverviewTab({
               <div className="flex justify-between text-xs mb-1.5">
                 <span className="text-slate-400">Your Portfolio</span>
                 <span className="flex items-center gap-2 font-bold text-teal-400">
-                  {formatPercent(totals.portfolioXirr)}
+                  {formatNullablePercent(totals.portfolioXirr)}
                   <DeltaBadge
                     delta={data.metricDeltas.portfolioXirr}
                     label=""
@@ -696,7 +628,7 @@ export default function ZerodhaOverviewTab({
               <div className="flex justify-between text-xs mb-1.5">
                 <span className="text-slate-400">Nifty 50 Index</span>
                 <span className="flex items-center gap-2 font-bold text-violet-400">
-                  {formatPercent(totals.benchmarkXirr)}
+                  {formatNullablePercent(totals.benchmarkXirr)}
                   <DeltaBadge
                     delta={data.metricDeltas.benchmarkXirr}
                     label=""

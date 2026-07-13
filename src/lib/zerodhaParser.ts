@@ -1,24 +1,8 @@
 import * as XLSX from "xlsx";
-
-export interface ZerodhaHoldingParsed {
-  holdingType: "equity" | "mutual_fund";
-  symbol: string;
-  isin: string;
-  sector: string | null;
-  instrumentType: string | null;
-  quantity: number;
-  averagePrice: number;
-  currentPrice: number;
-  investedValue: number;
-  currentValue: number;
-  unrealizedPnl: number;
-  unrealizedPnlPct: number;
-}
-
-export interface ZerodhaParseResult {
-  asOfDate: string; // YYYY-MM-DD
-  holdings: ZerodhaHoldingParsed[];
-}
+import type {
+  ZerodhaHoldingParsed,
+  ZerodhaParseResult,
+} from "@/types/zerodha-parser";
 
 function extractAsOfDate(rows: unknown[][]): string | null {
   for (let i = 0; i < Math.min(20, rows.length); i++) {

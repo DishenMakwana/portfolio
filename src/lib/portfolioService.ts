@@ -11,28 +11,12 @@ import {
 } from "../db/schema";
 import { eq, asc, desc, sql } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
-
-export interface HoldingDetails {
-  id: number;
-  schemeId: number;
-  memberId: number;
-  schemeName: string;
-  category: string;
-  schemeCodeApi: string | null;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments: string | null;
-  memberName: string;
-  memberPan: string | null;
-}
+import {
+  HoldingDetails,
+  ParsedHolding,
+  SipMandateRow,
+} from "@/types/portfolio";
+import { ParsedSipMandate, SaveSipMandatesResult } from "@/types/sips";
 
 /**
  * Subtract days from YYYY-MM-DD date string
@@ -66,25 +50,6 @@ export async function deleteReport(reportId: number): Promise<void> {
   await db.delete(reports).where(eq(reports.id, reportId));
   // 4. Rebuild all transactions to update snapshots diff ledger
   await rebuildAllTransactions();
-}
-
-export interface ParsedHolding {
-  memberName: string;
-  memberPan?: string | null;
-  schemeName: string;
-  category: string;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  dividend?: number | null;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments?: string | null;
 }
 
 /**
@@ -434,37 +399,14 @@ export async function updateSchemeCode(
 // SIP MANDATE FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface SipMandateRow {
-  id: number;
-  memberId: number;
-  memberName: string;
-  schemeId: number;
-  schemeName: string;
-  folioNo: string;
-  monthlyAmount: number;
-  monthlyHistory: Record<string, number>;
-  startMonth: string | null;
-  isActive: boolean;
-  uploadedAt: string;
-  sourceFile: string | null;
-}
-
 /**
  * Save or replace all SIP mandates from a parsed SIP upload.
  * Strategy: clear all existing records for the same sourceFile, then insert fresh.
  */
 export async function saveSipMandates(
-  sips: {
-    investorName: string;
-    schemeName: string;
-    folioNo: string;
-    monthlyAmount: number;
-    monthlyHistory: Record<string, number>;
-    startMonth: string;
-    isActive: boolean;
-  }[],
+  sips: ParsedSipMandate[],
   sourceFile: string
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<SaveSipMandatesResult> {
   const now = new Date().toISOString();
   let inserted = 0;
   let skipped = 0;

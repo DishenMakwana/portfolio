@@ -18,11 +18,8 @@ import {
 } from "lucide-react";
 import { uploadSipAction, clearSipMandatesAction } from "@/app/actions";
 import { formatCurrency } from "@/lib/formatters";
-import type { SipMandateRow } from "@/lib/portfolioService";
-
-interface SipsClientProps {
-  mandates: SipMandateRow[];
-}
+import type { SipMandateRow } from "@/types/portfolio";
+import type { SipsClientProps } from "@/types/sips";
 
 export default function SipsClient({ mandates }: SipsClientProps) {
   const router = useRouter();

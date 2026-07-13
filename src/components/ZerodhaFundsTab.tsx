@@ -4,29 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
-import type { ZerodhaHolding } from "./ZerodhaDashboard";
-
-type ZerodhaFundSortField =
-  | "symbol"
-  | "quantity"
-  | "averagePrice"
-  | "currentPrice"
-  | "investedValue"
-  | "currentValue"
-  | "unrealizedPnl"
-  | "unrealizedPnlPct"
-  | "xirr"
-  | "cagr"
-  | "holdingDays"
-  | "alpha";
-
-interface ZerodhaFundsTabProps {
-  funds: ZerodhaHolding[];
-  renderFundSortIcon: (field: ZerodhaFundSortField) => React.ReactNode;
-  toggleFundSort: (field: ZerodhaFundSortField) => void;
-  fundSortField: ZerodhaFundSortField;
-  fundSortOrder: "asc" | "desc";
-}
+import type { ZerodhaFundsTabProps } from "@/types/zerodha";
 
 export default function ZerodhaFundsTab({
   funds,

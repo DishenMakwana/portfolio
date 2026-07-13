@@ -31,12 +31,9 @@ import {
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
 import FundDetailsClient from "./FundDetailsClient";
+import { FundPageProps } from "@/types/fund-details";
 
 export const dynamic = "force-dynamic";
-
-interface FundPageProps {
-  params: Promise<{ id: string }>;
-}
 
 export default async function FundDetailsPage({ params }: FundPageProps) {
   const { id } = await params;
@@ -229,8 +226,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   const benchmarkCode = isMsfl
     ? "120716"
-    : getBenchmarkCodeForCategory(holding.category, holding.schemeName);
-  const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
+    : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
+  const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel
   const [fundTxs, fundDetails, benchDetails] = await Promise.all([
@@ -261,12 +258,19 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   ]);
 
   // 3. Format transactions for XIRR/Alpha calculation
-  const mappedTxs = fundTxs.map((tx) => ({
-    date: tx.date,
-    type: tx.type as "BUY" | "SELL",
-    amount: tx.amount,
-    units: tx.units,
-  }));
+  const mappedTxs = fundTxs.map(
+    (tx: {
+      date: string;
+      type: string;
+      amount: number;
+      units: number | null;
+    }) => ({
+      date: tx.date,
+      type: tx.type as "BUY" | "SELL",
+      amount: tx.amount,
+      units: tx.units ?? undefined,
+    })
+  );
 
   // 4. Calculate dynamic XIRR and Alpha
   let metrics = { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
@@ -347,7 +351,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             other: 0,
           },
         }
-      : getFactsheetMetadata(
+      : await getFactsheetMetadata(
           holding.category,
           formattedLaunchDate,
           holding.schemeName

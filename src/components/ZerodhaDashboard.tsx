@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
-
 import {
   Upload,
   Briefcase,
@@ -23,147 +22,24 @@ import {
   uploadZerodhaHoldingsAction,
   deleteZerodhaHoldingsAction,
 } from "@/app/zerodha/actions";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatCurrencyWithDecimals as formatPrice,
+  formatDate,
+} from "@/helpers/formatters";
+import type {
+  ZerodhaDashboardProps,
+  ZerodhaFundSortField,
+  ZerodhaStockSortField,
+} from "@/types/zerodha";
+import { ZERODHA_COLORS } from "@/types/zerodha";
 import ZerodhaMappingTab from "./ZerodhaMappingTab";
 import ZerodhaOverviewTab from "./ZerodhaOverviewTab";
 import ZerodhaStocksTab from "./ZerodhaStocksTab";
 import ZerodhaFundsTab from "./ZerodhaFundsTab";
 import ZerodhaSnapshotsTab from "./ZerodhaSnapshotsTab";
 import ZerodhaInsightsTab from "./ZerodhaInsightsTab";
-
-export interface ZerodhaHolding {
-  id: number;
-  reportId: number | null;
-  holdingType: string;
-  symbol: string;
-  isin: string;
-  sector: string | null;
-  instrumentType: string | null;
-  quantity: number;
-  averagePrice: number;
-  currentPrice: number;
-  investedValue: number;
-  currentValue: number;
-  unrealizedPnl: number;
-  unrealizedPnlPct: number;
-  xirr?: number | null;
-  cagr?: number | null;
-  holdingDays?: number | null;
-  benchmarkXirr?: number | null;
-  alpha?: number | null;
-  benchmarkCode?: string | null;
-  benchmarkName?: string | null;
-}
-
-export interface ZerodhaScheme {
-  id: number;
-  name: string;
-  category: string;
-  schemeCodeApi: string | null;
-}
-
-interface ZerodhaDashboardProps {
-  data: {
-    firstCasReportDate: string | null;
-    reportsList: {
-      id: number;
-      asOfDate: string;
-      filename: string;
-      uploadedAt: string;
-    }[];
-    selectedReport: {
-      id: number;
-      asOfDate: string;
-      filename: string;
-      uploadedAt: string;
-    } | null;
-    holdings: ZerodhaHolding[];
-    totals: {
-      invested: number;
-      currentValue: number;
-      gain: number;
-      absoluteReturn: number;
-      stocksInvested: number;
-      stocksCurrentValue: number;
-      stocksGain: number;
-      fundsInvested: number;
-      fundsCurrentValue: number;
-      fundsGain: number;
-      portfolioXirr: number;
-      benchmarkXirr: number;
-      alpha: number;
-    };
-    metricDeltas: {
-      previousDate: string | null;
-      portfolioXirr: number | null;
-      benchmarkXirr: number | null;
-      alpha: number | null;
-    };
-    sectorAllocation: { name: string; value: number }[];
-    categoryAllocation: { name: string; value: number }[];
-    assetSplit: { name: string; value: number }[];
-    timelineData: {
-      date: string;
-      equity: number;
-      mutualFunds: number;
-      nifty50: number;
-      equityReturn: number;
-      fundsReturn: number;
-      niftyReturn: number;
-    }[];
-    insights: {
-      reportDate: string | null;
-      benchmarkReturns: {
-        benchmarkCode: string;
-        benchmarkName: string;
-        endDate: string;
-        endNav: number;
-        return1Y: number | null;
-        cagr3Y: number | null;
-        cagr5Y: number | null;
-      };
-      weightedCagr: number | null;
-      stockWeight: number;
-      fundWeight: number;
-      concentration: {
-        topHoldingPct: number;
-        top3Pct: number;
-        top5Pct: number;
-      };
-      movers: {
-        topGainers: Array<{ symbol: string; returnPct: number; gain: number }>;
-        laggards: Array<{ symbol: string; returnPct: number; gain: number }>;
-      };
-      previousSnapshot: {
-        date: string | null;
-        investedChange: number;
-        currentValueChange: number;
-        gainChange: number;
-        returnPctChange: number;
-      };
-    };
-  };
-  allSchemes: ZerodhaScheme[];
-}
-
-function formatPrice(val: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(val);
-}
-
-export const COLORS = [
-  "#10b981",
-  "#8b5cf6",
-  "#3b82f6",
-  "#ec4899",
-  "#f59e0b",
-  "#14b8a6",
-  "#ef4444",
-];
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -173,14 +49,6 @@ const cardVariants: Variants = {
     transition: { delay: i * 0.07, duration: 0.4, ease: "easeOut" as const },
   }),
 };
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export default function ZerodhaDashboard({
   data,
@@ -212,19 +80,8 @@ export default function ZerodhaDashboard({
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Search & Filter state for Stocks Table
-  const [stockSortField, setStockSortField] = useState<
-    | "symbol"
-    | "quantity"
-    | "averagePrice"
-    | "currentPrice"
-    | "investedValue"
-    | "currentValue"
-    | "unrealizedPnl"
-    | "unrealizedPnlPct"
-    | "xirr"
-    | "cagr"
-    | "alpha"
-  >("currentValue");
+  const [stockSortField, setStockSortField] =
+    useState<ZerodhaStockSortField>("currentValue");
   const [stockSortOrder, setStockSortOrder] = useState<"asc" | "desc">("desc");
 
   const toggleStockSort = (field: typeof stockSortField) => {
@@ -249,20 +106,8 @@ export default function ZerodhaDashboard({
   };
 
   // Search & Filter state for Funds Table
-  const [fundSortField, setFundSortField] = useState<
-    | "symbol"
-    | "quantity"
-    | "averagePrice"
-    | "currentPrice"
-    | "investedValue"
-    | "currentValue"
-    | "unrealizedPnl"
-    | "unrealizedPnlPct"
-    | "xirr"
-    | "cagr"
-    | "holdingDays"
-    | "alpha"
-  >("currentValue");
+  const [fundSortField, setFundSortField] =
+    useState<ZerodhaFundSortField>("currentValue");
   const [fundSortOrder, setFundSortOrder] = useState<"asc" | "desc">("desc");
 
   const toggleFundSort = (field: typeof fundSortField) => {
@@ -696,7 +541,11 @@ export default function ZerodhaDashboard({
       {/* TAB CONTENT */}
       <div>
         {activeTab === "overview" && (
-          <ZerodhaOverviewTab data={data} holdings={holdings} COLORS={COLORS} />
+          <ZerodhaOverviewTab
+            data={data}
+            holdings={holdings}
+            COLORS={ZERODHA_COLORS}
+          />
         )}
 
         {activeTab === "insights" && <ZerodhaInsightsTab data={data} />}

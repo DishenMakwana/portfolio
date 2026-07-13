@@ -16,8 +16,9 @@ import {
   Line,
   PieChart,
   Pie,
-  Cell,
+  Sector,
 } from "recharts";
+import type { PieSectorDataItem } from "recharts";
 import {
   TrendingUp,
   TrendingDown,
@@ -35,106 +36,19 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
-
-const COLORS = [
-  "#10b981",
-  "#8b5cf6",
-  "#3b82f6",
-  "#ec4899",
-  "#f59e0b",
-  "#14b8a6",
-  "#ef4444",
-];
-const BG_CLASSES = [
-  "bg-teal-600",
-  "bg-violet-500",
-  "bg-blue-500",
-  "bg-pink-500",
-  "bg-amber-500",
-  "bg-emerald-500",
-  "bg-red-500",
-];
-const GRAD_CLASSES = [
-  "from-teal-600 to-blue-500",
-  "from-violet-500 to-pink-500",
-  "from-blue-500 to-amber-500",
-  "from-pink-500 to-emerald-500",
-  "from-amber-500 to-red-500",
-  "from-emerald-500 to-teal-600",
-  "from-red-500 to-violet-500",
-];
-
-interface OverviewTabProps {
-  totals: {
-    currentValue: number;
-    invested: number;
-    gain: number;
-    absoluteReturn: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-    cagr?: number | null;
-  };
-  metricDeltas: {
-    previousDate: string | null;
-    portfolioXirr: number | null;
-    benchmarkXirr: number | null;
-    alpha: number | null;
-    cagr: number | null;
-  };
-  timelineData: {
-    date: string;
-    invested: number;
-    value: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-  }[];
-  categoryAllocation: { name: string; value: number }[];
-  amcAllocation: { name: string; value: number }[];
-  capAllocation: { name: string; value: number }[];
-  memberSummaries: {
-    name: string;
-    pan: string | null;
-    invested: number;
-    currentValue: number;
-    gain: number;
-    cagr: number;
-    xirr: number;
-    alpha: number;
-    cagrDelta: number | null;
-    xirrDelta: number | null;
-    alphaDelta: number | null;
-  }[];
-  holdings: OverviewHolding[];
-}
-
-export interface OverviewHolding {
-  id: number;
-  schemeId: number | null;
-  memberId: number | null;
-  schemeName: string | null;
-  category: string | null;
-  schemeCodeApi: string | null;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  dividend?: number | null;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments: string | null;
-  memberName: string | null;
-  memberPan: string | null;
-  asOfDate?: string | null;
-  xirr?: number | null;
-  alpha?: number | null;
-}
+import {
+  formatCurrency,
+  formatPercent,
+  formatPointDelta,
+} from "@/helpers/formatters";
+import {
+  CustomTooltipItem,
+  CustomTooltipProps,
+  OVERVIEW_BG_CLASSES,
+  OVERVIEW_COLORS,
+  OVERVIEW_GRAD_CLASSES,
+  OverviewTabProps,
+} from "@/types/overview";
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -144,18 +58,6 @@ const cardVariants: Variants = {
     transition: { delay: i * 0.07, duration: 0.4, ease: "easeOut" as const },
   }),
 };
-
-interface CustomTooltipItem {
-  name: string;
-  value: number;
-  dataKey?: string;
-}
-
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: CustomTooltipItem[];
-  label?: string;
-}
 
 function CustomAreaTooltip({
   active,
@@ -211,10 +113,6 @@ function CustomXirrTooltip({
     );
   }
   return null;
-}
-
-function formatPointDelta(delta: number) {
-  return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
 }
 
 function DeltaBadge({
@@ -978,20 +876,24 @@ export default function OverviewTab({
                   paddingAngle={3}
                   dataKey="value"
                   strokeWidth={0}
-                >
-                  {categoryAllocation.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
+                  shape={(props: PieSectorDataItem & { index: number }) => (
+                    <Sector
+                      {...props}
+                      fill={
+                        OVERVIEW_COLORS[props.index % OVERVIEW_COLORS.length]
+                      }
                     />
-                  ))}
-                </Pie>
+                  )}
+                />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     return (
-                      <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 shadow-2xl text-xs font-bold text-slate-100">
-                        {formatCurrency(Number(payload[0].value))}
+                      <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 shadow-2xl text-xs font-bold text-slate-100 flex flex-col gap-0.5">
+                        <span className="text-slate-400 font-medium">
+                          {payload[0].name}
+                        </span>
+                        <span>{formatCurrency(Number(payload[0].value))}</span>
                       </div>
                     );
                   }}
@@ -1012,7 +914,7 @@ export default function OverviewTab({
                 >
                   <div className="flex items-center gap-2">
                     <span
-                      className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                      className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${OVERVIEW_BG_CLASSES[i % OVERVIEW_BG_CLASSES.length]}`}
                     />
                     <span className="text-slate-300 truncate max-w-[140px]">
                       {cat.name}
@@ -1066,7 +968,7 @@ export default function OverviewTab({
                   </div>
                   <div className="w-full bg-slate-800/80 h-3 rounded-full overflow-hidden">
                     <motion.div
-                      className={`h-full rounded-full bg-gradient-to-r ${GRAD_CLASSES[i % GRAD_CLASSES.length]}`}
+                      className={`h-full rounded-full bg-gradient-to-r ${OVERVIEW_GRAD_CLASSES[i % OVERVIEW_GRAD_CLASSES.length]}`}
                       initial={{ width: 0 }}
                       animate={{ width: `${pct}%` }}
                       transition={{
@@ -1325,7 +1227,7 @@ export default function OverviewTab({
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                            className={`w-2 h-2 rounded-full shrink-0 ${OVERVIEW_BG_CLASSES[i % OVERVIEW_BG_CLASSES.length]}`}
                           />
                           <span className="font-semibold text-slate-200">
                             {m.name}
@@ -1453,7 +1355,7 @@ export default function OverviewTab({
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`w-2 h-2 rounded-full shrink-0 ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                              className={`w-2 h-2 rounded-full shrink-0 ${OVERVIEW_BG_CLASSES[i % OVERVIEW_BG_CLASSES.length]}`}
                             />
                             <span className="font-semibold text-slate-200">
                               {cat.name}
@@ -1471,7 +1373,7 @@ export default function OverviewTab({
                         <td className="px-5 py-3 text-right w-24">
                           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                             <motion.div
-                              className={`h-full rounded-full ${BG_CLASSES[i % BG_CLASSES.length]}`}
+                              className={`h-full rounded-full ${OVERVIEW_BG_CLASSES[i % OVERVIEW_BG_CLASSES.length]}`}
                               initial={{ width: 0 }}
                               animate={{ width: `${share}%` }}
                               transition={{

@@ -1,17 +1,34 @@
-import { calculateXIRR, CashFlow } from "./xirr";
-import {
-  fetchMfDetails,
-  isSpecializedFundSchemeCode,
-  MfDetailsResponse,
-} from "./mfApi";
+import { calculateXIRR } from "./xirr";
 import { db } from "@/db/db";
 import {
   schemeNavCacheMeta,
   schemeNavHistory,
   benchmarkNavCacheMeta,
   benchmarkNavHistory,
+  benchmarkRules,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
+import {
+  PortfolioTransaction,
+  VolatilityMeasures,
+  FactsheetProfile,
+  AssetAllocation,
+  FactsheetChartPoint,
+} from "@/types/portfolio";
+import {
+  DEFAULT_BENCHMARK_CODE,
+  DEFAULT_BENCHMARK_NAME,
+  DEFAULT_BENCHMARK_FUND_NAME,
+  DEFAULT_CORPUS_CR,
+  DEFAULT_EXPENSE_RATIO,
+  DEFAULT_EXIT_LOAD,
+  DEFAULT_ASSET_ALLOCATION,
+} from "@/types/constants";
+import { NavPoint, ParsedNavPoint } from "@/types/alpha";
+import { CashFlow } from "@/types/xirr";
+import { MfDetailsResponse } from "@/types/mf-api";
+import { BenchmarkRuleDetails } from "@/types/benchmark";
+import { fetchMfDetails, isSpecializedFundSchemeCode } from "./mfApi";
 
 function normaliseSchemeCode(
   schemeCode: string | number | null | undefined
@@ -433,23 +450,6 @@ export function findClosestNav(
   return closestNav;
 }
 
-export interface PortfolioTransaction {
-  date: string; // YYYY-MM-DD
-  type: "BUY" | "SELL";
-  amount: number; // Positive absolute value
-  units: number;
-}
-
-interface NavPoint {
-  date: string;
-  nav: string;
-}
-
-interface ParsedNavPoint {
-  date: Date;
-  nav: number;
-}
-
 /**
  * Parses and sorts the raw NAV history data ascending by date.
  */
@@ -694,201 +694,134 @@ export async function calculateAlpha(
   };
 }
 
-export interface VolatilityMeasures {
-  alpha: number;
-  sharpe: number;
-  mean: number;
-  beta: number;
-  stdDev: number;
-  ytm: number;
-  modifiedDuration: number;
-  avgMaturity: number;
+export async function getBenchmarkRule(
+  category: string | null,
+  schemeName?: string | null
+): Promise<BenchmarkRuleDetails> {
+  try {
+    const rules = await db
+      .select()
+      .from(benchmarkRules)
+      .orderBy(desc(benchmarkRules.priority));
+
+    const cleanCat = (category || "").toLowerCase();
+    const cleanName = (schemeName || "").toLowerCase();
+
+    for (const r of rules) {
+      if (
+        r.schemeNamePattern &&
+        !cleanName.includes(r.schemeNamePattern.toLowerCase())
+      ) {
+        continue;
+      }
+      if (
+        r.categoryPattern &&
+        !cleanCat.includes(r.categoryPattern.toLowerCase())
+      ) {
+        continue;
+      }
+      return {
+        benchmarkCode: r.benchmarkCode,
+        benchmarkName: r.benchmarkName,
+        benchmarkFundName: r.benchmarkFundName,
+        corpusCr: r.corpusCr,
+        expenseRatio: r.expenseRatio,
+        exitLoad: r.exitLoad,
+        allocationEquity: r.allocationEquity,
+        allocationDebt: r.allocationDebt,
+        allocationGold: r.allocationGold,
+        allocationGlobalEquity: r.allocationGlobalEquity,
+        allocationOther: r.allocationOther,
+      };
+    }
+  } catch (e) {
+    console.error("Error reading benchmark_rules from DB:", e);
+  }
+
+  // Fallback default in case DB query fails or table is empty
+  return {
+    benchmarkCode: DEFAULT_BENCHMARK_CODE,
+    benchmarkName: DEFAULT_BENCHMARK_NAME,
+    benchmarkFundName: DEFAULT_BENCHMARK_FUND_NAME,
+    corpusCr: DEFAULT_CORPUS_CR,
+    expenseRatio: DEFAULT_EXPENSE_RATIO,
+    exitLoad: DEFAULT_EXIT_LOAD,
+    allocationEquity: DEFAULT_ASSET_ALLOCATION.equity,
+    allocationDebt: DEFAULT_ASSET_ALLOCATION.debt,
+    allocationGold: DEFAULT_ASSET_ALLOCATION.gold,
+    allocationGlobalEquity: DEFAULT_ASSET_ALLOCATION.globalEquity,
+    allocationOther: DEFAULT_ASSET_ALLOCATION.other,
+  };
 }
 
-export interface FactsheetProfile {
-  launchDate: string;
-  corpusCr: number;
-  expenseRatio: number;
-  exitLoad: string;
-  benchmarkName: string;
-}
-
-export interface AssetAllocation {
-  equity: number;
-  debt: number;
-  gold: number;
-  globalEquity: number;
-  other: number;
-}
-
-export function getFactsheetMetadata(
+export async function getFactsheetMetadata(
   category: string | null,
   launchDateStr: string | null,
   schemeName?: string | null
-): {
+): Promise<{
   profile: FactsheetProfile;
   allocation: AssetAllocation;
-} {
-  const cleanCat = (category || "").toLowerCase();
-  const cleanName = (schemeName || "").toLowerCase();
-
-  // Default values
-  let corpusCr = 12500;
-  let expenseRatio = 1.25;
-  let exitLoad = "1% for redemption within 365 days";
-  let benchmarkName = "NSE - Nifty 500 TRI";
-
-  if (
-    cleanName.includes("lic ulis") ||
-    cleanName.includes("uniform cover") ||
-    cleanName.includes("uti unit linked") ||
-    cleanName.includes("insurance plan")
-  ) {
-    benchmarkName = "CRISIL Hybrid 35+65 - Aggressive Index";
-  }
-
-  let allocation: AssetAllocation = {
-    equity: 98.2,
-    debt: 1.8,
-    gold: 0.0,
-    globalEquity: 0.0,
-    other: 0.0,
-  };
-
-  if (cleanCat.includes("flexi")) {
-    corpusCr = 26032;
-    expenseRatio = 1.37;
-    exitLoad = "1% for redemption within 90 days";
-    benchmarkName = "NSE - Nifty 500 TRI";
-    allocation = {
-      equity: 99.2,
-      debt: 0.8,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("small")) {
-    corpusCr = 18450;
-    expenseRatio = 1.58;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty Smallcap 250 TRI";
-    allocation = {
-      equity: 96.5,
-      debt: 3.5,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (
-    cleanCat.includes("large & mid") ||
-    cleanCat.includes("large and mid")
-  ) {
-    corpusCr = 21000;
-    expenseRatio = 1.25;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty LargeMidcap 250 TRI";
-    allocation = {
-      equity: 98.0,
-      debt: 2.0,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("mid")) {
-    corpusCr = 22100;
-    expenseRatio = 1.48;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty Midcap 150 TRI";
-    allocation = {
-      equity: 97.4,
-      debt: 2.6,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("multi cap") || cleanCat.includes("multicap")) {
-    corpusCr = 18000;
-    expenseRatio = 1.35;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty 500 Multicap 50:25:25 TRI";
-    allocation = {
-      equity: 98.5,
-      debt: 1.5,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("large")) {
-    corpusCr = 34500;
-    expenseRatio = 1.05;
-    exitLoad = "1% for redemption within 30 days";
-    benchmarkName = "Nifty 100 TRI";
-    allocation = {
-      equity: 98.9,
-      debt: 1.1,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (
-    cleanCat.includes("debt") ||
-    cleanCat.includes("liquid") ||
-    cleanCat.includes("income") ||
-    cleanCat.includes("gilt") ||
-    cleanCat.includes("bond")
-  ) {
-    corpusCr = 8400;
-    expenseRatio = 0.42;
-    exitLoad = cleanCat.includes("liquid")
-      ? "0.0070% to Nil depending on redemption day"
-      : "Nil";
-    benchmarkName = cleanCat.includes("ultra short")
-      ? "NIFTY Ultra Short Duration Debt Index A-I"
-      : "Nifty Short Duration Debt Index";
-    allocation = {
-      equity: 0.0,
-      debt: 98.4,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 1.6,
-    };
-  } else if (
-    cleanCat.includes("hybrid") ||
-    cleanCat.includes("balanced") ||
-    cleanCat.includes("alloc")
-  ) {
-    corpusCr = 14200;
-    expenseRatio = 1.18;
-    exitLoad = "1% for redemption within 365 days";
-    if (
-      cleanName.includes("lic ulis") ||
-      cleanName.includes("uniform cover") ||
-      cleanName.includes("uti unit linked") ||
-      cleanName.includes("insurance plan")
-    ) {
-      benchmarkName = "CRISIL Hybrid 35+65 - Aggressive Index";
-    } else {
-      benchmarkName = "Nifty 50 Hybrid Composite debt 65:35 Index";
-    }
-    allocation = {
-      equity: 65.5,
-      debt: 31.0,
-      gold: 3.5,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  }
+}> {
+  const rule = await getBenchmarkRule(category, schemeName);
 
   return {
     profile: {
       launchDate: launchDateStr || "27 Aug 1998",
-      corpusCr,
-      expenseRatio,
-      exitLoad,
-      benchmarkName,
+      corpusCr: rule.corpusCr ?? 12500,
+      expenseRatio: rule.expenseRatio ?? 1.25,
+      exitLoad: rule.exitLoad ?? "1% for redemption within 365 days",
+      benchmarkName: rule.benchmarkFundName,
     },
-    allocation,
+    allocation: {
+      equity: rule.allocationEquity,
+      debt: rule.allocationDebt,
+      gold: rule.allocationGold,
+      globalEquity: rule.allocationGlobalEquity,
+      other: rule.allocationOther,
+    },
   };
+}
+
+export async function getBenchmarkCodeForCategory(
+  category: string | null,
+  schemeName?: string | null
+): Promise<string> {
+  const rule = await getBenchmarkRule(category, schemeName);
+  return rule.benchmarkCode;
+}
+
+export async function getBenchmarkNameForCode(code: string): Promise<string> {
+  try {
+    const rule = await db
+      .select()
+      .from(benchmarkRules)
+      .where(eq(benchmarkRules.benchmarkCode, code))
+      .limit(1);
+    if (rule.length > 0) {
+      return rule[0].benchmarkName;
+    }
+  } catch (e) {
+    console.error("Error querying benchmarkName from DB:", e);
+  }
+  return "Nifty 500 Index";
+}
+
+export async function getBenchmarkFundNameForCode(
+  code: string
+): Promise<string> {
+  try {
+    const rule = await db
+      .select()
+      .from(benchmarkRules)
+      .where(eq(benchmarkRules.benchmarkCode, code))
+      .limit(1);
+    if (rule.length > 0) {
+      return rule[0].benchmarkFundName;
+    }
+  } catch (e) {
+    console.error("Error querying benchmarkFundName from DB:", e);
+  }
+  return "NSE - Nifty 500 TRI";
 }
 
 export function calculateVolatilityMeasures(
@@ -1014,16 +947,6 @@ export function calculateVolatilityMeasures(
   };
 }
 
-export interface FactsheetChartPoint {
-  date: string;
-  timestamp: number;
-  fundNav: number;
-  benchNav: number;
-  fundReturn: number;
-  benchReturn: number;
-  txs?: { type: string; amount: number }[];
-}
-
 export function generateFactsheetChartData(
   fundNavHistory: { date: string; nav: string }[],
   benchNavHistory: { date: string; nav: string }[],
@@ -1140,87 +1063,4 @@ export function generateFactsheetChartData(
   }
 
   return chartData;
-}
-
-export function getBenchmarkCodeForCategory(
-  category: string | null,
-  schemeName?: string | null
-): string {
-  const name = (schemeName || "").toLowerCase();
-  if (
-    name.includes("lic ulis") ||
-    name.includes("uniform cover") ||
-    name.includes("uti unit linked") ||
-    name.includes("insurance plan")
-  ) {
-    return "120261"; // CRISIL Hybrid 35+65 - Aggressive Index (LIC MF Aggressive Hybrid proxy)
-  }
-
-  const cat = (category || "").toLowerCase();
-  if (cat.includes("small")) {
-    return "147623"; // Nifty Smallcap 250
-  }
-  if (cat.includes("large & mid") || cat.includes("large and mid")) {
-    return "152156"; // NIFTY Large Midcap 250 TRI
-  }
-  if (cat.includes("mid")) {
-    return "147622"; // Nifty Midcap 150
-  }
-  if (cat.includes("multi cap") || cat.includes("multicap")) {
-    return "152778"; // Nifty 500 Multicap 50:25:25 TRI
-  }
-  if (cat.includes("large")) {
-    return "149868"; // Nifty 100 TRI
-  }
-  if (
-    cat.includes("hybrid") ||
-    cat.includes("balanced") ||
-    cat.includes("alloc")
-  ) {
-    return "120251"; // Nifty 50 Hybrid Composite debt 65:35 Index (proxy ICICI Pru Equity & Debt Fund Direct)
-  }
-  if (
-    cat.includes("debt") ||
-    cat.includes("liquid") ||
-    cat.includes("short") ||
-    cat.includes("duration") ||
-    cat.includes("gilt") ||
-    cat.includes("bond")
-  ) {
-    return "120197"; // ICICI Prudential Liquid Fund Direct Growth (proxy for Nifty Short/Ultra Short Duration indices)
-  }
-  return "147625"; // Default to Nifty 500 to match the UI factsheet default (NSE - Nifty 500 TRI)
-}
-
-export function getBenchmarkNameForCode(code: string): string {
-  if (code === "120261") return "CRISIL Hybrid 35+65 - Aggressive TRI";
-  if (code === "147623") return "Nifty Smallcap 250 Index";
-  if (code === "147622") return "Nifty Midcap 150 Index";
-  if (code === "120251") return "Nifty 50 Hybrid Composite debt 65:35 Index";
-  if (code === "120197") return "Nifty Short/Ultra Short Duration Debt Index";
-  if (code === "147625") return "Nifty 500 Index";
-  if (code === "152156") return "Nifty LargeMidcap 250 Index";
-  if (code === "152778") return "Nifty 500 Multicap 50:25:25 Index";
-  if (code === "149868") return "Nifty 100 Index";
-  if (code === "120716") return "Nifty 50 Index";
-  return "Nifty 50 Index";
-}
-
-export function getBenchmarkFundNameForCode(code: string): string {
-  if (code === "120261") return "LIC MF Aggressive Hybrid Fund Direct Growth";
-  if (code === "147623")
-    return "Motilal Oswal Nifty Smallcap 250 Index Fund Direct";
-  if (code === "147622")
-    return "Motilal Oswal Nifty Midcap 150 Index Fund Direct";
-  if (code === "120251")
-    return "ICICI Prudential Equity & Debt Fund Direct Growth";
-  if (code === "120197") return "ICICI Prudential Liquid Fund Direct Growth";
-  if (code === "147625") return "Motilal Oswal Nifty 500 Index Fund Direct";
-  if (code === "152156")
-    return "Zerodha Nifty LargeMidcap 250 Index Fund Direct";
-  if (code === "152778")
-    return "HDFC Nifty500 Multicap 50:25:25 Index Fund Direct";
-  if (code === "149868") return "HDFC Nifty 100 Index Fund Direct";
-  if (code === "120716") return "UTI Nifty 50 Index Fund Direct";
-  return "UTI Nifty 50 Index Fund Direct";
 }

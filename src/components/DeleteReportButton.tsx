@@ -4,13 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteReportAction } from "@/app/actions";
-
-interface DeleteReportButtonProps {
-  reportId: number;
-  dateLabel: string;
-  redirectTo?: string;
-  variant?: "default" | "icon";
-}
+import type { DeleteReportButtonProps } from "@/types/upload-tracker";
 
 export default function DeleteReportButton({
   reportId,

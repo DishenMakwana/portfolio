@@ -1,4 +1,4 @@
-import { MfDetailsResponse } from "./mfApi";
+import { MfDetailsResponse } from "@/types/mf-api";
 
 /**
  * Fetch stock price history from Yahoo Finance and format it like Mutual Fund NAV history.

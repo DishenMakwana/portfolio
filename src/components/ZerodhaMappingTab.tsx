@@ -19,17 +19,9 @@ import {
   autoMapAllZerodhaSchemesAction,
   updateZerodhaSchemeCategoryAction,
 } from "@/app/zerodha/actions";
-
-interface ZerodhaScheme {
-  id: number;
-  name: string;
-  category: string;
-  schemeCodeApi: string | null;
-}
-
-interface ZerodhaMappingTabProps {
-  allSchemes: ZerodhaScheme[];
-}
+import { ZerodhaScheme } from "@/types/zerodha";
+import { ZerodhaMappingTabProps } from "@/types/mapping";
+import { MfSearchResult } from "@/types/mf-api";
 
 const isStockScheme = (scheme: ZerodhaScheme) => {
   if (scheme.category.toLowerCase().includes("stock")) return true;
@@ -60,9 +52,9 @@ export default function ZerodhaMappingTab({
   const [mappingSchemeId, setMappingSchemeId] = useState<number | null>(null);
   const [mappingSchemeName, setMappingSchemeName] = useState("");
   const [apiSearchQuery, setApiSearchQuery] = useState("");
-  const [apiSearchResults, setApiSearchResults] = useState<
-    import("@/lib/mfApi").MfSearchResult[]
-  >([]);
+  const [apiSearchResults, setApiSearchResults] = useState<MfSearchResult[]>(
+    []
+  );
   const [isSearchingApi, setIsSearchingApi] = useState(false);
 
   // Auto-map state
@@ -437,27 +429,25 @@ export default function ZerodhaMappingTab({
                         Searching API...
                       </div>
                     ) : apiSearchResults.length > 0 ? (
-                      apiSearchResults.map(
-                        (res: import("@/lib/mfApi").MfSearchResult) => (
-                          <div
-                            key={res.schemeCode}
-                            onClick={() =>
-                              handleMapScheme(
-                                mappingSchemeId,
-                                String(res.schemeCode)
-                              )
-                            }
-                            className="flex items-center justify-between p-3 hover:bg-slate-900 cursor-pointer transition text-xs"
-                          >
-                            <div className="font-bold text-slate-300 flex-1 pr-4 leading-normal">
-                              {res.schemeName}
-                            </div>
-                            <div className="font-mono text-[10px] font-bold text-teal-400 shrink-0">
-                              {res.schemeCode}
-                            </div>
+                      apiSearchResults.map((res: MfSearchResult) => (
+                        <div
+                          key={res.schemeCode}
+                          onClick={() =>
+                            handleMapScheme(
+                              mappingSchemeId,
+                              String(res.schemeCode)
+                            )
+                          }
+                          className="flex items-center justify-between p-3 hover:bg-slate-900 cursor-pointer transition text-xs"
+                        >
+                          <div className="font-bold text-slate-300 flex-1 pr-4 leading-normal">
+                            {res.schemeName}
                           </div>
-                        )
-                      )
+                          <div className="font-mono text-[10px] font-bold text-teal-400 shrink-0">
+                            {res.schemeCode}
+                          </div>
+                        </div>
+                      ))
                     ) : (
                       <div className="py-10 text-center text-slate-500 text-xs">
                         {apiSearchQuery.trim().length < 3

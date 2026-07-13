@@ -12,6 +12,7 @@ import { db } from "@/db/db";
 import { zerodhaSchemes } from "@/db/schema";
 import { autoMapScheme } from "@/lib/mfApi";
 import { eq } from "drizzle-orm";
+import { ZerodhaAutoMapResult } from "@/types/zerodha";
 
 export async function uploadZerodhaHoldingsAction(
   formData: FormData
@@ -80,15 +81,6 @@ export async function getZerodhaDashboardAction(
       error instanceof Error ? error.message : "Failed to fetch dashboard data";
     throw new Error(errorMsg);
   }
-}
-
-export interface ZerodhaAutoMapResult {
-  schemeId: number;
-  schemeName: string;
-  status:
-    "mapped" | "low_confidence" | "not_found" | "already_mapped" | "api_error";
-  schemeCode: string | null;
-  confidence: number | null;
 }
 
 export async function updateZerodhaSchemeMappingAction(

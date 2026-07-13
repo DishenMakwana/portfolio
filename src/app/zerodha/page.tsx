@@ -5,11 +5,9 @@ import {
 import ZerodhaDashboard from "@/components/ZerodhaDashboard";
 import { Briefcase } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+import { PageProps } from "@/types/zerodha";
 
-interface PageProps {
-  searchParams: Promise<{ zerodhaReportId?: string }>;
-}
+export const dynamic = "force-dynamic";
 
 export default async function ZerodhaPage({ searchParams }: PageProps) {
   const params = await searchParams;

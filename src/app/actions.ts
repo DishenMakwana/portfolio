@@ -11,15 +11,18 @@ import {
   getSipMandates,
   saveSipMandates,
   clearSipMandates,
-  HoldingDetails,
   deleteReport,
 } from "@/lib/portfolioService";
 import {
   calculateAlpha,
-  PortfolioTransaction,
   getBenchmarkCodeForCategory,
   clearAllAlphaCaches,
 } from "@/lib/alpha";
+import {
+  PortfolioTransaction,
+  AutoMapResult,
+  DashboardData,
+} from "@/types/portfolio";
 import { clearAllZerodhaCaches } from "@/lib/zerodhaService";
 import { clearAllMsflCaches } from "@/lib/msflService";
 import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
@@ -32,6 +35,7 @@ import {
   memberReportCagrs,
 } from "@/db/schema";
 import { eq, lte, inArray } from "drizzle-orm";
+import { BullionRates, ChartDataPoint } from "@/types/bullion";
 
 /**
  * Upload and parse Excel report
@@ -136,16 +140,6 @@ export async function updateSchemeMappingAction(
       error instanceof Error ? error.message : "Failed to update mapping";
     return { success: false, error: errorMsg };
   }
-}
-
-export interface AutoMapResult {
-  schemeId: number;
-  schemeName: string;
-  status:
-    "mapped" | "low_confidence" | "not_found" | "already_mapped" | "api_error";
-  schemeCode: string | null;
-  confidence: number | null;
-  topMatches: { schemeCode: number; schemeName: string }[];
 }
 
 /**
@@ -263,62 +257,6 @@ export async function autoMapAllSchemesAction(
   }
 
   return { results, savedCount };
-}
-
-export interface ReportSummary {
-  id: number;
-  asOfDate: string;
-  uploadedAt: string;
-  filename: string;
-  cagr: number | null;
-}
-
-export interface DashboardData {
-  reportsList: ReportSummary[];
-  selectedReport: ReportSummary | null;
-  totals: {
-    invested: number;
-    currentValue: number;
-    gain: number;
-    absoluteReturn: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-    cagr?: number | null;
-  };
-  memberSummaries: {
-    name: string;
-    pan: string | null;
-    invested: number;
-    currentValue: number;
-    gain: number;
-    cagr: number;
-    xirr: number;
-    alpha: number;
-    cagrDelta: number | null;
-    xirrDelta: number | null;
-    alphaDelta: number | null;
-  }[];
-  holdings: (HoldingDetails & { xirr: number; alpha: number })[];
-  categoryAllocation: { name: string; value: number }[];
-  capAllocation: { name: string; value: number }[];
-  amcAllocation: { name: string; value: number }[];
-  metricDeltas: {
-    previousDate: string | null;
-    portfolioXirr: number | null;
-    benchmarkXirr: number | null;
-    alpha: number | null;
-    cagr: number | null;
-  };
-  timelineData: {
-    date: string;
-    invested: number;
-    value: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-    cagr: number;
-  }[];
 }
 
 /**
@@ -630,7 +568,7 @@ export async function getDashboardDataAction(
       let schemeAlpha = 0;
 
       if (schemeTxs.length >= 1) {
-        const benchmarkCode = getBenchmarkCodeForCategory(
+        const benchmarkCode = await getBenchmarkCodeForCategory(
           h.category,
           h.schemeName
         );
@@ -933,8 +871,8 @@ export async function clearSipMandatesAction(): Promise<{
 export async function refreshBullionDataAction(): Promise<{
   success: boolean;
   data?: {
-    rates: import("@/lib/bullionService").BullionRates;
-    chartData: import("@/lib/bullionService").ChartDataPoint[];
+    rates: BullionRates;
+    chartData: ChartDataPoint[];
     isThrottled?: boolean;
   };
   error?: string;

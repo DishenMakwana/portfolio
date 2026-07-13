@@ -21,13 +21,14 @@ import {
   ChevronDown,
   RefreshCw,
 } from "lucide-react";
-import { BullionRates, ChartDataPoint, CITIES } from "@/lib/bullionService";
 import { refreshBullionDataAction } from "@/app/actions";
-
-interface BullionClientProps {
-  initialRates: BullionRates;
-  initialChartData: ChartDataPoint[];
-}
+import {
+  BullionClientProps,
+  BullionRates,
+  ChartDataPoint,
+  CustomChartTooltipProps,
+} from "@/types/bullion";
+import { CITIES } from "@/lib/bullionService";
 
 export default function BullionClient({
   initialRates,
@@ -685,15 +686,6 @@ export default function BullionClient({
     if (selectedTab === "Gold") return ["24K", "22K", "18K"];
     if (selectedTab === "Silver") return ["999", "925", "800"];
     return ["PT950", "PT900", "PT850"];
-  }
-
-  interface CustomChartTooltipProps {
-    active?: boolean;
-    payload?: Array<{
-      name: string;
-      value: number;
-    }>;
-    label?: string;
   }
 
   // Custom Chart Tooltip

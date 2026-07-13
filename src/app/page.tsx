@@ -4,11 +4,9 @@ import OverviewTab from "@/components/OverviewTab";
 import HeaderClient from "@/components/HeaderClient";
 import { Upload } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+import { PageProps } from "@/types/overview";
 
-interface PageProps {
-  searchParams: Promise<{ reportId?: string }>;
-}
+export const dynamic = "force-dynamic";
 
 export default async function OverviewPage({ searchParams }: PageProps) {
   const params = await searchParams;

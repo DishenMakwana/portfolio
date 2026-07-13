@@ -11,62 +11,21 @@ import UploadTrackerControls from "@/components/UploadTrackerControls";
 import UploadedFilesList from "@/components/UploadedFilesList";
 import { getReports, getSchemes } from "@/lib/portfolioService";
 import Link from "next/link";
+import {
+  formatLocalDateStr as formatDate,
+  parseLocalDate,
+} from "@/helpers/formatters";
+import { UploadTrackerPageProps } from "@/types/upload-tracker";
+import {
+  toDateKey,
+  startOfMonth,
+  eachMonth,
+  eachDay,
+} from "@/helpers/dates";
 
 export const dynamic = "force-dynamic";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function parseLocalDate(date: string) {
-  return new Date(`${date}T00:00:00`);
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDate(date: string) {
-  return parseLocalDate(date).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, months: number) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-
-function eachMonth(start: Date, end: Date) {
-  const months = [];
-  let cursor = startOfMonth(start);
-  const last = startOfMonth(end);
-
-  while (cursor <= last) {
-    months.push(new Date(cursor));
-    cursor = addMonths(cursor, 1);
-  }
-
-  return months;
-}
-
-function eachDay(start: Date, end: Date) {
-  const days = [];
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    days.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return days;
-}
 
 function getCalendarDays(month: Date) {
   const firstDay = startOfMonth(month);
@@ -125,10 +84,6 @@ function getLastExpectedSnapshotDate(now: Date) {
   const yesterday = new Date(istDate);
   yesterday.setDate(yesterday.getDate() - 1);
   return yesterday;
-}
-
-interface UploadTrackerPageProps {
-  searchParams: Promise<{ reportId?: string; month?: string }>;
 }
 
 export default async function UploadTrackerPage({

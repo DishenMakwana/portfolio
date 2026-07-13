@@ -4,11 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, RefreshCw, AlertTriangle, X } from "lucide-react";
 import { uploadReportAction } from "@/app/actions";
-
-interface UploadTrackerControlsProps {
-  reportsList: { id: number; asOfDate: string }[];
-  selectedReport: { id: number; asOfDate: string } | null;
-}
+import type { UploadTrackerControlsProps } from "@/types/upload-tracker";
 
 export default function UploadTrackerControls({
   reportsList,

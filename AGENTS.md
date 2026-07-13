@@ -14,4 +14,7 @@ Whenever you modify or add any code files in this project, you MUST run verifica
 2. Maintain `"noUnusedLocals": true` and `"noUnusedParameters": true` enabled in `tsconfig.json`. Check for and remove any unused local variables, parameters, or imports.
 3. Define all static imports at the top level of files, not inside function code or loops.
 4. Define all global variables and module-level constants at the top level, not inside or between functions.
+5. All interface, type, and enum declarations must reside in the `src/types/` folder, organized by domain. Avoid inline object type declarations with more than 3 properties at function signatures or code levels. Create a custom type/interface in `src/types/` and import it instead.
+6. All formatters, date utilities, and common business logic helper functions must reside in the `src/helpers/` folder. Never define local formatting helpers (`fmtIN`, `pct2`, `formatDate`) inside page or component files. Group them in the helpers folder and import them.
+7. Do not use the deprecated `<Cell />` component for customizing chart elements in Recharts. Use the `shape` prop or `content` prop directly on parent chart components (e.g., `<Pie />`) to customize rendering.
 

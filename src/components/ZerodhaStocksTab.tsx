@@ -5,29 +5,7 @@ import { Search } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 import { useRouter } from "next/navigation";
 import { isUnlistedStock } from "@/lib/stockApi";
-import type { ZerodhaHolding } from "./ZerodhaDashboard";
-
-type ZerodhaStockSortField =
-  | "symbol"
-  | "quantity"
-  | "averagePrice"
-  | "currentPrice"
-  | "investedValue"
-  | "currentValue"
-  | "unrealizedPnl"
-  | "unrealizedPnlPct"
-  | "xirr"
-  | "cagr"
-  | "alpha";
-
-interface ZerodhaStocksTabProps {
-  stocks: ZerodhaHolding[];
-  renderStockSortIcon: (field: ZerodhaStockSortField) => React.ReactNode;
-  toggleStockSort: (field: ZerodhaStockSortField) => void;
-  stockSortField: ZerodhaStockSortField;
-  stockSortOrder: "asc" | "desc";
-  formatPrice: (v: number) => string;
-}
+import type { ZerodhaStocksTabProps } from "@/types/zerodha";
 
 export default function ZerodhaStocksTab({
   stocks,

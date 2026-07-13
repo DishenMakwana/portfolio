@@ -8,7 +8,11 @@ import {
   reports,
 } from "../db/schema";
 import { eq, desc, asc } from "drizzle-orm";
-import { ZerodhaHoldingParsed } from "./zerodhaParser";
+import {
+  ZerodhaDashboardData,
+  ZerodhaBenchmarkReturns,
+  ZerodhaInsightsData,
+} from "@/types/zerodha";
 import {
   getBenchmarkHistory,
   findClosestNav,
@@ -20,120 +24,13 @@ import {
   getBenchmarkFundNameForCode,
 } from "./alpha";
 import { fetchStockHistory } from "./stockApi";
-
 import {
   autoMapScheme,
   fetchMfDetails,
-  MfDetailsResponse,
   isSpecializedFundSchemeCode,
 } from "./mfApi";
-
-export interface ZerodhaDashboardData {
-  firstCasReportDate: string | null;
-  reportsList: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  }[];
-  selectedReport: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  } | null;
-  holdings: {
-    id: number;
-    reportId: number | null;
-    holdingType: string;
-    symbol: string;
-    isin: string;
-    sector: string | null;
-    instrumentType: string | null;
-    quantity: number;
-    averagePrice: number;
-    currentPrice: number;
-    investedValue: number;
-    currentValue: number;
-    unrealizedPnl: number;
-    unrealizedPnlPct: number;
-    xirr?: number | null;
-    cagr?: number | null;
-    holdingDays?: number | null;
-    benchmarkXirr?: number | null;
-    alpha?: number | null;
-    benchmarkCode?: string | null;
-    benchmarkName?: string | null;
-  }[];
-  totals: {
-    invested: number;
-    currentValue: number;
-    gain: number;
-    absoluteReturn: number;
-    stocksInvested: number;
-    stocksCurrentValue: number;
-    stocksGain: number;
-    fundsInvested: number;
-    fundsCurrentValue: number;
-    fundsGain: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-  };
-  metricDeltas: {
-    previousDate: string | null;
-    portfolioXirr: number | null;
-    benchmarkXirr: number | null;
-    alpha: number | null;
-  };
-  sectorAllocation: { name: string; value: number }[];
-  categoryAllocation: { name: string; value: number }[];
-  assetSplit: { name: string; value: number }[];
-  timelineData: {
-    date: string;
-    equity: number;
-    mutualFunds: number;
-    nifty50: number;
-    equityReturn: number;
-    fundsReturn: number;
-    niftyReturn: number;
-  }[];
-  insights: ZerodhaInsightsData;
-}
-
-export interface ZerodhaBenchmarkReturns {
-  benchmarkCode: string;
-  benchmarkName: string;
-  endDate: string;
-  endNav: number;
-  return1Y: number | null;
-  cagr3Y: number | null;
-  cagr5Y: number | null;
-}
-
-export interface ZerodhaInsightsData {
-  reportDate: string | null;
-  benchmarkReturns: ZerodhaBenchmarkReturns;
-  weightedCagr: number | null;
-  stockWeight: number;
-  fundWeight: number;
-  concentration: {
-    topHoldingPct: number;
-    top3Pct: number;
-    top5Pct: number;
-  };
-  movers: {
-    topGainers: Array<{ symbol: string; returnPct: number; gain: number }>;
-    laggards: Array<{ symbol: string; returnPct: number; gain: number }>;
-  };
-  previousSnapshot: {
-    date: string | null;
-    investedChange: number;
-    currentValueChange: number;
-    gainChange: number;
-    returnPctChange: number;
-  };
-}
+import { ZerodhaHoldingParsed } from "@/types/zerodha-parser";
+import { MfDetailsResponse } from "@/types/mf-api";
 
 function emptyZerodhaInsightsData(): ZerodhaInsightsData {
   return {
@@ -438,7 +335,7 @@ async function getZerodhaReportWeightedMetrics(
         scheme?.category ||
         h.instrumentType ||
         (h.holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
-      const benchmarkCode = getBenchmarkCodeForCategory(category);
+      const benchmarkCode = await getBenchmarkCodeForCategory(category);
 
       if (h.holdingType === "mutual_fund") {
         if (scheme && scheme.schemeCodeApi) {
@@ -581,8 +478,8 @@ export async function getZerodhaDashboardData(
         scheme?.category ||
         h.instrumentType ||
         (h.holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
-      const benchmarkCode = getBenchmarkCodeForCategory(category);
-      const benchmarkName = getBenchmarkFundNameForCode(benchmarkCode);
+      const benchmarkCode = await getBenchmarkCodeForCategory(category);
+      const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
 
       if (h.holdingType === "mutual_fund") {
         if (scheme && scheme.schemeCodeApi) {

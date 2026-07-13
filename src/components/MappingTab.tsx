@@ -20,20 +20,10 @@ import {
   searchMfApiAction,
   updateSchemeMappingAction,
   autoMapAllSchemesAction,
-  AutoMapResult,
 } from "@/app/actions";
-import type { MfSearchResult } from "@/lib/mfApi";
-
-interface Scheme {
-  id: number;
-  name: string;
-  category: string;
-  schemeCodeApi: string | null;
-}
-
-interface MappingTabProps {
-  allSchemes: Scheme[];
-}
+import { AutoMapResult } from "@/types/portfolio";
+import { MappingTabProps } from "@/types/mapping";
+import { MfSearchResult } from "@/types/mf-api";
 
 const STATUS_META: Record<
   AutoMapResult["status"],

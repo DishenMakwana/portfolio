@@ -4,7 +4,6 @@ import { useState, useMemo, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-
 import {
   Lightbulb,
   TrendingUp,
@@ -21,37 +20,13 @@ import {
   ChevronsUpDown,
   Layers,
 } from "lucide-react";
-import type { InsightsData } from "@/lib/insightsService";
-
-// ─── Formatters ────────────────────────────────────────────────────────────────
-
-function fmtInr(val: number): string {
-  if (val >= 1_00_00_000) return `₹${(val / 1_00_00_000).toFixed(2)}\u00A0Cr`;
-  if (val >= 1_00_000) return `₹${(val / 1_00_00_000).toFixed(2)}\u00A0L`;
-  return `₹${val.toLocaleString("en-IN")}`;
-}
-
-function fmtPct(val: number): string {
-  return `${val.toFixed(2)}%`;
-}
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-type Tab = "overview" | "funds" | "members" | "sip" | "actions" | "overlaps";
-type SortKey =
-  | "scheme"
-  | "category"
-  | "invested"
-  | "current"
-  | "gain"
-  | "absReturn"
-  | "avgCagr"
-  | "memberCount";
-
-interface SortState {
-  key: SortKey;
-  dir: "asc" | "desc";
-}
+import {
+  Tab,
+  SortKey,
+  SortState,
+  InsightsDashboardProps,
+} from "@/types/insights";
+import { formatInrCompact, formatPct } from "@/helpers/formatters";
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -539,13 +514,7 @@ const CAT_PALETTE = [
   "#818cf8", // indigo-light
 ];
 
-// ─── Main Component ────────────────────────────────────────────────────────────
-
-interface Props {
-  data: InsightsData;
-}
-
-export default function InsightsDashboard({ data }: Props) {
+export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -957,21 +926,21 @@ export default function InsightsDashboard({ data }: Props) {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                   label="Total Invested"
-                  value={fmtInr(data.totals.invested)}
+                  value={formatInrCompact(data.totals.invested)}
                   icon={IndianRupee}
                   accentColor="indigo"
                 />
                 <MetricCard
                   label="Current Value"
-                  value={fmtInr(data.totals.current)}
-                  sub={`+${fmtInr(data.totals.gain)} gain`}
+                  value={formatInrCompact(data.totals.current)}
+                  sub={`+${formatInrCompact(data.totals.gain)} gain`}
                   icon={TrendingUp}
                   accentColor="teal"
                 />
                 <MetricCard
                   label="Total Gain"
-                  value={fmtInr(data.totals.gain)}
-                  sub={`${fmtPct(data.totals.absReturn)} absolute`}
+                  value={formatInrCompact(data.totals.gain)}
+                  sub={`${formatPct(data.totals.absReturn)} absolute`}
                   icon={TrendingUp}
                   accentColor={data.totals.gain >= 0 ? "emerald" : "rose"}
                 />
@@ -1011,7 +980,7 @@ export default function InsightsDashboard({ data }: Props) {
                           </div>
                           <div className="flex items-center gap-3 ml-3 shrink-0">
                             <span className="text-slate-500 hidden sm:inline">
-                              {fmtInr(cat.current)}
+                              {formatInrCompact(cat.current)}
                             </span>
                             <span
                               className={`font-semibold text-xs ${
@@ -1160,7 +1129,7 @@ export default function InsightsDashboard({ data }: Props) {
                   </h2>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-extrabold text-slate-100">
-                      {fmtInr(data.totals.totalMonthlySip)}
+                      {formatInrCompact(data.totals.totalMonthlySip)}
                     </span>
                     <span className="text-slate-500 text-sm">/ month</span>
                   </div>
@@ -1190,7 +1159,7 @@ export default function InsightsDashboard({ data }: Props) {
                                 {memberSips.length} SIPs
                               </span>
                               <span className="font-semibold text-teal-300">
-                                {fmtInr(total)}
+                                {formatInrCompact(total)}
                               </span>
                             </div>
                           </div>
@@ -1310,13 +1279,13 @@ export default function InsightsDashboard({ data }: Props) {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-slate-400 font-mono text-xs">
-                                {fmtInr(s.invested)}
+                                {formatInrCompact(s.invested)}
                               </td>
                               <td className="px-4 py-3 text-slate-200 font-mono text-xs font-semibold">
-                                {fmtInr(s.current)}
+                                {formatInrCompact(s.current)}
                               </td>
                               <td className="px-4 py-3 text-emerald-400 font-mono text-xs font-semibold">
-                                {fmtInr(s.gain)}
+                                {formatInrCompact(s.gain)}
                               </td>
                               <td className="px-4 py-3 text-xs font-semibold text-slate-300">
                                 {s.absReturn.toFixed(1)}%
@@ -1410,7 +1379,9 @@ export default function InsightsDashboard({ data }: Props) {
                                                   Invested
                                                 </span>
                                                 <span className="font-mono text-slate-300">
-                                                  {fmtInr(hold.invested)}
+                                                  {formatInrCompact(
+                                                    hold.invested
+                                                  )}
                                                 </span>
                                               </div>
                                               <div>
@@ -1418,7 +1389,9 @@ export default function InsightsDashboard({ data }: Props) {
                                                   Current
                                                 </span>
                                                 <span className="font-mono text-slate-300 font-semibold">
-                                                  {fmtInr(hold.current)}
+                                                  {formatInrCompact(
+                                                    hold.current
+                                                  )}
                                                 </span>
                                               </div>
                                               <div>
@@ -1432,7 +1405,7 @@ export default function InsightsDashboard({ data }: Props) {
                                                       : "text-rose-400"
                                                   }`}
                                                 >
-                                                  {fmtInr(hold.gain)}
+                                                  {formatInrCompact(hold.gain)}
                                                 </span>
                                               </div>
                                             </div>
@@ -1593,7 +1566,7 @@ export default function InsightsDashboard({ data }: Props) {
 
                 <p className="text-xs text-slate-500">
                   Projection assumes 14% CAGR, {stepUpPct}% annual SIP step-up,
-                  starting from {fmtInr(baseSip)}/mo
+                  starting from {formatInrCompact(baseSip)}/mo
                 </p>
 
                 {/* Projection Table */}
@@ -1627,13 +1600,13 @@ export default function InsightsDashboard({ data }: Props) {
                             Year {row.year}
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-slate-200">
-                            {fmtInr(row.monthlySip)}
+                            {formatInrCompact(row.monthlySip)}
                           </td>
                           <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                            {fmtInr(row.monthlySip * 12)}
+                            {formatInrCompact(row.monthlySip * 12)}
                           </td>
                           <td className="px-4 py-3 font-bold text-teal-300">
-                            {fmtInr(row.corpus)}
+                            {formatInrCompact(row.corpus)}
                           </td>
                         </motion.tr>
                       ))}
@@ -1698,7 +1671,7 @@ export default function InsightsDashboard({ data }: Props) {
                       <p className="text-sm font-semibold text-slate-100 leading-snug">
                         You have{" "}
                         <span className="text-amber-400 font-bold">
-                          {fmtInr(reverseInsights.totalRegularVal)}
+                          {formatInrCompact(reverseInsights.totalRegularVal)}
                         </span>{" "}
                         locked in Regular Plans.
                       </p>
@@ -1706,7 +1679,8 @@ export default function InsightsDashboard({ data }: Props) {
                         Switching to commission-free Direct Plans can save you
                         approximately{" "}
                         <span className="text-emerald-400 font-bold">
-                          {fmtInr(reverseInsights.annualDrag)} every single year
+                          {formatInrCompact(reverseInsights.annualDrag)} every
+                          single year
                         </span>
                         . Over 10 years compounding, this drag costs{" "}
                         <span className="text-slate-300 font-semibold">
@@ -2032,7 +2006,7 @@ export default function InsightsDashboard({ data }: Props) {
                                       {s.holders.join(", ")}
                                     </td>
                                     <td className="py-3 px-4 text-right font-medium text-slate-300">
-                                      {fmtInr(s.totalValue)}
+                                      {formatInrCompact(s.totalValue)}
                                     </td>
                                     <td className="py-3 px-4 text-right text-xs text-slate-400">
                                       {formatHoldingDays(s.avgHoldingDays)}
@@ -2085,7 +2059,7 @@ export default function InsightsDashboard({ data }: Props) {
                                         {schemes.length} Funds
                                       </td>
                                       <td className="py-4 px-4 text-right text-teal-400 font-black text-sm">
-                                        {fmtInr(totalValueSum)}
+                                        {formatInrCompact(totalValueSum)}
                                       </td>
                                       <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
                                         {Math.round(

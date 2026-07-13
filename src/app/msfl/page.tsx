@@ -1,12 +1,9 @@
 import { getMsflDashboardData, getMsflSchemes } from "@/lib/msflService";
 import MsflDashboardClient from "@/components/MsflDashboardClient";
 import { Briefcase } from "lucide-react";
+import { PageProps } from "@/types/msfl";
 
 export const dynamic = "force-dynamic";
-
-interface PageProps {
-  searchParams: Promise<{ msflReportId?: string }>;
-}
 
 export default async function MsflPage({ searchParams }: PageProps) {
   const params = await searchParams;

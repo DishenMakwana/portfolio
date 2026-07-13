@@ -15,89 +15,13 @@ import {
   calculateCagr,
   calculateXirrFromNav,
 } from "./alpha";
-import type { MfDetailsResponse } from "./mfApi";
-
-export interface MsflBenchmarkReturns {
-  benchmarkCode: string;
-  benchmarkName: string;
-  endDate: string;
-  endNav: number;
-  return1Y: number | null;
-  cagr3Y: number | null;
-  cagr5Y: number | null;
-}
-
-export interface MsflInsightsData {
-  reportDate: string | null;
-  benchmarkReturns: MsflBenchmarkReturns;
-  weightedCagr: number | null;
-  movers: {
-    topGainers: Array<{ symbol: string; returnPct: number; gain: number }>;
-    laggards: Array<{ symbol: string; returnPct: number; gain: number }>;
-  };
-  previousSnapshot: {
-    date: string | null;
-    investedChange: number;
-    currentValueChange: number;
-    gainChange: number;
-    returnPctChange: number;
-  };
-}
-
-export interface MsflHoldingData {
-  id: number;
-  reportId: number | null;
-  symbol: string;
-  quantity: number;
-  averagePrice: number;
-  currentPrice: number;
-  investedValue: number;
-  currentValue: number;
-  unrealizedPnl: number;
-  unrealizedPnlPct: number;
-  xirr?: number | null;
-  cagr?: number | null;
-  alpha?: number | null;
-}
-
-export interface MsflDashboardData {
-  reportsList: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  }[];
-  selectedReport: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  } | null;
-  holdings: MsflHoldingData[];
-  totals: {
-    invested: number;
-    currentValue: number;
-    gain: number;
-    absoluteReturn: number;
-    portfolioXirr: number;
-    benchmarkXirr: number;
-    alpha: number;
-  };
-  metricDeltas: {
-    previousDate: string | null;
-    portfolioXirr: number | null;
-    benchmarkXirr: number | null;
-    alpha: number | null;
-  };
-  timelineData: {
-    date: string;
-    portfolioValue: number;
-    nifty50: number;
-    portfolioReturn: number;
-    niftyReturn: number;
-  }[];
-  insights: MsflInsightsData;
-}
+import {
+  MsflBenchmarkReturns,
+  MsflInsightsData,
+  MsflDashboardData,
+} from "@/types/msfl";
+import { MsflHoldingParsed } from "@/types/msfl-parser";
+import { MfDetailsResponse } from "@/types/mf-api";
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -252,7 +176,7 @@ async function getMsflSnapshotTotals(reportId: number) {
 export async function saveMsflHoldingsReport(
   asOfDate: string,
   filename: string,
-  holdings: import("@/lib/msflParser").MsflHoldingParsed[]
+  holdings: MsflHoldingParsed[]
 ): Promise<number> {
   const reportResult = await db
     .insert(msflReports)
@@ -349,12 +273,14 @@ async function triggerMsflStockNavCacheUpdate(ticker: string) {
           },
         });
 
-      const historyValues = data.data.map((p) => ({
-        schemeCode: ticker,
-        date: p.date,
-        nav: parseFloat(p.nav) || 0,
-        fetchedAt: new Date().toISOString(),
-      }));
+      const historyValues = data.data.map(
+        (p: { date: string; nav: string }) => ({
+          schemeCode: ticker,
+          date: p.date,
+          nav: parseFloat(p.nav) || 0,
+          fetchedAt: new Date().toISOString(),
+        })
+      );
 
       await db
         .delete(msflSchemeNavHistory)
@@ -446,12 +372,14 @@ export function getMsflStockHistoryForSymbol(
               },
             });
 
-          const historyValues = data.data.map((p) => ({
-            schemeCode: ticker,
-            date: p.date,
-            nav: parseFloat(p.nav) || 0,
-            fetchedAt: new Date().toISOString(),
-          }));
+          const historyValues = data.data.map(
+            (p: { date: string; nav: string }) => ({
+              schemeCode: ticker,
+              date: p.date,
+              nav: parseFloat(p.nav) || 0,
+              fetchedAt: new Date().toISOString(),
+            })
+          );
 
           await db
             .delete(msflSchemeNavHistory)
