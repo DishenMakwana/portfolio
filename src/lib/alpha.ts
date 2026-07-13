@@ -779,6 +779,21 @@ export function getFactsheetMetadata(
       globalEquity: 0.0,
       other: 0.0,
     };
+  } else if (
+    cleanCat.includes("large & mid") ||
+    cleanCat.includes("large and mid")
+  ) {
+    corpusCr = 21000;
+    expenseRatio = 1.25;
+    exitLoad = "1% for redemption within 365 days";
+    benchmarkName = "Nifty LargeMidcap 250 TRI";
+    allocation = {
+      equity: 98.0,
+      debt: 2.0,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
   } else if (cleanCat.includes("mid")) {
     corpusCr = 22100;
     expenseRatio = 1.48;
@@ -791,11 +806,23 @@ export function getFactsheetMetadata(
       globalEquity: 0.0,
       other: 0.0,
     };
-  } else if (cleanCat.includes("large") || cleanCat.includes("index")) {
+  } else if (cleanCat.includes("multi cap") || cleanCat.includes("multicap")) {
+    corpusCr = 18000;
+    expenseRatio = 1.35;
+    exitLoad = "1% for redemption within 365 days";
+    benchmarkName = "Nifty 500 Multicap 50:25:25 TRI";
+    allocation = {
+      equity: 98.5,
+      debt: 1.5,
+      gold: 0.0,
+      globalEquity: 0.0,
+      other: 0.0,
+    };
+  } else if (cleanCat.includes("large")) {
     corpusCr = 34500;
     expenseRatio = 1.05;
     exitLoad = "1% for redemption within 30 days";
-    benchmarkName = "Nifty 50 TRI";
+    benchmarkName = "Nifty 100 TRI";
     allocation = {
       equity: 98.9,
       debt: 1.1,
