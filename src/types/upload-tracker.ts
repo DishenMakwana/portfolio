@@ -36,3 +36,5 @@ export interface UploadedFilesListProps {
 export interface UploadTrackerPageProps {
   searchParams: Promise<{ reportId?: string; month?: string }>;
 }
+
+export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

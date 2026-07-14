@@ -91,6 +91,8 @@ export async function saveZerodhaHoldingsReport(
     .returning();
 
   // 3. Register mutual fund schemes and stocks in zerodhaSchemes if they don't exist
+  const schemeMap = new Map<string, number>();
+
   if (holdings.length > 0) {
     for (const h of holdings) {
       const schemeName = h.symbol;
@@ -101,12 +103,20 @@ export async function saveZerodhaHoldingsReport(
       if (!scheme) {
         if (h.holdingType === "mutual_fund") {
           const apiMapping = await autoMapScheme(schemeName);
-          await db.insert(zerodhaSchemes).values({
-            name: schemeName,
-            category: h.instrumentType || "Mutual Fund",
-            schemeCodeApi: apiMapping ? apiMapping.schemeCode : null,
-            mappedAt: apiMapping ? new Date().toISOString() : null,
-          });
+          const [inserted] = await db
+            .insert(zerodhaSchemes)
+            .values({
+              name: schemeName,
+              category: h.instrumentType || "Mutual Fund",
+              isin: h.isin,
+              holdingType: h.holdingType,
+              sector: h.sector,
+              instrumentType: h.instrumentType,
+              schemeCodeApi: apiMapping ? apiMapping.schemeCode : null,
+              mappedAt: apiMapping ? new Date().toISOString() : null,
+            })
+            .returning();
+          scheme = inserted;
         } else {
           // For stock, default to symbol.NS, except map known edge cases
           let ticker = `${h.symbol}.NS`;
@@ -114,33 +124,58 @@ export async function saveZerodhaHoldingsReport(
           else if (h.symbol === "TMCV") ticker = "TMCV.NS";
           else if (h.symbol === "TATACAP") ticker = "TATACAP.NS";
 
-          await db.insert(zerodhaSchemes).values({
-            name: schemeName,
-            category: "Equity Stock",
-            schemeCodeApi: ticker,
-            mappedAt: new Date().toISOString(),
-          });
+          const [inserted] = await db
+            .insert(zerodhaSchemes)
+            .values({
+              name: schemeName,
+              category: "Equity Stock",
+              isin: h.isin,
+              holdingType: h.holdingType,
+              sector: h.sector,
+              instrumentType: h.instrumentType,
+              schemeCodeApi: ticker,
+              mappedAt: new Date().toISOString(),
+            })
+            .returning();
+          scheme = inserted;
         }
+      } else {
+        // If it exists, make sure the static fields are updated in case they were null
+        await db
+          .update(zerodhaSchemes)
+          .set({
+            isin: scheme.isin || h.isin,
+            holdingType: scheme.holdingType || h.holdingType,
+            sector: scheme.sector || h.sector,
+            instrumentType: scheme.instrumentType || h.instrumentType,
+          })
+          .where(eq(zerodhaSchemes.id, scheme.id));
+      }
+
+      if (scheme) {
+        schemeMap.set(schemeName, scheme.id);
       }
     }
   }
 
   await db.insert(zerodhaHoldings).values(
-    holdings.map((h) => ({
-      reportId: newReport.id,
-      holdingType: h.holdingType,
-      symbol: h.symbol,
-      isin: h.isin,
-      sector: h.sector,
-      instrumentType: h.instrumentType,
-      quantity: h.quantity,
-      averagePrice: h.averagePrice,
-      currentPrice: h.currentPrice,
-      investedValue: h.investedValue,
-      currentValue: h.currentValue,
-      unrealizedPnl: h.unrealizedPnl,
-      unrealizedPnlPct: h.unrealizedPnlPct,
-    }))
+    holdings.map((h) => {
+      const schemeId = schemeMap.get(h.symbol);
+      if (!schemeId) {
+        throw new Error(`Scheme ID not found for symbol ${h.symbol}`);
+      }
+      return {
+        reportId: newReport.id,
+        schemeId,
+        quantity: h.quantity,
+        averagePrice: h.averagePrice,
+        currentPrice: h.currentPrice,
+        investedValue: h.investedValue,
+        currentValue: h.currentValue,
+        unrealizedPnl: h.unrealizedPnl,
+        unrealizedPnlPct: h.unrealizedPnlPct,
+      };
+    })
   );
 
   return newReport.id;
@@ -324,8 +359,25 @@ async function getZerodhaReportWeightedMetrics(
   }[]
 ): Promise<{ portfolioXirr: number; benchmarkXirr: number; alpha: number }> {
   const rawHoldings = await db
-    .select()
+    .select({
+      id: zerodhaHoldings.id,
+      reportId: zerodhaHoldings.reportId,
+      schemeId: zerodhaHoldings.schemeId,
+      quantity: zerodhaHoldings.quantity,
+      averagePrice: zerodhaHoldings.averagePrice,
+      currentPrice: zerodhaHoldings.currentPrice,
+      investedValue: zerodhaHoldings.investedValue,
+      currentValue: zerodhaHoldings.currentValue,
+      unrealizedPnl: zerodhaHoldings.unrealizedPnl,
+      unrealizedPnlPct: zerodhaHoldings.unrealizedPnlPct,
+      symbol: zerodhaSchemes.name,
+      holdingType: zerodhaSchemes.holdingType,
+      isin: zerodhaSchemes.isin,
+      sector: zerodhaSchemes.sector,
+      instrumentType: zerodhaSchemes.instrumentType,
+    })
     .from(zerodhaHoldings)
+    .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
     .where(eq(zerodhaHoldings.reportId, reportId));
 
   const enrichedHoldings = await Promise.all(
@@ -465,23 +517,45 @@ export async function getZerodhaDashboardData(
     : reportsList[0];
 
   const rawHoldings = await db
-    .select()
+    .select({
+      id: zerodhaHoldings.id,
+      reportId: zerodhaHoldings.reportId,
+      schemeId: zerodhaHoldings.schemeId,
+      quantity: zerodhaHoldings.quantity,
+      averagePrice: zerodhaHoldings.averagePrice,
+      currentPrice: zerodhaHoldings.currentPrice,
+      investedValue: zerodhaHoldings.investedValue,
+      currentValue: zerodhaHoldings.currentValue,
+      unrealizedPnl: zerodhaHoldings.unrealizedPnl,
+      unrealizedPnlPct: zerodhaHoldings.unrealizedPnlPct,
+      symbol: zerodhaSchemes.name,
+      holdingType: zerodhaSchemes.holdingType,
+      isin: zerodhaSchemes.isin,
+      sector: zerodhaSchemes.sector,
+      instrumentType: zerodhaSchemes.instrumentType,
+    })
     .from(zerodhaHoldings)
+    .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
     .where(eq(zerodhaHoldings.reportId, selectedReport.id));
 
   const schemesList = await db.select().from(zerodhaSchemes);
 
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
-      const scheme = schemesList.find((s) => s.name === h.symbol);
+      const symbol = h.symbol || "";
+      const holdingType = h.holdingType || "";
+      const isin = h.isin || "";
+      const sector = h.sector || "";
+
+      const scheme = schemesList.find((s) => s.name === symbol);
       const category =
         scheme?.category ||
         h.instrumentType ||
-        (h.holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
+        (holdingType === "equity" ? "Equity Stock" : "Mutual Fund");
       const benchmarkCode = await getBenchmarkCodeForCategory(category);
       const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
 
-      if (h.holdingType === "mutual_fund") {
+      if (holdingType === "mutual_fund") {
         if (scheme && scheme.schemeCodeApi) {
           const [fundDetails, benchDetails] = await Promise.all([
             getZerodhaSchemeHistoryForDbCode(scheme.schemeCodeApi),
@@ -497,6 +571,10 @@ export async function getZerodhaDashboardData(
             );
             return {
               ...h,
+              symbol,
+              holdingType,
+              isin,
+              sector,
               instrumentType: category,
               xirr: metrics.xirr,
               cagr: metrics.cagr,
@@ -508,8 +586,8 @@ export async function getZerodhaDashboardData(
             };
           }
         }
-      } else if (h.holdingType === "equity") {
-        const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
+      } else if (holdingType === "equity") {
+        const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
         const [stockDetails, benchDetails] = await Promise.all([
           getZerodhaStockHistoryForSymbol(ticker),
           getBenchmarkHistory(benchmarkCode),
@@ -524,6 +602,10 @@ export async function getZerodhaDashboardData(
           );
           return {
             ...h,
+            symbol,
+            holdingType,
+            isin,
+            sector,
             instrumentType: category,
             xirr: metrics.xirr,
             cagr: metrics.cagr,
@@ -537,10 +619,14 @@ export async function getZerodhaDashboardData(
       }
       return {
         ...h,
+        symbol,
+        holdingType,
+        isin,
+        sector,
         instrumentType: category,
         xirr: null,
         cagr: null,
-        holdingDays: null,
+        holdingDays: 0,
         benchmarkXirr: null,
         alpha: null,
         benchmarkCode,
@@ -612,8 +698,14 @@ export async function getZerodhaDashboardData(
 
   for (const r of chronologicalReports) {
     const snapHoldings = await db
-      .select()
+      .select({
+        id: zerodhaHoldings.id,
+        investedValue: zerodhaHoldings.investedValue,
+        currentValue: zerodhaHoldings.currentValue,
+        holdingType: zerodhaSchemes.holdingType,
+      })
       .from(zerodhaHoldings)
+      .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
       .where(eq(zerodhaHoldings.reportId, r.id));
 
     let snapStocksInvested = 0;
@@ -971,11 +1063,32 @@ export function getZerodhaSchemeHistoryForDbCode(
           }
         }
 
-        // If not fresh, trigger background SWR fetch
+        // If not fresh, trigger SWR fetch
         if (!isFresh) {
-          triggerZerodhaNavCacheUpdate(schemeCode, latestDateStr).catch((e) =>
-            console.error("[SWR BACKGROUND ERROR]", e)
-          );
+          try {
+            await triggerZerodhaNavCacheUpdate(schemeCode, latestDateStr);
+            const updatedHistory =
+              await db.query.zerodhaSchemeNavHistory.findMany({
+                where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+              });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: cachedMeta.fundHouse,
+                  scheme_type: cachedMeta.schemeType,
+                  scheme_category: cachedMeta.schemeCategory,
+                  scheme_code: parseInt(cachedMeta.schemeCode),
+                  scheme_name: cachedMeta.schemeName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC ZERODHA CACHE UPDATE ERROR]", e);
+          }
         }
 
         if (history.length > 0) {
@@ -1103,47 +1216,83 @@ export function clearAllZerodhaCaches() {
   zerodhaStockHistoryCache.clear();
 }
 
+async function saveZerodhaStockCacheAndMapping(
+  ticker: string,
+  data: MfDetailsResponse
+) {
+  const resolvedTicker = data.resolvedTicker || ticker;
+
+  // 1. Update the scheme mapping in database if the resolved ticker is different (e.g. from .BO)
+  if (resolvedTicker !== ticker) {
+    console.log(
+      `[BSE/NSE Mapping] Updating Zerodha scheme mapping for name/ticker ${ticker} to resolved: ${resolvedTicker}`
+    );
+    const baseSymbol = ticker.includes(".") ? ticker.split(".")[0] : ticker;
+    await db
+      .update(zerodhaSchemes)
+      .set({
+        schemeCodeApi: resolvedTicker,
+        mappedAt: new Date().toISOString(),
+      })
+      .where(eq(zerodhaSchemes.schemeCodeApi, ticker));
+
+    await db
+      .update(zerodhaSchemes)
+      .set({
+        schemeCodeApi: resolvedTicker,
+        mappedAt: new Date().toISOString(),
+      })
+      .where(eq(zerodhaSchemes.name, baseSymbol));
+  }
+
+  // 2. Save the cache for the resolved ticker and the original ticker
+  const tickersToCache = Array.from(new Set([ticker, resolvedTicker]));
+  for (const t of tickersToCache) {
+    await db
+      .insert(zerodhaSchemeNavCacheMeta)
+      .values({
+        schemeCode: t,
+        fundHouse: "Equity",
+        schemeType: "Equity",
+        schemeCategory: "Stock",
+        schemeName: t,
+        lastFetchedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: zerodhaSchemeNavCacheMeta.schemeCode,
+        set: {
+          fundHouse: "Equity",
+          schemeType: "Equity",
+          schemeCategory: "Stock",
+          schemeName: t,
+          lastFetchedAt: new Date().toISOString(),
+        },
+      });
+
+    const historyValues = data.data.map((p) => ({
+      schemeCode: t,
+      date: p.date,
+      nav: parseFloat(p.nav) || 0,
+      fetchedAt: new Date().toISOString(),
+    }));
+
+    await db
+      .delete(zerodhaSchemeNavHistory)
+      .where(eq(zerodhaSchemeNavHistory.schemeCode, t));
+
+    const chunkSize = 100;
+    for (let i = 0; i < historyValues.length; i += chunkSize) {
+      const chunk = historyValues.slice(i, i + chunkSize);
+      await db.insert(zerodhaSchemeNavHistory).values(chunk);
+    }
+  }
+}
+
 async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
   try {
     const data = await fetchStockHistory(ticker);
     if (data && data.meta && data.data && data.data.length > 0) {
-      await db
-        .insert(zerodhaSchemeNavCacheMeta)
-        .values({
-          schemeCode: ticker,
-          fundHouse: "Equity",
-          schemeType: "Equity",
-          schemeCategory: "Stock",
-          schemeName: ticker,
-          lastFetchedAt: new Date().toISOString(),
-        })
-        .onConflictDoUpdate({
-          target: zerodhaSchemeNavCacheMeta.schemeCode,
-          set: {
-            fundHouse: "Equity",
-            schemeType: "Equity",
-            schemeCategory: "Stock",
-            schemeName: ticker,
-            lastFetchedAt: new Date().toISOString(),
-          },
-        });
-
-      const historyValues = data.data.map((p) => ({
-        schemeCode: ticker,
-        date: p.date,
-        nav: parseFloat(p.nav) || 0,
-        fetchedAt: new Date().toISOString(),
-      }));
-
-      await db
-        .delete(zerodhaSchemeNavHistory)
-        .where(eq(zerodhaSchemeNavHistory.schemeCode, ticker));
-
-      const chunkSize = 100;
-      for (let i = 0; i < historyValues.length; i += chunkSize) {
-        const chunk = historyValues.slice(i, i + chunkSize);
-        await db.insert(zerodhaSchemeNavHistory).values(chunk);
-      }
+      await saveZerodhaStockCacheAndMapping(ticker, data);
     }
   } catch (err) {
     console.error(`Failed background cache update for stock ${ticker}:`, err);
@@ -1172,9 +1321,30 @@ export function getZerodhaStockHistoryForSymbol(
 
       if (cachedMeta) {
         if (!isFresh) {
-          triggerZerodhaStockNavCacheUpdate(ticker).catch((e) =>
-            console.error("[SWR BACKGROUND STOCK ERROR]", e)
-          );
+          try {
+            await triggerZerodhaStockNavCacheUpdate(ticker);
+            const updatedHistory =
+              await db.query.zerodhaSchemeNavHistory.findMany({
+                where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
+              });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: cachedMeta.fundHouse,
+                  scheme_type: cachedMeta.schemeType,
+                  scheme_category: cachedMeta.schemeCategory,
+                  scheme_code: 0,
+                  scheme_name: cachedMeta.schemeName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC ZERODHA STOCK CACHE UPDATE ERROR]", e);
+          }
         }
 
         const history = await db.query.zerodhaSchemeNavHistory.findMany({
@@ -1202,44 +1372,7 @@ export function getZerodhaStockHistoryForSymbol(
       const data = await fetchStockHistory(ticker);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
-          await db
-            .insert(zerodhaSchemeNavCacheMeta)
-            .values({
-              schemeCode: ticker,
-              fundHouse: "Equity",
-              schemeType: "Equity",
-              schemeCategory: "Stock",
-              schemeName: ticker,
-              lastFetchedAt: new Date().toISOString(),
-            })
-            .onConflictDoUpdate({
-              target: zerodhaSchemeNavCacheMeta.schemeCode,
-              set: {
-                fundHouse: "Equity",
-                schemeType: "Equity",
-                schemeCategory: "Stock",
-                schemeName: ticker,
-                lastFetchedAt: new Date().toISOString(),
-              },
-            });
-
-          const historyValues = data.data.map((p) => ({
-            schemeCode: ticker,
-            date: p.date,
-            nav: parseFloat(p.nav) || 0,
-            fetchedAt: new Date().toISOString(),
-          }));
-
-          await db
-            .delete(zerodhaSchemeNavHistory)
-            .where(eq(zerodhaSchemeNavHistory.schemeCode, ticker));
-
-          const chunkSize = 100;
-          for (let i = 0; i < historyValues.length; i += chunkSize) {
-            const chunk = historyValues.slice(i, i + chunkSize);
-            await db.insert(zerodhaSchemeNavHistory).values(chunk);
-          }
-
+          await saveZerodhaStockCacheAndMapping(ticker, data);
           return data;
         } catch (dbErr) {
           console.error(

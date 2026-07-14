@@ -1,3 +1,4 @@
+import axios from "axios";
 import type {
   BullionCache,
   BullionRates,
@@ -163,19 +164,15 @@ export async function getBullionData(forceRefresh = false): Promise<{
 
   try {
     // 1. Fetch current rates from CoinGecko
-    const cgRes = await fetch(
+    const cgRes = await axios.get(
       "https://api.coingecko.com/api/v3/simple/price?ids=pax-gold,kinesis-silver&vs_currencies=inr",
       {
         headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(3000),
+        timeout: 3000,
       }
     );
 
-    if (!cgRes.ok) {
-      throw new Error(`CoinGecko status: ${cgRes.status}`);
-    }
-
-    const priceData = await cgRes.json();
+    const priceData = cgRes.data;
     const goldOunceINR = priceData["pax-gold"]?.inr;
     const silverOunceINR = priceData["kinesis-silver"]?.inr;
 
@@ -184,23 +181,27 @@ export async function getBullionData(forceRefresh = false): Promise<{
     }
 
     // 2. Fetch 1-year historical rates (days=365)
-    const goldHistRes = await fetch(
-      "https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=inr&days=365&interval=daily",
-      { signal: AbortSignal.timeout(4000) }
-    );
-    const silverHistRes = await fetch(
-      "https://api.coingecko.com/api/v3/coins/kinesis-silver/market_chart?vs_currency=inr&days=365&interval=daily",
-      { signal: AbortSignal.timeout(4000) }
-    );
-
     let goldHistory: [number, number][] = [];
     let silverHistory: [number, number][] = [];
 
-    if (goldHistRes.ok && silverHistRes.ok) {
-      const gHist = await goldHistRes.json();
-      const sHist = await silverHistRes.json();
-      goldHistory = gHist.prices || [];
-      silverHistory = sHist.prices || [];
+    try {
+      const [goldHistRes, silverHistRes] = await Promise.all([
+        axios.get(
+          "https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=inr&days=365&interval=daily",
+          { timeout: 4000 }
+        ),
+        axios.get(
+          "https://api.coingecko.com/api/v3/coins/kinesis-silver/market_chart?vs_currency=inr&days=365&interval=daily",
+          { timeout: 4000 }
+        ),
+      ]);
+      goldHistory = goldHistRes.data.prices || [];
+      silverHistory = silverHistRes.data.prices || [];
+    } catch (e) {
+      console.warn(
+        "Failed to fetch historical rates from CoinGecko, using empty history:",
+        e
+      );
     }
 
     // 3. Process current rates

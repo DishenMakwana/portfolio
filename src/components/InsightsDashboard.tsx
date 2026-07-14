@@ -20,11 +20,17 @@ import {
   ChevronsUpDown,
   Layers,
 } from "lucide-react";
-import {
+import type {
   Tab,
   SortKey,
   SortState,
   InsightsDashboardProps,
+  CategoryOverlap,
+  DonutSlice,
+  HoveredMemberCagrPoint,
+  MemberCagrPoint,
+  MetricCardProps,
+  SubCategoryGroupItem,
 } from "@/types/insights";
 import { formatInrCompact, formatPct } from "@/helpers/formatters";
 
@@ -36,13 +42,7 @@ function MetricCard({
   sub,
   icon: Icon,
   accentColor = "indigo",
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ElementType;
-  accentColor?: "indigo" | "teal" | "emerald" | "rose" | "amber";
-}) {
+}: MetricCardProps) {
   const styles = {
     indigo: {
       border: "border-indigo-500/20",
@@ -153,16 +153,8 @@ function CagrBar({ cagr, maxCagr }: { cagr: number; maxCagr: number }) {
 
 // ─── Donut Chart ────────────────────────────────────────────────────────────────
 
-function DonutChart({
-  slices,
-}: {
-  slices: Array<{ label: string; value: number; color: string }>;
-}) {
-  const [hoveredSlice, setHoveredSlice] = useState<{
-    label: string;
-    value: number;
-    color: string;
-  } | null>(null);
+function DonutChart({ slices }: { slices: DonutSlice[] }) {
+  const [hoveredSlice, setHoveredSlice] = useState<DonutSlice | null>(null);
 
   const total = slices.reduce((s, v) => s + v.value, 0);
   const r = 60;
@@ -209,12 +201,9 @@ function DonutChart({
             strokeLinecap="round"
             onMouseEnter={() => setHoveredSlice(p)}
             onMouseLeave={() => setHoveredSlice(null)}
-            className="cursor-pointer"
-            style={{
-              transition: "stroke-width 0.2s ease, opacity 0.2s ease",
-              opacity,
-              filter: "drop-shadow(0 0 6px rgba(0,0,0,0.35))",
-            }}
+            className={`cursor-pointer transition-[stroke-width,opacity] duration-200 drop-shadow-[0_0_6px_rgba(0,0,0,0.35)] ${
+              opacity === 1 ? "opacity-100" : "opacity-[0.45]"
+            }`}
           />
         );
       })}
@@ -253,60 +242,70 @@ function MembersBarChart({
   memberCagrs,
   niftyBenchmark,
 }: {
-  memberCagrs: Array<{ memberName: string; cagr: number }>;
+  memberCagrs: MemberCagrPoint[];
   niftyBenchmark: number;
 }) {
-  const [hoveredBar, setHoveredBar] = useState<{
-    x: number;
-    y: number;
-    fullName: string;
-    cagr: number;
-  } | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<HoveredMemberCagrPoint | null>(
+    null
+  );
 
   const maxCagr = Math.max(...memberCagrs.map((m) => m.cagr), 0);
-  const chartH = 220;
-  const barW = 55;
-  const gap = 30;
-  const padX = 50;
-  const padY = 30;
+  const minCagr = Math.min(...memberCagrs.map((m) => m.cagr), 0);
+  const chartH = 300;
+  const barW = 60;
+  const gap = 35;
+  const padX = 55;
+  const padY = 40;
   const totalW = padX * 2 + memberCagrs.length * (barW + gap) - gap;
   const benchmark = niftyBenchmark;
-  const chartMax = Math.max(maxCagr, benchmark, 1) * 1.1;
-  const benchmarkY = padY + chartH - (benchmark / chartMax) * chartH;
+
+  // Set bounds for Y scale
+  const yMax = Math.max(maxCagr, benchmark, 1) * 1.15;
+  const yMin = minCagr < 0 ? minCagr * 1.35 : 0; // Pad negative side slightly to prevent text clipping
+  const totalRange = yMax - yMin;
+
+  const getY = (v: number) =>
+    padY + chartH - ((v - yMin) / totalRange) * chartH;
+
+  const zeroY = getY(0);
+  const benchmarkY = getY(benchmark);
 
   return (
     <div className="overflow-x-auto select-none relative">
       <svg
-        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 40}`}
-        className="w-full min-w-[600px]"
-        style={{ height: 320 }}
+        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 60}`}
+        className="w-full min-w-[600px] h-[440px]"
       >
         {/* Grid lines */}
-        {[0, 5, 10, 15, 20, 25].map((v) => {
-          if (v > chartMax) return null;
-          const y = padY + chartH - (v / chartMax) * chartH;
-          return (
-            <g key={v}>
-              <line
-                x1={padX}
-                y1={y}
-                x2={totalW - padX}
-                y2={y}
-                stroke="#1e293b"
-                strokeWidth="1"
-              />
-              <text
-                x={padX - 5}
-                y={y + 4}
-                textAnchor="end"
-                fontSize="9"
-                fill="#475569"
-              >
-                {v}%
-              </text>
-            </g>
-          );
-        })}
+        {[-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 75, 100, 150].map(
+          (v) => {
+            if (v > yMax || v < yMin) return null;
+            const y = getY(v);
+            return (
+              <g key={v}>
+                <line
+                  x1={padX}
+                  y1={y}
+                  x2={totalW - padX}
+                  y2={y}
+                  stroke={v === 0 ? "#475569" : "#1e293b"}
+                  strokeWidth={v === 0 ? "1.5" : "1"}
+                  strokeOpacity={v === 0 ? "0.8" : "1"}
+                />
+                <text
+                  x={padX - 5}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="9"
+                  fill={v === 0 ? "#94a3b8" : "#475569"}
+                  fontWeight={v === 0 ? "bold" : "normal"}
+                >
+                  {v}%
+                </text>
+              </g>
+            );
+          }
+        )}
 
         {/* Benchmark line at real Nifty 3Y CAGR */}
         <line
@@ -329,13 +328,16 @@ function MembersBarChart({
         {/* Bars */}
         {memberCagrs.map((m, i) => {
           const x = padX + i * (barW + gap);
-          const barH = (m.cagr / chartMax) * chartH;
-          const y = padY + chartH - barH;
+          const valY = getY(m.cagr);
+          const isNegative = m.cagr < 0;
+
+          const rectY = isNegative ? zeroY : valY;
+          const rectH = isNegative ? valY - zeroY : zeroY - valY;
+
           const isTop = i === 0;
           const shortName = m.memberName.split(" ")[0];
 
           const isHovered = hoveredBar?.fullName === m.memberName;
-          const opacity = hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0;
 
           return (
             <g
@@ -343,7 +345,7 @@ function MembersBarChart({
               onMouseEnter={() =>
                 setHoveredBar({
                   x,
-                  y,
+                  y: valY,
                   fullName: m.memberName,
                   cagr: m.cagr,
                 })
@@ -353,9 +355,9 @@ function MembersBarChart({
             >
               <rect
                 x={x}
-                y={y}
+                y={rectY}
                 width={barW}
-                height={barH}
+                height={Math.max(2, rectH)}
                 rx="6"
                 fill={
                   isTop
@@ -364,25 +366,30 @@ function MembersBarChart({
                       ? "url(#goodGrad)"
                       : "url(#lowGrad)"
                 }
-                style={{
-                  transition: "opacity 0.2s ease, filter 0.2s ease",
-                  opacity,
-                  filter: isTop
-                    ? "drop-shadow(0 0 8px rgba(20,184,166,0.5))"
-                    : undefined,
-                }}
+                className={`transition-[opacity,filter] duration-200 ${
+                  isTop ? "drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" : ""
+                } ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               />
               <text
                 x={x + barW / 2}
-                y={y - 6}
+                y={isNegative ? valY + 12 : valY - 6}
                 textAnchor="middle"
                 fontSize="9"
-                fill="#94a3b8"
+                fill={isNegative ? "#f87171" : "#94a3b8"}
                 fontWeight="bold"
-                style={{
-                  transition: "opacity 0.2s ease",
-                  opacity: hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0,
-                }}
+                className={`transition-opacity duration-200 ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               >
                 {m.cagr.toFixed(1)}%
               </text>
@@ -392,10 +399,13 @@ function MembersBarChart({
                 textAnchor="middle"
                 fontSize="8"
                 fill="#64748b"
-                style={{
-                  transition: "opacity 0.2s ease",
-                  opacity: hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0,
-                }}
+                className={`transition-opacity duration-200 ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               >
                 {shortName}
               </text>
@@ -410,9 +420,12 @@ function MembersBarChart({
               5,
               Math.min(hoveredBar.x + barW / 2 - 85, totalW - 175)
             );
-            const tooltipY = Math.max(hoveredBar.y - 70, 5);
+            const isNegative = hoveredBar.cagr < 0;
+            const tooltipY = isNegative
+              ? Math.min(hoveredBar.y + 15, chartH + padY * 2 - 15)
+              : Math.max(hoveredBar.y - 70, 5);
             return (
-              <g style={{ pointerEvents: "none" }}>
+              <g className="pointer-events-none">
                 <rect
                   x={tooltipX}
                   y={tooltipY}
@@ -422,9 +435,7 @@ function MembersBarChart({
                   fill="#0f172a"
                   stroke="#334155"
                   strokeWidth="1.5"
-                  style={{
-                    filter: "drop-shadow(0 10px 15px rgba(0,0,0,0.65))",
-                  }}
+                  className="drop-shadow-[0_10px_15px_rgba(0,0,0,0.65)]"
                 />
                 <text
                   x={tooltipX + 85}
@@ -513,6 +524,62 @@ const CAT_PALETTE = [
   "#2dd4bf", // teal-light
   "#818cf8", // indigo-light
 ];
+const CAT_DOT_CLASSES = [
+  "bg-teal-500",
+  "bg-indigo-500",
+  "bg-amber-500",
+  "bg-pink-500",
+  "bg-cyan-400",
+  "bg-violet-400",
+  "bg-emerald-400",
+  "bg-orange-400",
+  "bg-red-400",
+  "bg-blue-400",
+  "bg-yellow-400",
+  "bg-green-400",
+  "bg-fuchsia-400",
+  "bg-teal-400",
+  "bg-indigo-400",
+];
+const CAT_GRADIENT_CLASSES = [
+  "bg-gradient-to-r from-teal-500 to-teal-400/50",
+  "bg-gradient-to-r from-indigo-500 to-indigo-400/50",
+  "bg-gradient-to-r from-amber-500 to-amber-400/50",
+  "bg-gradient-to-r from-pink-500 to-pink-400/50",
+  "bg-gradient-to-r from-cyan-400 to-cyan-300/50",
+  "bg-gradient-to-r from-violet-400 to-violet-300/50",
+  "bg-gradient-to-r from-emerald-400 to-emerald-300/50",
+  "bg-gradient-to-r from-orange-400 to-orange-300/50",
+  "bg-gradient-to-r from-red-400 to-red-300/50",
+  "bg-gradient-to-r from-blue-400 to-blue-300/50",
+  "bg-gradient-to-r from-yellow-400 to-yellow-300/50",
+  "bg-gradient-to-r from-green-400 to-green-300/50",
+  "bg-gradient-to-r from-fuchsia-400 to-fuchsia-300/50",
+  "bg-gradient-to-r from-teal-400 to-teal-300/50",
+  "bg-gradient-to-r from-indigo-400 to-indigo-300/50",
+];
+const CAT_BADGE_CLASSES = [
+  "bg-teal-500/15 text-teal-300 border-teal-500/25",
+  "bg-indigo-500/15 text-indigo-300 border-indigo-500/25",
+  "bg-amber-500/15 text-amber-300 border-amber-500/25",
+  "bg-pink-500/15 text-pink-300 border-pink-500/25",
+  "bg-cyan-500/15 text-cyan-300 border-cyan-500/25",
+  "bg-violet-500/15 text-violet-300 border-violet-500/25",
+  "bg-emerald-500/15 text-emerald-300 border-emerald-500/25",
+  "bg-orange-500/15 text-orange-300 border-orange-500/25",
+  "bg-red-500/15 text-red-300 border-red-500/25",
+  "bg-blue-500/15 text-blue-300 border-blue-500/25",
+  "bg-yellow-500/15 text-yellow-300 border-yellow-500/25",
+  "bg-green-500/15 text-green-300 border-green-500/25",
+  "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/25",
+  "bg-teal-500/15 text-teal-300 border-teal-500/25",
+  "bg-indigo-500/15 text-indigo-300 border-indigo-500/25",
+];
+const FALLBACK_DOT_CLASS = "bg-slate-500";
+const FALLBACK_GRADIENT_CLASS =
+  "bg-gradient-to-r from-slate-500 to-slate-400/50";
+const FALLBACK_BADGE_CLASS =
+  "bg-slate-500/15 text-slate-300 border-slate-500/25";
 
 export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   const router = useRouter();
@@ -594,11 +661,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     }
     const annualDrag = totalRegularVal * 0.01;
 
-    const overlaps: Array<{
-      category: string;
-      count: number;
-      funds: string[];
-    }> = [];
+    const overlaps: CategoryOverlap[] = [];
     const catMap: Record<string, string[]> = {};
     for (const s of data.schemes || []) {
       if (!catMap[s.category]) {
@@ -640,16 +703,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
 
   // Group mutual funds by category for overlap analysis
   const subCategoryGroups = useMemo(() => {
-    const groups: Record<
-      string,
-      Array<{
-        schemeName: string;
-        cagr: number;
-        holders: string[];
-        totalValue: number;
-        avgHoldingDays: number;
-      }>
-    > = {};
+    const groups: Record<string, SubCategoryGroupItem[]> = {};
 
     for (const s of data.schemes || []) {
       const name = s.scheme;
@@ -819,14 +873,39 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     });
   }, [baseSip, stepUpPct]);
 
-  // Category colors — dynamically mapped from the module-level CAT_PALETTE constant
-  const catColors = useMemo(() => {
-    const map: Record<string, string> = {};
+  // Category palette index — dynamically mapped from module-level palette constants
+  const catPaletteIndexes = useMemo(() => {
+    const map: Record<string, number> = {};
     data.categoryAllocation.forEach((c, i) => {
-      map[c.category] = CAT_PALETTE[i % CAT_PALETTE.length];
+      map[c.category] = i % CAT_PALETTE.length;
     });
     return map;
   }, [data.categoryAllocation]);
+
+  const getCategoryPaletteIndex = (category: string): number | null =>
+    catPaletteIndexes[category] ?? null;
+
+  const getCategoryColor = (category: string): string => {
+    const index = getCategoryPaletteIndex(category);
+    return index === null ? "#64748b" : CAT_PALETTE[index];
+  };
+
+  const getCategoryDotClass = (category: string): string => {
+    const index = getCategoryPaletteIndex(category);
+    return index === null ? FALLBACK_DOT_CLASS : CAT_DOT_CLASSES[index];
+  };
+
+  const getCategoryGradientClass = (category: string): string => {
+    const index = getCategoryPaletteIndex(category);
+    return index === null
+      ? FALLBACK_GRADIENT_CLASS
+      : CAT_GRADIENT_CLASSES[index];
+  };
+
+  const getCategoryBadgeClass = (category: string): string => {
+    const index = getCategoryPaletteIndex(category);
+    return index === null ? FALLBACK_BADGE_CLASS : CAT_BADGE_CLASSES[index];
+  };
 
   function handleSort(key: SortKey) {
     setSort((prev) =>
@@ -965,11 +1044,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2 min-w-0">
                             <div
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{
-                                background:
-                                  catColors[cat.category] ?? "#64748b",
-                              }}
+                              className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat.category)}`}
                             />
                             <span
                               className="font-semibold text-slate-200 truncate"
@@ -1001,10 +1076,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                             initial={{ width: 0 }}
                             animate={{ width: `${cat.allocation}%` }}
                             transition={{ duration: 0.9, ease: "easeOut" }}
-                            className="h-full rounded-full"
-                            style={{
-                              background: `linear-gradient(90deg, ${catColors[cat.category] ?? "#64748b"}, ${catColors[cat.category] ?? "#64748b"}88)`,
-                            }}
+                            className={`h-full rounded-full ${getCategoryGradientClass(cat.category)}`}
                           />
                         </div>
                       </div>
@@ -1023,7 +1095,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                         slices={data.categoryAllocation.map((c) => ({
                           label: c.category,
                           value: c.allocation,
-                          color: catColors[c.category] ?? "#64748b",
+                          color: getCategoryColor(c.category),
                         }))}
                       />
                     </div>
@@ -1032,10 +1104,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                     {data.categoryAllocation.map((c) => (
                       <div key={c.category} className="flex items-center gap-2">
                         <div
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{
-                            background: catColors[c.category] ?? "#64748b",
-                          }}
+                          className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(c.category)}`}
                         />
                         <span
                           className="text-xs text-slate-400 truncate flex-1"
@@ -1268,12 +1337,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                               </td>
                               <td className="px-4 py-3">
                                 <span
-                                  className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap"
-                                  style={{
-                                    background: `${catColors[s.category] ?? "#64748b"}22`,
-                                    color: catColors[s.category] ?? "#94a3b8",
-                                    border: `1px solid ${catColors[s.category] ?? "#64748b"}44`,
-                                  }}
+                                  className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap border ${getCategoryBadgeClass(s.category)}`}
                                 >
                                   {s.category}
                                 </span>

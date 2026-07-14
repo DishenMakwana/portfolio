@@ -22,6 +22,7 @@ import {
   PortfolioTransaction,
   AutoMapResult,
   DashboardData,
+  RawTransaction,
 } from "@/types/portfolio";
 import { clearAllZerodhaCaches } from "@/lib/zerodhaService";
 import { clearAllMsflCaches } from "@/lib/msflService";
@@ -334,20 +335,6 @@ export async function getDashboardDataAction(
     .select()
     .from(txTable)
     .where(lte(txTable.date, selectedReport.asOfDate));
-
-  // Re-map transactions to format needed for Alpha calculation
-  interface RawTransaction {
-    id: number;
-    memberId: number | null;
-    schemeId: number | null;
-    folioNo: string | null;
-    date: string;
-    type: string;
-    units: number;
-    nav: number;
-    amount: number;
-    sourceReportId: number | null;
-  }
 
   const getPortfolioTransactions = (
     filterFn?: (tx: RawTransaction) => boolean

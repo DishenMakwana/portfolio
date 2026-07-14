@@ -15,17 +15,11 @@ import {
   formatLocalDateStr as formatDate,
   parseLocalDate,
 } from "@/helpers/formatters";
-import { UploadTrackerPageProps } from "@/types/upload-tracker";
-import {
-  toDateKey,
-  startOfMonth,
-  eachMonth,
-  eachDay,
-} from "@/helpers/dates";
+import { UploadTrackerPageProps, WEEKDAYS } from "@/types/upload-tracker";
+import { toDateKey, startOfMonth, eachMonth, eachDay } from "@/helpers/dates";
 
 export const dynamic = "force-dynamic";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const metadata = { title: "Upload Tracker" };
 
 function getCalendarDays(month: Date) {
   const firstDay = startOfMonth(month);

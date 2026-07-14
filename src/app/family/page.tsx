@@ -1,4 +1,4 @@
-import { getDashboardDataAction } from "@/app/actions";
+import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import MembersTab from "@/components/MembersTab";
 import HeaderClient from "@/components/HeaderClient";
@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { PageProps } from "@/types/members";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Family Portfolio" };
 
 export default async function FamilyPage({ searchParams }: PageProps) {
   const params = await searchParams;

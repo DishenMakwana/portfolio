@@ -13,12 +13,12 @@ import {
   Link as LinkIcon,
   CheckCircle,
 } from "lucide-react";
-import { searchMfApiAction } from "@/app/actions";
+import { searchMfApiAction } from "@/actions/portfolio";
 import {
   updateZerodhaSchemeMappingAction,
   autoMapAllZerodhaSchemesAction,
   updateZerodhaSchemeCategoryAction,
-} from "@/app/zerodha/actions";
+} from "@/actions/zerodha";
 import { ZerodhaScheme } from "@/types/zerodha";
 import { ZerodhaMappingTabProps } from "@/types/mapping";
 import { MfSearchResult } from "@/types/mf-api";

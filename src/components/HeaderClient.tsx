@@ -5,7 +5,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { globalRefreshAction } from "@/app/actions";
+import { globalRefreshAction } from "@/actions/portfolio";
 import type { HeaderClientProps } from "@/types/upload-tracker";
 
 function MappingLink({ unmappedCount }: { unmappedCount: number }) {

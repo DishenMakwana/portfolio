@@ -19,4 +19,5 @@ export interface MfDetailsResponse {
     isin_div_reinvestment?: string | null;
   };
   data: NavDataPoint[];
+  resolvedTicker?: string;
 }

@@ -21,7 +21,7 @@ import {
   ChevronDown,
   RefreshCw,
 } from "lucide-react";
-import { refreshBullionDataAction } from "@/app/actions";
+import { refreshBullionDataAction } from "@/actions/portfolio";
 import {
   BullionClientProps,
   BullionRates,

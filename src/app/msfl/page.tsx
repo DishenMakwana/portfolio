@@ -4,6 +4,7 @@ import { Briefcase } from "lucide-react";
 import { PageProps } from "@/types/msfl";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "MSFL Stocks Portfolio" };
 
 export default async function MsflPage({ searchParams }: PageProps) {
   const params = await searchParams;

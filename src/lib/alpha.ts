@@ -113,6 +113,49 @@ export function clearBenchmarkCache(benchmarkCode: string) {
   benchmarkHistoryCache.delete(benchmarkCode);
 }
 
+async function saveBenchmarkCache(
+  benchmarkCode: string,
+  data: MfDetailsResponse
+) {
+  await db
+    .insert(benchmarkNavCacheMeta)
+    .values({
+      benchmarkCode,
+      benchmarkName: data.meta.scheme_name || "Unknown",
+      fundHouse: data.meta.fund_house || null,
+      schemeType: data.meta.scheme_type || null,
+      schemeCategory: data.meta.scheme_category || null,
+      isinGrowth: data.meta.isin_growth || null,
+      isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+      lastFetchedAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: benchmarkNavCacheMeta.benchmarkCode,
+      set: {
+        benchmarkName: data.meta.scheme_name || "Unknown",
+        fundHouse: data.meta.fund_house || null,
+        schemeType: data.meta.scheme_type || null,
+        schemeCategory: data.meta.scheme_category || null,
+        isinGrowth: data.meta.isin_growth || null,
+        isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+        lastFetchedAt: new Date().toISOString(),
+      },
+    });
+
+  const historyValues = data.data.map((p) => ({
+    benchmarkCode,
+    date: p.date,
+    nav: parseFloat(p.nav) || 0,
+    fetchedAt: new Date().toISOString(),
+  }));
+
+  const chunkSize = 500;
+  for (let i = 0; i < historyValues.length; i += chunkSize) {
+    const chunk = historyValues.slice(i, i + chunkSize);
+    await db.insert(benchmarkNavHistory).values(chunk).onConflictDoNothing();
+  }
+}
+
 async function triggerBenchmarkCacheUpdate(
   benchmarkCode: string,
   startDate?: string
@@ -120,36 +163,7 @@ async function triggerBenchmarkCacheUpdate(
   try {
     const data = await fetchMfDetails(benchmarkCode, startDate);
     if (data && data.meta && data.data && data.data.length > 0) {
-      await db
-        .insert(benchmarkNavCacheMeta)
-        .values({
-          benchmarkCode,
-          benchmarkName: data.meta.scheme_name || "Unknown",
-          lastFetchedAt: new Date().toISOString(),
-        })
-        .onConflictDoUpdate({
-          target: benchmarkNavCacheMeta.benchmarkCode,
-          set: {
-            benchmarkName: data.meta.scheme_name || "Unknown",
-            lastFetchedAt: new Date().toISOString(),
-          },
-        });
-
-      const historyValues = data.data.map((p) => ({
-        benchmarkCode,
-        date: p.date,
-        nav: parseFloat(p.nav) || 0,
-        fetchedAt: new Date().toISOString(),
-      }));
-
-      const chunkSize = 500;
-      for (let i = 0; i < historyValues.length; i += chunkSize) {
-        const chunk = historyValues.slice(i, i + chunkSize);
-        await db
-          .insert(benchmarkNavHistory)
-          .values(chunk)
-          .onConflictDoNothing();
-      }
+      await saveBenchmarkCache(benchmarkCode, data);
     }
   } catch (err) {
     console.error(
@@ -200,9 +214,29 @@ export function getBenchmarkHistory(
         }
 
         if (!isFresh) {
-          triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr).catch((e) =>
-            console.error("[SWR BACKGROUND ERROR]", e)
-          );
+          try {
+            await triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr);
+            const updatedHistory = await db.query.benchmarkNavHistory.findMany({
+              where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+            });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: "Benchmark",
+                  scheme_type: "Index",
+                  scheme_category: "Benchmark Index",
+                  scheme_code: parseInt(cachedMeta.benchmarkCode),
+                  scheme_name: cachedMeta.benchmarkName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC BENCHMARK CACHE UPDATE ERROR]", e);
+          }
         }
 
         if (history.length > 0) {
@@ -226,36 +260,7 @@ export function getBenchmarkHistory(
       const data = await fetchMfDetails(benchmarkCode);
       if (data && data.meta && data.data && data.data.length > 0) {
         try {
-          await db
-            .insert(benchmarkNavCacheMeta)
-            .values({
-              benchmarkCode,
-              benchmarkName: data.meta.scheme_name || "Unknown",
-              lastFetchedAt: new Date().toISOString(),
-            })
-            .onConflictDoUpdate({
-              target: benchmarkNavCacheMeta.benchmarkCode,
-              set: {
-                benchmarkName: data.meta.scheme_name || "Unknown",
-                lastFetchedAt: new Date().toISOString(),
-              },
-            });
-
-          const historyValues = data.data.map((p) => ({
-            benchmarkCode,
-            date: p.date,
-            nav: parseFloat(p.nav) || 0,
-            fetchedAt: new Date().toISOString(),
-          }));
-
-          const chunkSize = 500;
-          for (let i = 0; i < historyValues.length; i += chunkSize) {
-            const chunk = historyValues.slice(i, i + chunkSize);
-            await db
-              .insert(benchmarkNavHistory)
-              .values(chunk)
-              .onConflictDoNothing();
-          }
+          await saveBenchmarkCache(benchmarkCode, data);
         } catch (e) {
           console.error("Error writing benchmark NAV cache:", e);
         }
@@ -309,11 +314,31 @@ export function getSchemeHistoryForDbCode(
           }
         }
 
-        // If cache is stale, trigger background update
+        // If cache is stale, trigger update
         if (!isFresh) {
-          triggerNavCacheUpdate(schemeCode, latestDateStr).catch((e) =>
-            console.error("[SWR BACKGROUND ERROR]", e)
-          );
+          try {
+            await triggerNavCacheUpdate(schemeCode, latestDateStr);
+            const updatedHistory = await db.query.schemeNavHistory.findMany({
+              where: eq(schemeNavHistory.schemeCode, schemeCode),
+            });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: cachedMeta.fundHouse,
+                  scheme_type: cachedMeta.schemeType,
+                  scheme_category: cachedMeta.schemeCategory,
+                  scheme_code: parseInt(cachedMeta.schemeCode),
+                  scheme_name: cachedMeta.schemeName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC CACHE UPDATE ERROR]", e);
+          }
         }
 
         if (history.length > 0) {

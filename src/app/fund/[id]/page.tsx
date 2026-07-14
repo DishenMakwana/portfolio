@@ -30,10 +30,11 @@ import {
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
-import FundDetailsClient from "./FundDetailsClient";
-import { FundPageProps } from "@/types/fund-details";
+import FundDetailsClient from "../../../components/FundDetailsClient";
+import { FundPageProps, HoldingDetails } from "@/types/fund-details";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Fund Details" };
 
 export default async function FundDetailsPage({ params }: FundPageProps) {
   const { id } = await params;
@@ -49,41 +50,14 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  interface HoldingDetails {
-    id: number;
-    schemeId: number | null;
-    memberId: number | null;
-    schemeName: string | null;
-    category: string | null;
-    schemeCodeApi: string | null;
-    folioNo?: string | null;
-    balanceUnits: number;
-    purchaseNav: number;
-    purchaseValue: number;
-    currentNav: number;
-    currentValue: number;
-    dividend: number | null;
-    gain: number;
-    holdingDays: number;
-    absoluteReturn: number;
-    cagr: number;
-    comments: string | null;
-    memberName: string | null;
-    memberPan: string | null;
-    asOfDate: string | null;
-    holdingType?: string;
-    isin?: string;
-    reportId?: number | null;
-  }
-
   let holding: HoldingDetails | null = null;
 
   if (isMsfl) {
     const mHolding = await db
       .select({
         id: msflHoldings.id,
-        schemeName: msflHoldings.symbol,
-        category: msflHoldings.symbol,
+        schemeName: msflSchemes.name,
+        category: msflSchemes.category,
         balanceUnits: msflHoldings.quantity,
         purchaseNav: msflHoldings.averagePrice,
         purchaseValue: msflHoldings.investedValue,
@@ -96,12 +70,13 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       })
       .from(msflHoldings)
       .leftJoin(msflReports, eq(msflHoldings.reportId, msflReports.id))
+      .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
       .where(eq(msflHoldings.id, holdingId))
       .then((res) => res[0]);
 
     if (mHolding) {
       const scheme = await db.query.msflSchemes.findFirst({
-        where: eq(msflSchemes.name, mHolding.schemeName),
+        where: eq(msflSchemes.name, mHolding.schemeName || ""),
       });
 
       holding = {
@@ -116,7 +91,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         memberPan: null,
         schemeCodeApi: scheme
           ? scheme.schemeCodeApi
-          : `${mHolding.schemeName}.NS`,
+          : mHolding.schemeName
+            ? `${mHolding.schemeName}.NS`
+            : null,
         category: "Stock",
         holdingType: "equity",
       };
@@ -126,9 +103,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     const zHolding = await db
       .select({
         id: zerodhaHoldings.id,
-        schemeName: zerodhaHoldings.symbol,
-        isin: zerodhaHoldings.isin,
-        category: zerodhaHoldings.instrumentType,
+        schemeName: zerodhaSchemes.name,
+        isin: zerodhaSchemes.isin,
+        category: zerodhaSchemes.instrumentType,
         balanceUnits: zerodhaHoldings.quantity,
         purchaseNav: zerodhaHoldings.averagePrice,
         purchaseValue: zerodhaHoldings.investedValue,
@@ -138,21 +115,25 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         absoluteReturn: zerodhaHoldings.unrealizedPnlPct,
         asOfDate: zerodhaReports.asOfDate,
         reportId: zerodhaReports.id,
-        holdingType: zerodhaHoldings.holdingType,
+        holdingType: zerodhaSchemes.holdingType,
+        sector: zerodhaSchemes.sector,
       })
       .from(zerodhaHoldings)
       .leftJoin(zerodhaReports, eq(zerodhaHoldings.reportId, zerodhaReports.id))
+      .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
       .where(eq(zerodhaHoldings.id, holdingId))
       .then((res) => res[0]);
 
     if (zHolding) {
       if (zHolding.holdingType === "equity") {
         const scheme = await db.query.zerodhaSchemes.findFirst({
-          where: eq(zerodhaSchemes.name, zHolding.schemeName),
+          where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
 
         holding = {
           ...zHolding,
+          holdingType: zHolding.holdingType || undefined,
+          isin: zHolding.isin || undefined,
           schemeId: scheme ? scheme.id : null,
           memberId: null,
           dividend: 0,
@@ -163,15 +144,18 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           memberPan: null,
           schemeCodeApi: scheme ? scheme.schemeCodeApi : zHolding.schemeName,
           category: scheme ? scheme.category : "Equity Stock",
+          sector: zHolding.sector,
         };
       } else {
         // Find matching scheme in DB to fetch API mapping code
         const scheme = await db.query.zerodhaSchemes.findFirst({
-          where: eq(zerodhaSchemes.name, zHolding.schemeName),
+          where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
 
         holding = {
           ...zHolding,
+          holdingType: zHolding.holdingType || undefined,
+          isin: zHolding.isin || undefined,
           schemeId: scheme ? scheme.id : null,
           memberId: null,
           dividend: 0,
@@ -182,6 +166,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           memberPan: null,
           schemeCodeApi: scheme ? scheme.schemeCodeApi : null,
           category: scheme ? scheme.category : zHolding.category,
+          sector: zHolding.sector,
         };
       }
     }
@@ -341,7 +326,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             corpusCr: 0,
             expenseRatio: 0,
             exitLoad: "Nil",
-            benchmarkName: `${benchmarkName} TRI`,
+            benchmarkName: benchmarkName.toLowerCase().endsWith("tri")
+              ? benchmarkName
+              : `${benchmarkName} TRI`,
           },
           allocation: {
             equity: 100,

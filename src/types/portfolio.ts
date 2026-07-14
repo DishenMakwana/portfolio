@@ -31,6 +31,19 @@ export interface PortfolioTransaction {
   folioNo?: string;
 }
 
+export interface RawTransaction {
+  id: number;
+  memberId: number | null;
+  schemeId: number | null;
+  folioNo: string | null;
+  date: string;
+  type: string;
+  units: number;
+  nav: number;
+  amount: number;
+  sourceReportId: number | null;
+}
+
 export interface VolatilityMeasures {
   alpha: number;
   sharpe: number;
@@ -158,6 +171,8 @@ export interface OverviewHolding {
   asOfDate?: string | null;
   xirr?: number | null;
   alpha?: number | null;
+  holdingType?: string;
+  sector?: string | null;
 }
 
 export interface ParsedHolding {

@@ -16,7 +16,7 @@ import {
   IndianRupee,
   X,
 } from "lucide-react";
-import { uploadSipAction, clearSipMandatesAction } from "@/app/actions";
+import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
 import { formatCurrency } from "@/lib/formatters";
 import type { SipMandateRow } from "@/types/portfolio";
 import type { SipsClientProps } from "@/types/sips";

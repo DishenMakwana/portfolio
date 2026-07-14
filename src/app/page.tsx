@@ -1,4 +1,4 @@
-import { getDashboardDataAction } from "./actions";
+import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import OverviewTab from "@/components/OverviewTab";
 import HeaderClient from "@/components/HeaderClient";

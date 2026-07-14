@@ -8,6 +8,7 @@ import { Briefcase } from "lucide-react";
 import { PageProps } from "@/types/zerodha";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Zerodha Portfolio" };
 
 export default async function ZerodhaPage({ searchParams }: PageProps) {
   const params = await searchParams;

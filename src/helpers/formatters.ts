@@ -137,6 +137,10 @@ export function formatDate(date: string | Date): string {
   });
 }
 
+export function formatNullableDate(date: string | null): string {
+  return date ? formatDate(date) : "N/A";
+}
+
 /**
  * Formats an uploaded timestamp to a human-readable string.
  * Example: "2026-07-13T10:20:00Z" → "13 Jul, 10:20 AM"

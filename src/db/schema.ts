@@ -179,11 +179,9 @@ export const zerodhaHoldings = mySchema.table(
     reportId: integer("report_id").references(() => zerodhaReports.id, {
       onDelete: "cascade",
     }),
-    holdingType: text("holding_type").notNull(), // 'equity' or 'mutual_fund'
-    symbol: text("symbol").notNull(),
-    isin: text("isin").notNull(),
-    sector: text("sector"), // null for mutual funds
-    instrumentType: text("instrument_type"), // null for stocks
+    schemeId: integer("scheme_id")
+      .references(() => zerodhaSchemes.id, { onDelete: "cascade" })
+      .notNull(),
     quantity: doublePrecision("quantity").notNull(),
     averagePrice: doublePrecision("average_price").notNull(),
     currentPrice: doublePrecision("current_price").notNull(),
@@ -199,6 +197,10 @@ export const zerodhaSchemes = mySchema.table("zerodha_schemes", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   category: text("category").notNull(),
+  isin: text("isin"),
+  holdingType: text("holding_type"),
+  sector: text("sector"),
+  instrumentType: text("instrument_type"),
   schemeCodeApi: text("scheme_code_api"),
   mappedAt: text("mapped_at"),
 });
@@ -239,6 +241,11 @@ export const benchmarkNavCacheMeta = mySchema.table(
   {
     benchmarkCode: text("benchmark_code").primaryKey(),
     benchmarkName: text("benchmark_name").notNull(),
+    fundHouse: text("fund_house"),
+    schemeType: text("scheme_type"),
+    schemeCategory: text("scheme_category"),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
     lastFetchedAt: text("last_fetched_at").notNull(),
   }
 );
@@ -274,7 +281,9 @@ export const msflHoldings = mySchema.table(
     reportId: integer("report_id").references(() => msflReports.id, {
       onDelete: "cascade",
     }),
-    symbol: text("symbol").notNull(),
+    schemeId: integer("scheme_id")
+      .references(() => msflSchemes.id, { onDelete: "cascade" })
+      .notNull(),
     quantity: doublePrecision("quantity").notNull(),
     averagePrice: doublePrecision("average_price").notNull(),
     currentPrice: doublePrecision("current_price").notNull(),

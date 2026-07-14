@@ -1,3 +1,5 @@
+import type { ElementType } from "react";
+
 export interface BenchmarkReturns {
   benchmarkCode: string;
   benchmarkName: string;
@@ -91,4 +93,47 @@ export interface SortState {
 
 export interface InsightsDashboardProps {
   data: InsightsData;
+}
+
+export type MetricAccentColor =
+  "indigo" | "teal" | "emerald" | "rose" | "amber";
+
+export interface MetricCardProps {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: ElementType;
+  accentColor?: MetricAccentColor;
+}
+
+export interface DonutSlice {
+  label: string;
+  value: number;
+  color: string;
+}
+
+export interface MemberCagrPoint {
+  memberName: string;
+  cagr: number;
+}
+
+export interface HoveredMemberCagrPoint {
+  x: number;
+  y: number;
+  fullName: string;
+  cagr: number;
+}
+
+export interface CategoryOverlap {
+  category: string;
+  count: number;
+  funds: string[];
+}
+
+export interface SubCategoryGroupItem {
+  schemeName: string;
+  cagr: number;
+  holders: string[];
+  totalValue: number;
+  avgHoldingDays: number;
 }

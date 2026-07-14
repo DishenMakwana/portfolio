@@ -69,7 +69,6 @@ export const ALLOCATION_BG_CLASSES = [
   "bg-lime-500",
 ];
 
-
 export interface PageProps {
   searchParams: Promise<{ reportId?: string }>;
 }

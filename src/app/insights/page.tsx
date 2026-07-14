@@ -4,6 +4,7 @@ import { Lightbulb } from "lucide-react";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Investment Insights" };
 
 export default async function InsightsPage() {
   const data = await getInsightsData();

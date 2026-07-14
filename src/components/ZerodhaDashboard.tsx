@@ -21,7 +21,7 @@ import {
 import {
   uploadZerodhaHoldingsAction,
   deleteZerodhaHoldingsAction,
-} from "@/app/zerodha/actions";
+} from "@/actions/zerodha";
 import {
   formatCurrency,
   formatPercent,

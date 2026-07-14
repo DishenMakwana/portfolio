@@ -208,17 +208,29 @@ export async function saveMsflHoldingsReport(
     }
   }
 
-  const holdingsToSave = holdings.map((h) => ({
-    reportId,
-    symbol: h.symbol,
-    quantity: h.quantity,
-    averagePrice: h.averagePrice,
-    currentPrice: h.currentPrice,
-    investedValue: h.investedValue,
-    currentValue: h.currentValue,
-    unrealizedPnl: h.unrealizedPnl,
-    unrealizedPnlPct: h.unrealizedPnlPct,
-  }));
+  const updatedSchemesList = await db.select().from(msflSchemes);
+  const schemeMap = new Map<string, number>();
+  for (const s of updatedSchemesList) {
+    schemeMap.set(s.name, s.id);
+  }
+
+  const holdingsToSave = holdings.map((h) => {
+    const schemeId = schemeMap.get(h.symbol);
+    if (!schemeId) {
+      throw new Error(`Scheme ID not found for MSFL symbol ${h.symbol}`);
+    }
+    return {
+      reportId,
+      schemeId,
+      quantity: h.quantity,
+      averagePrice: h.averagePrice,
+      currentPrice: h.currentPrice,
+      investedValue: h.investedValue,
+      currentValue: h.currentValue,
+      unrealizedPnl: h.unrealizedPnl,
+      unrealizedPnlPct: h.unrealizedPnlPct,
+    };
+  });
 
   const chunkSize = 50;
   for (let i = 0; i < holdingsToSave.length; i += chunkSize) {
@@ -248,49 +260,83 @@ export function clearAllMsflCaches() {
   msflStockHistoryCache.clear();
 }
 
+async function saveMsflStockCacheAndMapping(
+  ticker: string,
+  data: MfDetailsResponse
+) {
+  const resolvedTicker = data.resolvedTicker || ticker;
+
+  // 1. Update the scheme mapping in database if the resolved ticker is different (e.g. from .BO)
+  if (resolvedTicker !== ticker) {
+    console.log(
+      `[BSE/NSE Mapping] Updating MSFL scheme mapping for name/ticker ${ticker} to resolved: ${resolvedTicker}`
+    );
+    const baseSymbol = ticker.includes(".") ? ticker.split(".")[0] : ticker;
+    await db
+      .update(msflSchemes)
+      .set({
+        schemeCodeApi: resolvedTicker,
+        mappedAt: new Date().toISOString(),
+      })
+      .where(eq(msflSchemes.schemeCodeApi, ticker));
+
+    await db
+      .update(msflSchemes)
+      .set({
+        schemeCodeApi: resolvedTicker,
+        mappedAt: new Date().toISOString(),
+      })
+      .where(eq(msflSchemes.name, baseSymbol));
+  }
+
+  // 2. Save the cache for the resolved ticker and the original ticker
+  const tickersToCache = Array.from(new Set([ticker, resolvedTicker]));
+  for (const t of tickersToCache) {
+    await db
+      .insert(msflSchemeNavCacheMeta)
+      .values({
+        schemeCode: t,
+        fundHouse: "Equity",
+        schemeType: "Equity",
+        schemeCategory: "Stock",
+        schemeName: t,
+        lastFetchedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: msflSchemeNavCacheMeta.schemeCode,
+        set: {
+          fundHouse: "Equity",
+          schemeType: "Equity",
+          schemeCategory: "Stock",
+          schemeName: t,
+          lastFetchedAt: new Date().toISOString(),
+        },
+      });
+
+    const historyValues = data.data.map((p) => ({
+      schemeCode: t,
+      date: p.date,
+      nav: parseFloat(p.nav) || 0,
+      fetchedAt: new Date().toISOString(),
+    }));
+
+    await db
+      .delete(msflSchemeNavHistory)
+      .where(eq(msflSchemeNavHistory.schemeCode, t));
+
+    const chunkSize = 100;
+    for (let i = 0; i < historyValues.length; i += chunkSize) {
+      const chunk = historyValues.slice(i, i + chunkSize);
+      await db.insert(msflSchemeNavHistory).values(chunk);
+    }
+  }
+}
+
 async function triggerMsflStockNavCacheUpdate(ticker: string) {
   try {
     const data = await fetchStockHistory(ticker);
     if (data && data.meta && data.data && data.data.length > 0) {
-      await db
-        .insert(msflSchemeNavCacheMeta)
-        .values({
-          schemeCode: ticker,
-          fundHouse: "Equity",
-          schemeType: "Equity",
-          schemeCategory: "Stock",
-          schemeName: ticker,
-          lastFetchedAt: new Date().toISOString(),
-        })
-        .onConflictDoUpdate({
-          target: msflSchemeNavCacheMeta.schemeCode,
-          set: {
-            fundHouse: "Equity",
-            schemeType: "Equity",
-            schemeCategory: "Stock",
-            schemeName: ticker,
-            lastFetchedAt: new Date().toISOString(),
-          },
-        });
-
-      const historyValues = data.data.map(
-        (p: { date: string; nav: string }) => ({
-          schemeCode: ticker,
-          date: p.date,
-          nav: parseFloat(p.nav) || 0,
-          fetchedAt: new Date().toISOString(),
-        })
-      );
-
-      await db
-        .delete(msflSchemeNavHistory)
-        .where(eq(msflSchemeNavHistory.schemeCode, ticker));
-
-      const chunkSize = 100;
-      for (let i = 0; i < historyValues.length; i += chunkSize) {
-        const chunk = historyValues.slice(i, i + chunkSize);
-        await db.insert(msflSchemeNavHistory).values(chunk);
-      }
+      await saveMsflStockCacheAndMapping(ticker, data);
     }
   } catch (err) {
     console.error(
@@ -321,9 +367,31 @@ export function getMsflStockHistoryForSymbol(
 
       if (cachedMeta) {
         if (!isFresh) {
-          triggerMsflStockNavCacheUpdate(ticker).catch((e) =>
-            console.error("[SWR BACKGROUND MSFL STOCK ERROR]", e)
-          );
+          try {
+            await triggerMsflStockNavCacheUpdate(ticker);
+            const updatedHistory = await db.query.msflSchemeNavHistory.findMany(
+              {
+                where: eq(msflSchemeNavHistory.schemeCode, ticker),
+              }
+            );
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: cachedMeta.fundHouse,
+                  scheme_type: cachedMeta.schemeType,
+                  scheme_category: cachedMeta.schemeCategory,
+                  scheme_code: 0,
+                  scheme_name: cachedMeta.schemeName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC MSFL STOCK CACHE UPDATE ERROR]", e);
+          }
         }
 
         const history = await db.query.msflSchemeNavHistory.findMany({
@@ -351,46 +419,7 @@ export function getMsflStockHistoryForSymbol(
       try {
         const data = await fetchStockHistory(ticker);
         if (data && data.meta && data.data && data.data.length > 0) {
-          await db
-            .insert(msflSchemeNavCacheMeta)
-            .values({
-              schemeCode: ticker,
-              fundHouse: "Equity",
-              schemeType: "Equity",
-              schemeCategory: "Stock",
-              schemeName: ticker,
-              lastFetchedAt: new Date().toISOString(),
-            })
-            .onConflictDoUpdate({
-              target: msflSchemeNavCacheMeta.schemeCode,
-              set: {
-                fundHouse: "Equity",
-                schemeType: "Equity",
-                schemeCategory: "Stock",
-                schemeName: ticker,
-                lastFetchedAt: new Date().toISOString(),
-              },
-            });
-
-          const historyValues = data.data.map(
-            (p: { date: string; nav: string }) => ({
-              schemeCode: ticker,
-              date: p.date,
-              nav: parseFloat(p.nav) || 0,
-              fetchedAt: new Date().toISOString(),
-            })
-          );
-
-          await db
-            .delete(msflSchemeNavHistory)
-            .where(eq(msflSchemeNavHistory.schemeCode, ticker));
-
-          const chunkSize = 100;
-          for (let i = 0; i < historyValues.length; i += chunkSize) {
-            const chunk = historyValues.slice(i, i + chunkSize);
-            await db.insert(msflSchemeNavHistory).values(chunk);
-          }
-
+          await saveMsflStockCacheAndMapping(ticker, data);
           return data;
         }
       } catch (err) {
@@ -462,14 +491,28 @@ async function getMsflReportWeightedMetrics(
   niftyData: { date: string; nav: string }[]
 ): Promise<{ portfolioXirr: number; benchmarkXirr: number; alpha: number }> {
   const rawHoldings = await db
-    .select()
+    .select({
+      id: msflHoldings.id,
+      reportId: msflHoldings.reportId,
+      schemeId: msflHoldings.schemeId,
+      quantity: msflHoldings.quantity,
+      averagePrice: msflHoldings.averagePrice,
+      currentPrice: msflHoldings.currentPrice,
+      investedValue: msflHoldings.investedValue,
+      currentValue: msflHoldings.currentValue,
+      unrealizedPnl: msflHoldings.unrealizedPnl,
+      unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
+      symbol: msflSchemes.name,
+    })
     .from(msflHoldings)
+    .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
     .where(eq(msflHoldings.reportId, reportId));
 
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
-      const scheme = schemesList.find((s) => s.name === h.symbol);
-      const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
+      const symbol = h.symbol || "";
+      const scheme = schemesList.find((s) => s.name === symbol);
+      const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
 
       const stockDetails = await getMsflStockHistoryForSymbol(ticker);
       if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
@@ -555,8 +598,21 @@ export async function getMsflDashboardData(
     : reportsList[0];
 
   const rawHoldings = await db
-    .select()
+    .select({
+      id: msflHoldings.id,
+      reportId: msflHoldings.reportId,
+      schemeId: msflHoldings.schemeId,
+      quantity: msflHoldings.quantity,
+      averagePrice: msflHoldings.averagePrice,
+      currentPrice: msflHoldings.currentPrice,
+      investedValue: msflHoldings.investedValue,
+      currentValue: msflHoldings.currentValue,
+      unrealizedPnl: msflHoldings.unrealizedPnl,
+      unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
+      symbol: msflSchemes.name,
+    })
     .from(msflHoldings)
+    .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
     .where(eq(msflHoldings.reportId, selectedReport.id));
 
   const schemesList = await db.select().from(msflSchemes);
@@ -566,8 +622,9 @@ export async function getMsflDashboardData(
 
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
-      const scheme = schemesList.find((s) => s.name === h.symbol);
-      const ticker = scheme?.schemeCodeApi || `${h.symbol}.NS`;
+      const symbol = h.symbol || "";
+      const scheme = schemesList.find((s) => s.name === symbol);
+      const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
 
       const stockDetails = await getMsflStockHistoryForSymbol(ticker);
       if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
@@ -580,12 +637,19 @@ export async function getMsflDashboardData(
         );
         return {
           ...h,
+          symbol,
           xirr: metrics.xirr,
           cagr: metrics.cagr,
           alpha: metrics.alpha,
         };
       }
-      return { ...h, xirr: null, cagr: null, alpha: null };
+      return {
+        ...h,
+        symbol,
+        xirr: null,
+        cagr: null,
+        alpha: null,
+      };
     })
   );
 

@@ -20,12 +20,7 @@ import {
   parseLocalDate,
 } from "@/helpers/formatters";
 
-import {
-  toDateKey,
-  startOfMonth,
-  eachMonth,
-  eachDay,
-} from "@/helpers/dates";
+import { toDateKey, startOfMonth, eachMonth, eachDay } from "@/helpers/dates";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

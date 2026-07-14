@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
-import { deleteReportAction } from "@/app/actions";
+import { deleteReportAction } from "@/actions/portfolio";
 import type { DeleteReportButtonProps } from "@/types/upload-tracker";
 
 export default function DeleteReportButton({

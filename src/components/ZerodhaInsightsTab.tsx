@@ -137,14 +137,24 @@ function MfLeaderboardChart({
   } | null>(null);
 
   const maxCagr = Math.max(...mfHoldings.map((m) => m.cagr), 0);
-  const chartH = 220;
-  const barW = 55;
-  const minGap = 25;
-  const padX = 60;
-  const padY = 30;
+  const minCagr = Math.min(...mfHoldings.map((m) => m.cagr), 0);
+  const chartH = 300;
+  const barW = 60;
+  const minGap = 28;
+  const padX = 65;
+  const padY = 40;
   const benchmark = niftyBenchmark;
-  const chartMax = Math.max(maxCagr, benchmark, 1) * 1.1;
-  const benchmarkY = padY + chartH - (benchmark / chartMax) * chartH;
+
+  // Set bounds for Y scale
+  const yMax = Math.max(maxCagr, benchmark, 1) * 1.15;
+  const yMin = minCagr < 0 ? minCagr * 1.35 : 0; // Pad negative side slightly to prevent text clipping
+  const totalRange = yMax - yMin;
+
+  const getY = (v: number) =>
+    padY + chartH - ((v - yMin) / totalRange) * chartH;
+
+  const zeroY = getY(0);
+  const benchmarkY = getY(benchmark);
 
   const n = mfHoldings.length;
   // Calculate dynamic width based on number of bars to support horizontal scroll on narrow views
@@ -155,36 +165,39 @@ function MfLeaderboardChart({
   return (
     <div className="overflow-x-auto select-none relative">
       <svg
-        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 40}`}
-        className="w-full min-w-[700px]"
-        style={{ height: 320 }}
+        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 60}`}
+        className="w-full min-w-[700px] h-[440px]"
       >
         {/* Grid lines */}
-        {[0, 5, 10, 15, 20, 25].map((v) => {
-          if (v > chartMax) return null;
-          const y = padY + chartH - (v / chartMax) * chartH;
-          return (
-            <g key={v}>
-              <line
-                x1={padX}
-                y1={y}
-                x2={totalW - padX}
-                y2={y}
-                stroke="#1e293b"
-                strokeWidth="1"
-              />
-              <text
-                x={padX - 8}
-                y={y + 4}
-                textAnchor="end"
-                fontSize="9"
-                fill="#475569"
-              >
-                {v}%
-              </text>
-            </g>
-          );
-        })}
+        {[-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 75, 100, 150].map(
+          (v) => {
+            if (v > yMax || v < yMin) return null;
+            const y = getY(v);
+            return (
+              <g key={v}>
+                <line
+                  x1={padX}
+                  y1={y}
+                  x2={totalW - padX}
+                  y2={y}
+                  stroke={v === 0 ? "#475569" : "#1e293b"}
+                  strokeWidth={v === 0 ? "1.5" : "1"}
+                  strokeOpacity={v === 0 ? "0.8" : "1"}
+                />
+                <text
+                  x={padX - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="9"
+                  fill={v === 0 ? "#94a3b8" : "#475569"}
+                  fontWeight={v === 0 ? "bold" : "normal"}
+                >
+                  {v}%
+                </text>
+              </g>
+            );
+          }
+        )}
 
         {/* Benchmark line */}
         <line
@@ -209,13 +222,16 @@ function MfLeaderboardChart({
         {/* Bars */}
         {mfHoldings.map((m, i) => {
           const x = padX + i * (barW + gap);
-          const barH = (m.cagr / chartMax) * chartH;
-          const y = padY + chartH - barH;
+          const valY = getY(m.cagr);
+          const isNegative = m.cagr < 0;
+
+          const rectY = isNegative ? zeroY : valY;
+          const rectH = isNegative ? valY - zeroY : zeroY - valY;
+
           const isTop = i === 0;
           const shortLabelName = getShortFundName(m.symbol);
 
           const isHovered = hoveredBar?.symbol === m.symbol;
-          const opacity = hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0;
 
           return (
             <g
@@ -223,7 +239,7 @@ function MfLeaderboardChart({
               onMouseEnter={() =>
                 setHoveredBar({
                   x,
-                  y,
+                  y: valY,
                   symbol: m.symbol,
                   cagr: m.cagr,
                 })
@@ -233,9 +249,9 @@ function MfLeaderboardChart({
             >
               <rect
                 x={x}
-                y={y}
+                y={rectY}
                 width={barW}
-                height={barH}
+                height={Math.max(2, rectH)}
                 rx="6"
                 fill={
                   isTop
@@ -244,25 +260,30 @@ function MfLeaderboardChart({
                       ? "url(#goodGrad)"
                       : "url(#lowGrad)"
                 }
-                style={{
-                  transition: "opacity 0.2s ease, filter 0.2s ease",
-                  opacity,
-                  filter: isTop
-                    ? "drop-shadow(0 0 8px rgba(20,184,166,0.5))"
-                    : undefined,
-                }}
+                className={`transition-[opacity,filter] duration-200 ${
+                  isTop ? "drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" : ""
+                } ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               />
               <text
                 x={x + barW / 2}
-                y={y - 6}
+                y={isNegative ? valY + 12 : valY - 6}
                 textAnchor="middle"
                 fontSize="9"
-                fill="#94a3b8"
+                fill={isNegative ? "#f87171" : "#94a3b8"}
                 fontWeight="bold"
-                style={{
-                  transition: "opacity 0.2s ease",
-                  opacity: hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0,
-                }}
+                className={`transition-opacity duration-200 ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               >
                 {m.cagr.toFixed(1)}%
               </text>
@@ -273,10 +294,13 @@ function MfLeaderboardChart({
                 fontSize="8.5"
                 fill="#64748b"
                 fontWeight="bold"
-                style={{
-                  transition: "opacity 0.2s ease",
-                  opacity: hoveredBar ? (isHovered ? 1.0 : 0.45) : 1.0,
-                }}
+                className={`transition-opacity duration-200 ${
+                  hoveredBar
+                    ? isHovered
+                      ? "opacity-100"
+                      : "opacity-[0.45]"
+                    : "opacity-100"
+                }`}
               >
                 {shortLabelName}
               </text>
@@ -291,9 +315,12 @@ function MfLeaderboardChart({
               5,
               Math.min(hoveredBar.x + barW / 2 - 85, totalW - 175)
             );
-            const tooltipY = Math.max(hoveredBar.y - 70, 5);
+            const isNegative = hoveredBar.cagr < 0;
+            const tooltipY = isNegative
+              ? Math.min(hoveredBar.y + 15, chartH + padY * 2 - 15)
+              : Math.max(hoveredBar.y - 70, 5);
             return (
-              <g style={{ pointerEvents: "none" }}>
+              <g className="pointer-events-none">
                 <rect
                   x={tooltipX}
                   y={tooltipY}
@@ -303,9 +330,7 @@ function MfLeaderboardChart({
                   fill="#0f172a"
                   stroke="#334155"
                   strokeWidth="1.5"
-                  style={{
-                    filter: "drop-shadow(0 10px 15px rgba(0,0,0,0.65))",
-                  }}
+                  className="drop-shadow-[0_10px_15px_rgba(0,0,0,0.65)]"
                 />
                 <text
                   x={tooltipX + 85}
@@ -548,9 +573,9 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
               />
 
               {/* Benchmark target line indicator */}
-              <div
+              <motion.div
                 className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-30"
-                style={{
+                animate={{
                   left: `${Math.min(100, (benchmark / Math.max(mfWeightedCagr || 0, benchmark, 1)) * 90)}%`,
                 }}
               />

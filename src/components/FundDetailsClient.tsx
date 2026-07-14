@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Calendar,
@@ -16,9 +17,13 @@ import {
   ChevronUp,
   RefreshCw,
 } from "lucide-react";
-import { globalRefreshAction } from "@/app/actions";
+import { globalRefreshAction } from "@/actions/portfolio";
 import { isUnlistedStock } from "@/lib/stockApi";
-import { formatCurrency, formatPercent } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatNullableDate,
+  formatPercent,
+} from "@/helpers/formatters";
 import {
   FundDetailsClientProps,
   CustomTooltipProps,
@@ -130,6 +135,8 @@ export default function FundDetailsClient({
   const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
     "3y"
   );
+  const isStock = holding.holdingType === "equity";
+  const isDebt = (holding.category || "").toLowerCase().includes("debt");
 
   const handleGlobalRefresh = async (): Promise<void> => {
     if (isRefreshingGlobal) return;
@@ -315,15 +322,6 @@ export default function FundDetailsClient({
     return null;
   }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
-  const formatDate = (dateStr: string | null): string => {
-    if (!dateStr) return "N/A";
-    return new Date(dateStr).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
   const cleanCategory = holding.category || "N/A";
   const hasHoldingDays =
     Number.isFinite(holding.holdingDays) && holding.holdingDays > 0;
@@ -359,10 +357,14 @@ export default function FundDetailsClient({
               <strong className="text-slate-300">
                 {holding.memberName || "Unknown Holder"}
               </strong>{" "}
-              • Folio:{" "}
-              <span className="font-mono text-slate-300 font-bold">
-                {holding.folioNo}
-              </span>
+              {!isStock && holding.folioNo && (
+                <>
+                  • Folio:{" "}
+                  <span className="font-mono text-slate-300 font-bold">
+                    {holding.folioNo}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -372,7 +374,7 @@ export default function FundDetailsClient({
             <span>
               Snapshot Date:{" "}
               <strong className="text-slate-200">
-                {formatDate(holding.asOfDate || null)}
+                {formatNullableDate(holding.asOfDate || null)}
               </strong>
             </span>
           </div>
@@ -470,12 +472,14 @@ export default function FundDetailsClient({
           )}
         </div>
 
-        {/* Row 2: Annualized returns (4 cards) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Row 2: Annualized returns */}
+        <div
+          className={`grid grid-cols-2 ${isStock ? "md:grid-cols-3" : "md:grid-cols-4"} gap-4`}
+        >
           {/* Card 4: Scheme XIRR */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
             <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-              Scheme XIRR
+              {isStock ? "Stock XIRR" : "Scheme XIRR"}
               <span title="Calculated from reconstructed transactions">
                 <Info size={12} className="text-slate-500 cursor-pointer" />
               </span>
@@ -512,24 +516,26 @@ export default function FundDetailsClient({
           </div>
 
           {/* Card 6: CAGR */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
-            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-              Report CAGR
-              <span title="Compounded Annualized Growth Rate">
-                <Info size={12} className="text-slate-500 cursor-pointer" />
+          {!isStock && (
+            <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+              <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+                Report CAGR
+                <span title="Compounded Annualized Growth Rate">
+                  <Info size={12} className="text-slate-500 cursor-pointer" />
+                </span>
               </span>
-            </span>
-            <div className="mt-2">
-              <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-                {holding.cagr !== null && holding.cagr !== undefined
-                  ? `${holding.cagr.toFixed(2)}%`
-                  : "-"}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-                Compounded Annual
+              <div className="mt-2">
+                <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                  {holding.cagr !== null && holding.cagr !== undefined
+                    ? `${holding.cagr.toFixed(2)}%`
+                    : "-"}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                  Compounded Annual
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Card 7: Alpha */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
@@ -615,7 +621,7 @@ export default function FundDetailsClient({
               <AreaChart
                 data={filteredChartData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                style={{ outline: "none" }}
+                className="outline-none"
               >
                 <defs>
                   <linearGradient id="colorFund" x1="0" y1="0" x2="0" y2="1">
@@ -750,165 +756,196 @@ export default function FundDetailsClient({
       </div>
 
       {/* DETAILED FACTSHEET PANELS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div
+        className={`grid grid-cols-1 ${isStock ? "lg:grid-cols-2" : "lg:grid-cols-3"} gap-6`}
+      >
         {/* PANEL 1: SCHEME PROFILE */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-305 backdrop-blur-sm">
           <div>
             <h3 className="text-base font-black text-slate-100 mb-5 tracking-tight flex items-center gap-2 border-b border-slate-850 pb-3">
               <Layers size={18} className="text-teal-400" />
-              <span>Scheme Profile</span>
+              <span>{isStock ? "Stock Profile" : "Scheme Profile"}</span>
             </h3>
 
             <div className="space-y-4">
               <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
-                <span className="text-slate-400 font-medium">Launch Date</span>
+                <span className="text-slate-400 font-medium">
+                  {isStock ? "Listing Date" : "Launch Date"}
+                </span>
                 <span className="font-semibold text-slate-200">
                   {factsheetMeta.profile.launchDate}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
-                <span className="text-slate-400 font-medium">Corpus (Cr)</span>
-                <span className="font-mono font-bold text-slate-200">
-                  ₹{factsheetMeta.profile.corpusCr.toLocaleString("en-IN")}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
-                <span className="text-slate-400 font-medium">Category</span>
-                <span className="font-semibold text-slate-200">
-                  {cleanCategory}
-                </span>
-              </div>
+              {!isStock && (
+                <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
+                  <span className="text-slate-400 font-medium">
+                    Corpus (Cr)
+                  </span>
+                  <span className="font-mono font-bold text-slate-200">
+                    ₹{factsheetMeta.profile.corpusCr.toLocaleString("en-IN")}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
                 <span className="text-slate-400 font-medium">
-                  Expense Ratio
+                  {isStock ? "Sector" : "Category"}
                 </span>
-                <span className="font-mono font-bold text-slate-200">
-                  {factsheetMeta.profile.expenseRatio.toFixed(2)}%
+                <span className="font-semibold text-slate-200">
+                  {isStock ? holding.sector || "General" : cleanCategory}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
-                <span className="text-slate-400 font-medium">Scheme Type</span>
-                <span className="font-semibold text-teal-400">Open-Ended</span>
-              </div>
+              {!isStock && (
+                <>
+                  <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
+                    <span className="text-slate-400 font-medium">
+                      Expense Ratio
+                    </span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {factsheetMeta.profile.expenseRatio.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
+                    <span className="text-slate-400 font-medium">
+                      Scheme Type
+                    </span>
+                    <span className="font-semibold text-teal-400">
+                      Open-Ended
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between items-start text-sm border-b border-slate-850/60 pb-2">
-                <span className="text-slate-400 font-medium">Benchmark</span>
+                <span className="text-slate-400 font-medium">
+                  {isStock ? "Index Benchmark" : "Benchmark"}
+                </span>
                 <span className="font-semibold text-indigo-400 text-right text-xs max-w-[200px]">
                   {factsheetMeta.profile.benchmarkName}
                 </span>
               </div>
-              <div className="flex flex-col text-sm pt-1">
-                <span className="text-slate-400 font-medium mb-1">
-                  Exit Load
-                </span>
-                <span className="text-xs text-slate-300 bg-slate-950/40 p-2.5 border border-slate-850/80 rounded-lg leading-relaxed italic">
-                  {factsheetMeta.profile.exitLoad}
-                </span>
-              </div>
+              {!isStock && (
+                <div className="flex flex-col text-sm pt-1">
+                  <span className="text-slate-400 font-medium mb-1">
+                    Exit Load
+                  </span>
+                  <span className="text-xs text-slate-300 bg-slate-950/40 p-2.5 border border-slate-850/80 rounded-lg leading-relaxed italic">
+                    {factsheetMeta.profile.exitLoad}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* PANEL 2: COMPOSITION */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-305 backdrop-blur-sm">
-          <div>
-            <h3 className="text-base font-black text-slate-100 mb-5 tracking-tight flex items-center gap-2 border-b border-slate-850 pb-3">
-              <PieChart size={18} className="text-teal-400" />
-              <span>Asset Composition (%)</span>
-            </h3>
+        {!isStock && (
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-305 backdrop-blur-sm">
+            <div>
+              <h3 className="text-base font-black text-slate-100 mb-5 tracking-tight flex items-center gap-2 border-b border-slate-850 pb-3">
+                <PieChart size={18} className="text-teal-400" />
+                <span>Asset Composition (%)</span>
+              </h3>
 
-            <div className="space-y-4">
-              {/* Equity */}
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-300">Equity Allocation</span>
-                  <span className="text-teal-400 font-mono">
-                    {factsheetMeta.allocation.equity.toFixed(1)}%
-                  </span>
+              <div className="space-y-4">
+                {/* Equity */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span className="text-slate-300">Equity Allocation</span>
+                    <span className="text-teal-400 font-mono">
+                      {factsheetMeta.allocation.equity.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
+                    <motion.div
+                      className="bg-teal-500 h-full rounded-full transition-all duration-500"
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${factsheetMeta.allocation.equity}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
-                  <div
-                    className="bg-teal-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${factsheetMeta.allocation.equity}%` }}
-                  ></div>
-                </div>
-              </div>
 
-              {/* Debt */}
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-300">Debt Allocation</span>
-                  <span className="text-purple-400 font-mono">
-                    {factsheetMeta.allocation.debt.toFixed(1)}%
-                  </span>
+                {/* Debt */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span className="text-slate-300">Debt Allocation</span>
+                    <span className="text-purple-400 font-mono">
+                      {factsheetMeta.allocation.debt.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
+                    <motion.div
+                      className="bg-purple-500 h-full rounded-full transition-all duration-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${factsheetMeta.allocation.debt}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
-                  <div
-                    className="bg-purple-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${factsheetMeta.allocation.debt}%` }}
-                  ></div>
-                </div>
-              </div>
 
-              {/* Gold */}
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-300">Gold</span>
-                  <span className="text-amber-400 font-mono">
-                    {factsheetMeta.allocation.gold.toFixed(1)}%
-                  </span>
+                {/* Gold */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span className="text-slate-300">Gold</span>
+                    <span className="text-amber-400 font-mono">
+                      {factsheetMeta.allocation.gold.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
+                    <motion.div
+                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${factsheetMeta.allocation.gold}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
-                  <div
-                    className="bg-amber-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${factsheetMeta.allocation.gold}%` }}
-                  ></div>
-                </div>
-              </div>
 
-              {/* Global Equity */}
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-300">Global Equity</span>
-                  <span className="text-blue-400 font-mono">
-                    {factsheetMeta.allocation.globalEquity.toFixed(1)}%
-                  </span>
+                {/* Global Equity */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span className="text-slate-300">Global Equity</span>
+                    <span className="text-blue-400 font-mono">
+                      {factsheetMeta.allocation.globalEquity.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
+                    <motion.div
+                      className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                      initial={{ width: 0 }}
+                      animate={{
+                        width: `${factsheetMeta.allocation.globalEquity}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
-                  <div
-                    className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${factsheetMeta.allocation.globalEquity}%`,
-                    }}
-                  ></div>
-                </div>
-              </div>
 
-              {/* Other */}
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-1.5">
-                  <span className="text-slate-300">
-                    Other (Cash/Call Money)
-                  </span>
-                  <span className="text-slate-400 font-mono">
-                    {factsheetMeta.allocation.other.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
-                  <div
-                    className="bg-slate-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${factsheetMeta.allocation.other}%` }}
-                  ></div>
+                {/* Other */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1.5">
+                    <span className="text-slate-300">
+                      Other (Cash/Call Money)
+                    </span>
+                    <span className="text-slate-400 font-mono">
+                      {factsheetMeta.allocation.other.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-2.5 rounded-full overflow-hidden border border-slate-850/60">
+                    <motion.div
+                      className="bg-slate-500 h-full rounded-full transition-all duration-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${factsheetMeta.allocation.other}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="text-[10px] text-slate-500 border-t border-slate-850 pt-4 mt-6 leading-relaxed">
-            Note: Portfolio allocations are estimated based on standard mutual
-            fund category guidelines. Real-time updates reflect fund house
-            holdings updates.
+            <div className="text-[10px] text-slate-500 border-t border-slate-850 pt-4 mt-6 leading-relaxed">
+              Note: Portfolio allocations are estimated based on standard mutual
+              fund category guidelines. Real-time updates reflect fund house
+              holdings updates.
+            </div>
           </div>
-        </div>
+        )}
 
         {/* PANEL 3: VOLATILITY MEASURES */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-305 backdrop-blur-sm">
@@ -965,7 +1002,9 @@ export default function FundDetailsClient({
                   {currentVolatilityStats.beta.toFixed(2)}
                 </span>
               </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
+              <div
+                className={`bg-slate-950/40 p-3 border border-slate-850 rounded-xl ${!isDebt ? "col-span-2" : ""}`}
+              >
                 <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
                   Std. Deviation
                   <span title="Overall historical return volatility">
@@ -976,45 +1015,49 @@ export default function FundDetailsClient({
                   {currentVolatilityStats.stdDev.toFixed(2)}%
                 </span>
               </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  YTM (Debt)
-                  <span title="Yield to maturity (only for Debt)">
-                    <Info size={10} className="text-slate-600" />
-                  </span>
-                </span>
-                <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {currentVolatilityStats.ytm > 0
-                    ? `${currentVolatilityStats.ytm.toFixed(2)}%`
-                    : "0.0%"}
-                </span>
-              </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Mod. Duration
-                  <span title="Debt yield sensitivity time frame">
-                    <Info size={10} className="text-slate-600" />
-                  </span>
-                </span>
-                <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {currentVolatilityStats.modifiedDuration > 0
-                    ? `${currentVolatilityStats.modifiedDuration.toFixed(2)} Yr`
-                    : "0.0"}
-                </span>
-              </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Avg Maturity
-                  <span title="Average holding debt maturity period">
-                    <Info size={10} className="text-slate-600" />
-                  </span>
-                </span>
-                <span className="text-base font-black font-mono text-slate-400 block mt-1">
-                  {currentVolatilityStats.avgMaturity > 0
-                    ? `${currentVolatilityStats.avgMaturity.toFixed(2)} Yr`
-                    : "0.0"}
-                </span>
-              </div>
+              {isDebt && (
+                <>
+                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
+                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
+                      YTM (Debt)
+                      <span title="Yield to maturity (only for Debt)">
+                        <Info size={10} className="text-slate-600" />
+                      </span>
+                    </span>
+                    <span className="text-base font-black font-mono text-slate-400 block mt-1">
+                      {currentVolatilityStats.ytm > 0
+                        ? `${currentVolatilityStats.ytm.toFixed(2)}%`
+                        : "0.0%"}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
+                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
+                      Mod. Duration
+                      <span title="Debt yield sensitivity time frame">
+                        <Info size={10} className="text-slate-600" />
+                      </span>
+                    </span>
+                    <span className="text-base font-black font-mono text-slate-400 block mt-1">
+                      {currentVolatilityStats.modifiedDuration > 0
+                        ? `${currentVolatilityStats.modifiedDuration.toFixed(2)} Yr`
+                        : "0.0"}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl col-span-2">
+                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1 justify-center">
+                      Avg Maturity
+                      <span title="Average holding debt maturity period">
+                        <Info size={10} className="text-slate-600" />
+                      </span>
+                    </span>
+                    <span className="text-base font-black font-mono text-slate-400 block mt-1 text-center">
+                      {currentVolatilityStats.avgMaturity > 0
+                        ? `${currentVolatilityStats.avgMaturity.toFixed(2)} Yr`
+                        : "0.0"}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1177,29 +1220,31 @@ export default function FundDetailsClient({
               </div>
 
               {/* Debt Metrics */}
-              <div className="bg-slate-950/50 p-4 border border-slate-850/80 rounded-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                  <span className="font-bold text-slate-200">
-                    YTM / Duration / Maturity
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                    Debt Specifics
-                  </span>
+              {isDebt && (
+                <div className="bg-slate-950/50 p-4 border border-slate-850/80 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                    <span className="font-bold text-slate-200">
+                      YTM / Duration / Maturity
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+                      Debt Specifics
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-200 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                    <span>Δ Price ≈ - Duration × Δy</span>
+                  </div>
+                  <div className="text-slate-400 text-xs leading-relaxed space-y-1">
+                    <p>
+                      YTM is the yield if held to maturity. Modified Duration
+                      measures bond price sensitivity to interest rate shifts (a
+                      1% yield rise drops price by Duration %).
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                      Where: Δ Price = Price change %, Δy = Yield change %
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-slate-200 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
-                  <span>Δ Price ≈ - Duration × Δy</span>
-                </div>
-                <div className="text-slate-400 text-xs leading-relaxed space-y-1">
-                  <p>
-                    YTM is the yield if held to maturity. Modified Duration
-                    measures bond price sensitivity to interest rate shifts (a
-                    1% yield rise drops price by Duration %).
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Where: Δ Price = Price change %, Δy = Yield change %
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -1217,10 +1262,12 @@ export default function FundDetailsClient({
           <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
             <div className="border-b border-slate-850/60 pb-2">
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
-                Balance Units
+                {isStock ? "Quantity" : "Balance Units"}
               </div>
               <div className="font-mono text-slate-200 mt-0.5 font-bold">
-                {holding.balanceUnits.toFixed(4)}
+                {isStock
+                  ? holding.balanceUnits.toLocaleString("en-IN")
+                  : holding.balanceUnits.toFixed(4)}
               </div>
             </div>
             <div className="border-b border-slate-850/60 pb-2">
@@ -1233,7 +1280,7 @@ export default function FundDetailsClient({
             </div>
             <div className="border-b border-slate-850/60 pb-2">
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
-                Purchase NAV
+                {isStock ? "Avg Purchase Price" : "Purchase NAV"}
               </div>
               <div className="font-mono text-slate-200 mt-0.5 font-bold">
                 ₹{holding.purchaseNav.toFixed(4)}
@@ -1241,30 +1288,34 @@ export default function FundDetailsClient({
             </div>
             <div className="border-b border-slate-850/60 pb-2">
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
-                Current NAV
+                {isStock ? "Current Price" : "Current NAV"}
               </div>
               <div className="font-mono text-slate-200 mt-0.5 font-bold">
                 ₹{holding.currentNav.toFixed(4)}
               </div>
             </div>
-            <div className="border-b border-slate-850/60 pb-2">
-              <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
-                Dividend Paid
-              </div>
-              <div className="font-mono text-slate-200 mt-0.5 font-bold">
-                ₹{(holding.dividend ?? 0).toFixed(2)}
-              </div>
-            </div>
-            <div className="border-b border-slate-850/60 pb-2">
-              <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
-                Report CAGR
-              </div>
-              <div className="text-slate-200 mt-0.5 font-black">
-                {holding.cagr !== null && holding.cagr !== undefined
-                  ? `${holding.cagr.toFixed(2)}%`
-                  : "-"}
-              </div>
-            </div>
+            {!isStock && (
+              <>
+                <div className="border-b border-slate-850/60 pb-2">
+                  <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                    Dividend Paid
+                  </div>
+                  <div className="font-mono text-slate-200 mt-0.5 font-bold">
+                    ₹{(holding.dividend ?? 0).toFixed(2)}
+                  </div>
+                </div>
+                <div className="border-b border-slate-850/60 pb-2">
+                  <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                    Report CAGR
+                  </div>
+                  <div className="text-slate-200 mt-0.5 font-black">
+                    {holding.cagr !== null && holding.cagr !== undefined
+                      ? `${holding.cagr.toFixed(2)}%`
+                      : "-"}
+                  </div>
+                </div>
+              </>
+            )}
             <div className="col-span-2">
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                 Comments
@@ -1286,15 +1337,17 @@ export default function FundDetailsClient({
             <div className="space-y-4">
               <div className="flex justify-between items-start text-sm">
                 <span className="text-slate-400 font-medium">
-                  Benchmark Scheme:
+                  {isStock ? "Benchmark Index:" : "Benchmark Scheme:"}
                 </span>
                 <span className="font-semibold text-slate-200 text-right text-xs">
-                  UTI Nifty 50 Index Fund Direct (120716)
+                  {isStock
+                    ? "Nifty 50 TRI (Index)"
+                    : "UTI Nifty 50 Index Fund Direct (120716)"}
                 </span>
               </div>
               <div className="flex justify-between items-start text-sm">
                 <span className="text-slate-400 font-medium">
-                  Scheme Code API:
+                  {isStock ? "Stock Symbol:" : "Scheme Code API:"}
                 </span>
                 {holding.schemeCodeApi ? (
                   <span className="font-mono text-emerald-400 font-bold bg-emerald-950/20 px-2.5 py-0.5 border border-emerald-900/40 rounded text-xs">
@@ -1308,17 +1361,18 @@ export default function FundDetailsClient({
                 )}
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mt-2 font-medium">
-                When mapped, we download historical NAV details from
-                `api.mfapi.in` dynamically. Transactions are mirrored into Nifty
-                50 to compute true portfolio outperformance.
+                {isStock
+                  ? "For stock holdings, we query historical daily price charts and metrics directly from Yahoo Finance API. Outperformance metrics are calculated against the Nifty 50 TRI Index."
+                  : "When mapped, we download historical NAV details from `api.mfapi.in` dynamically. Transactions are mirrored into Nifty 50 to compute true portfolio outperformance."}
               </p>
             </div>
           </div>
 
           {!holding.schemeCodeApi && (
             <div className="bg-amber-950/40 border border-amber-800/40 rounded-xl p-3 text-xs text-amber-300 mt-4 leading-relaxed font-semibold">
-              Assign a Scheme Code in the mapping tab to unlock dynamic Alpha
-              calculations.
+              {isStock
+                ? "Ensure symbol is mapped correctly in the mapping tab to unlock stock metrics."
+                : "Assign a Scheme Code in the mapping tab to unlock dynamic Alpha calculations."}
             </div>
           )}
         </div>
@@ -1344,8 +1398,8 @@ export default function FundDetailsClient({
               <tr className="bg-slate-950 text-slate-400 text-[10px] font-extrabold uppercase tracking-wider border-b border-slate-850">
                 <th className="p-4">Transaction Date</th>
                 <th className="p-4">Type</th>
-                <th className="p-4">Units</th>
-                <th className="p-4">NAV</th>
+                <th className="p-4">{isStock ? "Quantity" : "Units"}</th>
+                <th className="p-4">{isStock ? "Price" : "NAV"}</th>
                 <th className="p-4">Amount</th>
               </tr>
             </thead>
@@ -1356,13 +1410,13 @@ export default function FundDetailsClient({
                     colSpan={5}
                     className="p-8 text-center text-slate-500 font-semibold"
                   >
-                    No transactions found for this fund holding.
+                    No transactions found for this holding.
                   </td>
                 </tr>
               ) : (
                 transactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-950/40 transition">
-                    <td className="p-4">{formatDate(tx.date)}</td>
+                    <td className="p-4">{formatNullableDate(tx.date)}</td>
                     <td className="p-4">
                       <span
                         className={`px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider ${tx.type === "BUY" ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
@@ -1371,7 +1425,9 @@ export default function FundDetailsClient({
                       </span>
                     </td>
                     <td className="p-4 font-mono font-bold">
-                      {tx.units.toFixed(4)}
+                      {isStock
+                        ? tx.units.toLocaleString("en-IN")
+                        : tx.units.toFixed(4)}
                     </td>
                     <td className="p-4 font-mono font-bold">
                       ₹{tx.nav.toFixed(4)}

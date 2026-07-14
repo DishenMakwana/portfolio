@@ -1,10 +1,11 @@
-import { getDashboardDataAction } from "@/app/actions";
+import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import HoldingsTab from "@/components/HoldingsTab";
 import HeaderClient from "@/components/HeaderClient";
 import { PageProps } from "@/types/holdings";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Holdings" };
 
 export default async function HoldingsPage({ searchParams }: PageProps) {
   const params = await searchParams;

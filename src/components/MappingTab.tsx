@@ -20,7 +20,7 @@ import {
   searchMfApiAction,
   updateSchemeMappingAction,
   autoMapAllSchemesAction,
-} from "@/app/actions";
+} from "@/actions/portfolio";
 import { AutoMapResult } from "@/types/portfolio";
 import { MappingTabProps } from "@/types/mapping";
 import { MfSearchResult } from "@/types/mf-api";
@@ -352,9 +352,10 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                                 {result.confidence !== null && (
                                   <div className="flex items-center gap-1.5">
                                     <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <div
+                                      <motion.div
                                         className={`h-full rounded-full ${result.confidence >= 75 ? "bg-emerald-500" : result.confidence >= 55 ? "bg-amber-500" : "bg-red-500"}`}
-                                        style={{
+                                        initial={{ width: 0 }}
+                                        animate={{
                                           width: `${result.confidence}%`,
                                         }}
                                       />

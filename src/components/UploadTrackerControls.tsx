@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, RefreshCw, AlertTriangle, X } from "lucide-react";
-import { uploadReportAction } from "@/app/actions";
+import { uploadReportAction } from "@/actions/portfolio";
 import type { UploadTrackerControlsProps } from "@/types/upload-tracker";
 
 export default function UploadTrackerControls({

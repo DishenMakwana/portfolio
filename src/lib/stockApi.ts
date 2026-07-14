@@ -1,39 +1,25 @@
+import axios from "axios";
 import { MfDetailsResponse } from "@/types/mf-api";
 
-/**
- * Fetch stock price history from Yahoo Finance and format it like Mutual Fund NAV history.
- */
-export async function fetchStockHistory(
+async function fetchFromYahoo(
+  ticker: string,
   symbol: string
 ): Promise<MfDetailsResponse | null> {
-  if (!symbol) return null;
-  if (isUnlistedStock(symbol)) return null;
-
-  // Stocks in Zerodha are typically Indian stocks. Suffix .NS for National Stock Exchange (NSE).
-  const ticker = symbol.includes(".") ? symbol : `${symbol}.NS`;
   const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
-  )}?range=5y&interval=1d`;
+  )}?range=1y&interval=1d`;
 
   try {
-    const res = await fetch(url, {
+    const res = await axios.get(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(3000),
+      timeout: 3000,
     });
 
-    if (!res.ok) {
-      console.warn(
-        `[Yahoo Finance API] Failed to fetch for ${ticker}: status ${res.status}`
-      );
-      return null;
-    }
-
-    const json = await res.json();
-    const result = json?.chart?.result?.[0];
+    const result = res.data?.chart?.result?.[0];
     if (!result) {
       console.warn(`[Yahoo Finance API] No result returned for ${ticker}`);
       return null;
@@ -63,6 +49,10 @@ export async function fetchStockHistory(
       }
     }
 
+    if (data.length === 0) {
+      return null;
+    }
+
     // Sort descending by date (latest first) to match API behavior
     data.sort((a, b) => {
       const [ad, am, ay] = a.date.split("-");
@@ -82,6 +72,7 @@ export async function fetchStockHistory(
         scheme_name: symbol,
       },
       data,
+      resolvedTicker: ticker,
     };
   } catch (error: unknown) {
     const errObj = error as
@@ -99,13 +90,42 @@ export async function fetchStockHistory(
         `[Yahoo Finance API] Timeout fetching history for ${ticker} (3s). Using cache or fallback.`
       );
     } else {
-      console.error(
-        `[Yahoo Finance API] Error fetching history for ${ticker}:`,
+      console.warn(
+        `[Yahoo Finance API] Failed fetching history for ${ticker}:`,
         errorMsg
       );
     }
     return null;
   }
+}
+
+/**
+ * Fetch stock price history from Yahoo Finance and format it like Mutual Fund NAV history.
+ */
+export async function fetchStockHistory(
+  symbol: string
+): Promise<MfDetailsResponse | null> {
+  if (!symbol) return null;
+  if (isUnlistedStock(symbol)) return null;
+
+  // If a suffix is already specified (like .NS or .BO), fetch it directly.
+  if (symbol.includes(".")) {
+    return fetchFromYahoo(symbol, symbol);
+  }
+
+  // Try NSE first (.NS)
+  const nseTicker = `${symbol}.NS`;
+  const nseData = await fetchFromYahoo(nseTicker, symbol);
+  if (nseData) {
+    return nseData;
+  }
+
+  // Fallback to BSE (.BO)
+  const bseTicker = `${symbol}.BO`;
+  console.log(
+    `[Yahoo Finance API] NSE failed or returned empty for ${symbol}. Trying BSE fallback: ${bseTicker}`
+  );
+  return fetchFromYahoo(bseTicker, symbol);
 }
 
 const UNLISTED_STOCKS = new Set([

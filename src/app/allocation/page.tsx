@@ -1,8 +1,8 @@
-import { getDashboardDataAction } from "@/app/actions";
+import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import HeaderClient from "@/components/HeaderClient";
 import AllocationClient from "@/components/AllocationClient";
-import {PageProps} from "@/types/allocation";
+import { PageProps } from "@/types/allocation";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Asset Allocation — Family Portfolio" };

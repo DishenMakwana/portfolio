@@ -22,6 +22,27 @@
       "when": 1783404938674,
       "tag": "0002_large_the_captain",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783959779512,
+      "tag": "0003_tidy_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783960552109,
+      "tag": "0004_chunky_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783963270035,
+      "tag": "0005_mushy_leper_queen",
+      "breakpoints": true
     }
   ]
 }

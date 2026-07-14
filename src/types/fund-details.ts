@@ -58,3 +58,31 @@ export interface CustomTooltipProps {
 export interface FundPageProps {
   params: Promise<{ id: string }>;
 }
+
+export interface HoldingDetails {
+  id: number;
+  schemeId: number | null;
+  memberId: number | null;
+  schemeName: string | null;
+  category: string | null;
+  schemeCodeApi: string | null;
+  folioNo?: string | null;
+  balanceUnits: number;
+  purchaseNav: number;
+  purchaseValue: number;
+  currentNav: number;
+  currentValue: number;
+  dividend: number | null;
+  gain: number;
+  holdingDays: number;
+  absoluteReturn: number;
+  cagr: number;
+  comments: string | null;
+  memberName: string | null;
+  memberPan: string | null;
+  asOfDate: string | null;
+  holdingType?: string;
+  isin?: string;
+  reportId?: number | null;
+  sector?: string | null;
+}

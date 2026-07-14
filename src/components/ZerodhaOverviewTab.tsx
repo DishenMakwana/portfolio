@@ -35,6 +35,16 @@ import type {
   ZerodhaOverviewTabProps,
 } from "@/types/zerodha";
 
+const ZERODHA_COLOR_CLASSES = [
+  "bg-emerald-500",
+  "bg-violet-500",
+  "bg-blue-500",
+  "bg-pink-500",
+  "bg-amber-500",
+  "bg-teal-500",
+  "bg-red-500",
+];
+
 const CustomPerformanceTooltip = ({
   active,
   payload,
@@ -281,10 +291,7 @@ export default function ZerodhaOverviewTab({
                   >
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                        style={{
-                          backgroundColor: COLORS[index % COLORS.length],
-                        }}
+                        className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${ZERODHA_COLOR_CLASSES[index % ZERODHA_COLOR_CLASSES.length]}`}
                       />
                       <div className="flex flex-col">
                         <span className="text-slate-300 font-medium">
@@ -377,10 +384,7 @@ export default function ZerodhaOverviewTab({
                   >
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                        style={{
-                          backgroundColor: COLORS[(index + 2) % COLORS.length],
-                        }}
+                        className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${ZERODHA_COLOR_CLASSES[(index + 2) % ZERODHA_COLOR_CLASSES.length]}`}
                       />
                       <div className="flex flex-col">
                         <span className="text-slate-300 font-medium truncate max-w-[140px]">
@@ -689,9 +693,10 @@ export default function ZerodhaOverviewTab({
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                      <div
+                      <motion.div
                         className="bg-teal-500 h-full rounded-full"
-                        style={{ width: `${pct}%` }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>
@@ -727,9 +732,10 @@ export default function ZerodhaOverviewTab({
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                      <div
+                      <motion.div
                         className="bg-violet-500 h-full rounded-full"
-                        style={{ width: `${pct}%` }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>

@@ -7,7 +7,9 @@ import {
   sipMandates,
   memberReportCagrs,
   zerodhaHoldings,
+  zerodhaSchemes,
   msflHoldings,
+  msflSchemes,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { getBenchmarkHistory } from "@/lib/alpha";
@@ -292,8 +294,25 @@ export async function getInsightsData(): Promise<InsightsData> {
   const benchmarkReturns = await getBenchmarkReturns(reportDate);
 
   // Fetch Zerodha and MSFL stock holdings
-  const zHolds = await db.select().from(zerodhaHoldings);
-  const mHolds = await db.select().from(msflHoldings);
+  const zHolds = await db
+    .select({
+      quantity: zerodhaHoldings.quantity,
+      averagePrice: zerodhaHoldings.averagePrice,
+      currentPrice: zerodhaHoldings.currentPrice,
+      symbol: zerodhaSchemes.name,
+      holdingType: zerodhaSchemes.holdingType,
+    })
+    .from(zerodhaHoldings)
+    .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id));
+  const mHolds = await db
+    .select({
+      quantity: msflHoldings.quantity,
+      averagePrice: msflHoldings.averagePrice,
+      currentPrice: msflHoldings.currentPrice,
+      symbol: msflSchemes.name,
+    })
+    .from(msflHoldings)
+    .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id));
 
   return {
     reportDate,
@@ -315,14 +334,14 @@ export async function getInsightsData(): Promise<InsightsData> {
     sips: sipsOut,
     benchmarkReturns,
     zerodhaHoldings: zHolds.map((h) => ({
-      symbol: h.symbol,
+      symbol: h.symbol || "",
       quantity: h.quantity,
       averagePrice: h.averagePrice,
       currentPrice: h.currentPrice,
-      holdingType: h.holdingType,
+      holdingType: h.holdingType || "",
     })),
     msflHoldings: mHolds.map((h) => ({
-      symbol: h.symbol,
+      symbol: h.symbol || "",
       quantity: h.quantity,
       averagePrice: h.averagePrice,
       currentPrice: h.currentPrice,
