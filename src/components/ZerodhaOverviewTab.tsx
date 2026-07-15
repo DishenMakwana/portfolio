@@ -590,11 +590,129 @@ export default function ZerodhaOverviewTab({
 
       {/* Side summary details */}
       <div className="space-y-6">
-        {/* XIRR Comparison */}
+        {/* Portfolio Stats & Insights Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
+          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col gap-3 hover:border-slate-700/80 transition-all duration-300"
+        >
+          <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3">
+            <Activity size={15} className="text-teal-400 animate-pulse" />
+            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
+              Portfolio Stats & Insights
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Holdings Count */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Holdings Count
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.stocksCount} Stocks / {insights.fundsCount} Funds
+              </div>
+              <div className="text-[10px] text-slate-500">
+                Active positions in account
+              </div>
+            </div>
+
+            {/* Concentration */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Top 3 Concentration
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.top3Pct.toFixed(1)}%
+              </div>
+              <div className={`text-[10px] font-bold ${insights.statusColor}`}>
+                {insights.diversificationStatus}
+              </div>
+            </div>
+
+            {/* Top AMC Exposure */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Top AMC Exposure
+              </div>
+              <div
+                className="text-base font-extrabold text-slate-100 truncate"
+                title={insights.topAmc}
+              >
+                {insights.topAmc}
+              </div>
+              <div className="text-[10px] text-teal-400 font-bold">
+                {insights.amcPct.toFixed(1)}% share
+              </div>
+            </div>
+
+            {/* Avg Holding Period */}
+            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                Avg Holding Age
+              </div>
+              <div className="text-base font-extrabold text-slate-100">
+                {insights.avgDays} Days
+              </div>
+              <div className="text-[10px] text-slate-500">
+                per mutual fund scheme
+              </div>
+            </div>
+          </div>
+
+          {/* Top Assets */}
+          <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
+            {insights.topStock ? (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-medium">
+                  Top Stock Asset
+                </span>
+                <span
+                  className="text-teal-400 font-bold truncate max-w-[180px] text-right"
+                  title={insights.topStock.symbol}
+                >
+                  {insights.topStock.symbol} ({insights.topStockPct.toFixed(1)}%
+                  share)
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-medium">
+                  Top Stock Asset
+                </span>
+                <span className="text-slate-500">—</span>
+              </div>
+            )}
+            {insights.topFund ? (
+              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
+                <span className="text-slate-400 font-medium">
+                  Top Mutual Fund
+                </span>
+                <span
+                  className="text-violet-400 font-bold truncate max-w-[180px] text-right"
+                  title={insights.topFund.symbol}
+                >
+                  {insights.topFund.symbol.split(" ")[0]} (
+                  {insights.topFundPct.toFixed(1)}% share)
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
+                <span className="text-slate-400 font-medium">
+                  Top Mutual Fund
+                </span>
+                <span className="text-slate-500">—</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* XIRR Comparison */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
           className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl"
         >
           <div className="flex items-center justify-between mb-3">
@@ -748,124 +866,6 @@ export default function ZerodhaOverviewTab({
             )}
           </div>
         </div>
-
-        {/* Portfolio Stats & Insights Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-          className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 shadow-xl flex flex-col gap-3 hover:border-slate-700/80 transition-all duration-300"
-        >
-          <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3">
-            <Activity size={15} className="text-teal-400 animate-pulse" />
-            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-100">
-              Portfolio Stats & Insights
-            </h4>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {/* Holdings Count */}
-            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
-              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                Holdings Count
-              </div>
-              <div className="text-base font-extrabold text-slate-100">
-                {insights.stocksCount} Stocks / {insights.fundsCount} Funds
-              </div>
-              <div className="text-[10px] text-slate-500">
-                Active positions in account
-              </div>
-            </div>
-
-            {/* Concentration */}
-            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
-              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                Top 3 Concentration
-              </div>
-              <div className="text-base font-extrabold text-slate-100">
-                {insights.top3Pct.toFixed(1)}%
-              </div>
-              <div className={`text-[10px] font-bold ${insights.statusColor}`}>
-                {insights.diversificationStatus}
-              </div>
-            </div>
-
-            {/* Top AMC Exposure */}
-            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
-              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                Top AMC Exposure
-              </div>
-              <div
-                className="text-base font-extrabold text-slate-100 truncate"
-                title={insights.topAmc}
-              >
-                {insights.topAmc}
-              </div>
-              <div className="text-[10px] text-teal-400 font-bold">
-                {insights.amcPct.toFixed(1)}% share
-              </div>
-            </div>
-
-            {/* Avg Holding Period */}
-            <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
-              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                Avg Holding Age
-              </div>
-              <div className="text-base font-extrabold text-slate-100">
-                {insights.avgDays} Days
-              </div>
-              <div className="text-[10px] text-slate-500">
-                per mutual fund scheme
-              </div>
-            </div>
-          </div>
-
-          {/* Top Assets */}
-          <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
-            {insights.topStock ? (
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">
-                  Top Stock Asset
-                </span>
-                <span
-                  className="text-teal-400 font-bold truncate max-w-[180px] text-right"
-                  title={insights.topStock.symbol}
-                >
-                  {insights.topStock.symbol} ({insights.topStockPct.toFixed(1)}%
-                  share)
-                </span>
-              </div>
-            ) : (
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">
-                  Top Stock Asset
-                </span>
-                <span className="text-slate-500">—</span>
-              </div>
-            )}
-            {insights.topFund ? (
-              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
-                <span className="text-slate-400 font-medium">
-                  Top Mutual Fund
-                </span>
-                <span
-                  className="text-violet-400 font-bold truncate max-w-[180px] text-right"
-                  title={insights.topFund.symbol}
-                >
-                  {insights.topFund.symbol.split(" ")[0]} (
-                  {insights.topFundPct.toFixed(1)}% share)
-                </span>
-              </div>
-            ) : (
-              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
-                <span className="text-slate-400 font-medium">
-                  Top Mutual Fund
-                </span>
-                <span className="text-slate-500">—</span>
-              </div>
-            )}
-          </div>
-        </motion.div>
       </div>
     </div>
   );
