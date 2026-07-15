@@ -35,6 +35,9 @@ import type {
   SubCategoryGroupItem,
   AmcPoint,
   HoveredAmcPoint,
+  AllocationAnalysisGroup,
+  AllocationAnalysisSortKey,
+  AllocationAnalysisTabProps,
 } from "@/types/insights";
 import {
   formatInrCompact,
@@ -516,23 +519,23 @@ function futureValueGrowingAnnuity(
   return pmt * ((Math.pow(1 + r, n) - Math.pow(1 + g, n)) / (r - g));
 }
 
-// ─── AMC Analysis Tab Component ──────────────────────────────────────────────────
+// ─── Allocation Analysis Tab Component ───────────────────────────────────────────
 
-function AmcAnalysisTab({
-  amcData,
+function AllocationAnalysisTab({
+  analysisData,
   niftyBenchmark,
-  amcSortKey,
-  amcSortDir,
+  sortKey,
+  sortDir,
   onSort,
-}: {
-  amcData: AmcPoint[];
-  niftyBenchmark: number;
-  amcSortKey: string;
-  amcSortDir: "asc" | "desc";
-  onSort: (key: string) => void;
-}) {
+  entityLabel,
+  entityDescription,
+  title,
+  downloadPrefix,
+}: AllocationAnalysisTabProps) {
   const [graphView, setGraphView] = useState<"cagr" | "abs" | "xirr">("cagr");
-  const [hoveredAmc, setHoveredAmc] = useState<HoveredAmcPoint | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<HoveredAmcPoint | null>(
+    null
+  );
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const cagrSvgRef = useRef<SVGSVGElement | null>(null);
@@ -597,17 +600,17 @@ function AmcAnalysisTab({
 
   const handleDownload = () => {
     let activeSvg: SVGSVGElement | null = null;
-    let filename = "amc_analysis";
+    let filename = `${downloadPrefix}_analysis`;
 
     if (graphView === "cagr") {
       activeSvg = cagrSvgRef.current;
-      filename = "amc_cagr_returns";
+      filename = `${downloadPrefix}_cagr_returns`;
     } else if (graphView === "abs") {
       activeSvg = absSvgRef.current;
-      filename = "amc_absolute_returns";
+      filename = `${downloadPrefix}_absolute_returns`;
     } else if (graphView === "xirr") {
       activeSvg = xirrSvgRef.current;
-      filename = "amc_xirr_returns";
+      filename = `${downloadPrefix}_xirr_returns`;
     }
 
     if (activeSvg) {
@@ -616,15 +619,15 @@ function AmcAnalysisTab({
     }
   };
 
-  function AmcSortIcon({ col }: { col: string }) {
-    if (amcSortKey !== col)
+  function SortIcon({ col }: { col: AllocationAnalysisSortKey }) {
+    if (sortKey !== col)
       return (
         <ChevronsUpDown
           size={11}
           className="text-slate-600 inline ml-1.5 align-middle"
         />
       );
-    return amcSortDir === "asc" ? (
+    return sortDir === "asc" ? (
       <ChevronUp
         size={11}
         className="text-teal-400 inline ml-1.5 align-middle"
@@ -649,17 +652,17 @@ function AmcAnalysisTab({
   const height = chartH - padTop - padBottom;
 
   // --- Math for CAGR Bubble Chart ---
-  const maxDays = Math.max(...amcData.map((d) => d.avgHoldingDays), 365);
+  const maxDays = Math.max(...analysisData.map((d) => d.avgHoldingDays), 365);
   const maxX = Math.ceil(maxDays / 182.5) * 182.5;
 
   const maxVal =
     graphView === "cagr"
-      ? Math.max(...amcData.map((d) => d.cagr), 15)
-      : Math.max(...amcData.map((d) => d.xirr), 15);
+      ? Math.max(...analysisData.map((d) => d.cagr), 15)
+      : Math.max(...analysisData.map((d) => d.xirr), 15);
   const minVal =
     graphView === "cagr"
-      ? Math.min(...amcData.map((d) => d.cagr), 0)
-      : Math.min(...amcData.map((d) => d.xirr), 0);
+      ? Math.min(...analysisData.map((d) => d.cagr), 0)
+      : Math.min(...analysisData.map((d) => d.xirr), 0);
 
   const maxYVal = Math.ceil(maxVal / 5) * 5;
   const minYVal = minVal < 0 ? Math.floor(minVal / 5) * 5 : 0;
@@ -682,32 +685,39 @@ function AmcAnalysisTab({
   const benchmarkY = getYVal(niftyBenchmark);
 
   // --- Math for Absolute Returns Combo Chart ---
-  const amcWithReturns = useMemo(() => {
-    return amcData.map((amc) => {
-      const absReturn = amc.invested > 0 ? (amc.gain / amc.invested) * 100 : 0;
+  const analysisWithReturns = useMemo(() => {
+    return analysisData.map((item) => {
+      const absReturn =
+        item.invested > 0 ? (item.gain / item.invested) * 100 : 0;
       return {
-        ...amc,
+        ...item,
         absReturn,
       };
     });
-  }, [amcData]);
+  }, [analysisData]);
 
-  const maxAbsReturn = Math.max(...amcWithReturns.map((d) => d.absReturn), 15);
-  const minAbsReturn = Math.min(...amcWithReturns.map((d) => d.absReturn), 0);
+  const maxAbsReturn = Math.max(
+    ...analysisWithReturns.map((d) => d.absReturn),
+    15
+  );
+  const minAbsReturn = Math.min(
+    ...analysisWithReturns.map((d) => d.absReturn),
+    0
+  );
   const maxYLeft = Math.ceil(maxAbsReturn / 10) * 10;
   const minYLeft = minAbsReturn < 0 ? Math.floor(minAbsReturn / 10) * 10 : 0;
   const getYLeft = (val: number) =>
     padTop + height - ((val - minYLeft) / (maxYLeft - minYLeft)) * height;
 
   const maxHoldingDays = Math.max(
-    ...amcWithReturns.map((d) => d.avgHoldingDays),
+    ...analysisWithReturns.map((d) => d.avgHoldingDays),
     365
   );
   const maxYRight = Math.ceil(maxHoldingDays / 182.5) * 182.5;
   const getYRight = (val: number) =>
     padTop + height - (val / maxYRight) * height;
 
-  const stepXAbs = width / (amcWithReturns.length || 1);
+  const stepXAbs = width / (analysisWithReturns.length || 1);
   const getXAbs = (index: number) => padLeft + stepXAbs * index + stepXAbs / 2;
 
   const yLeftTicks: number[] = [];
@@ -722,9 +732,9 @@ function AmcAnalysisTab({
     yRightTicks.push(y);
   }
 
-  const linePoints = amcWithReturns.map((amc, i) => ({
+  const linePoints = analysisWithReturns.map((item, i) => ({
     x: getXAbs(i),
-    y: getYRight(amc.avgHoldingDays),
+    y: getYRight(item.avgHoldingDays),
   }));
 
   let linePath = "";
@@ -740,14 +750,12 @@ function AmcAnalysisTab({
       <div className="rounded-2xl border border-teal-500/25 bg-slate-900/70 backdrop-blur-md p-5 space-y-3 shadow-xl">
         <div className="flex items-center gap-2">
           <LineChart className="text-teal-400" size={18} />
-          <h2 className="text-base font-bold text-slate-100">
-            AMC Exposure & Performance Analysis
-          </h2>
+          <h2 className="text-base font-bold text-slate-100">{title}</h2>
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">
           {graphView === "cagr" && (
             <>
-              This Cartesian graph plots each Asset Management Company (AMC)
+              This Cartesian graph plots each {entityDescription}
               where the <strong>X-axis</strong> represents the weighted average
               holding period (Time) in days/years, the <strong>Y-axis</strong>{" "}
               represents the weighted CAGR return (%), and the{" "}
@@ -757,7 +765,7 @@ function AmcAnalysisTab({
           )}
           {graphView === "abs" && (
             <>
-              This Cartesian graph displays two metrics for each AMC:{" "}
+              This Cartesian graph displays two metrics for each {entityLabel}:{" "}
               <strong className="text-teal-400">Absolute Return (%)</strong> as
               vertical bars (left Y-axis) and{" "}
               <strong className="text-amber-500">
@@ -768,12 +776,12 @@ function AmcAnalysisTab({
           )}
           {graphView === "xirr" && (
             <>
-              This Cartesian graph displays AMC performance using a{" "}
+              This Cartesian graph displays {entityLabel} performance using a{" "}
               <strong className="text-teal-400">Lollipop Chart</strong> where
               the <strong>X-axis</strong> represents average holding period in
-              days/years, the <strong>Y-axis</strong> represents AMC XIRR return
-              (%), and stick height indicates the magnitude of return. Node size
-              represents relative portfolio weight (%).
+              days/years, the <strong>Y-axis</strong> represents {entityLabel}{" "}
+              XIRR return (%), and stick height indicates the magnitude of
+              return. Node size represents relative portfolio weight (%).
             </>
           )}
         </p>
@@ -784,10 +792,10 @@ function AmcAnalysisTab({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
             {graphView === "cagr"
-              ? "AMC CAGR Returns vs Weighted Holding Time"
+              ? `${entityLabel} CAGR Returns vs Weighted Holding Time`
               : graphView === "abs"
-                ? "AMC Absolute Returns vs Weighted Holding Time"
-                : "AMC XIRR Returns vs Weighted Holding Time"}
+                ? `${entityLabel} Absolute Returns vs Weighted Holding Time`
+                : `${entityLabel} XIRR Returns vs Weighted Holding Time`}
           </h3>
 
           {/* Graph View Selector & Download */}
@@ -966,31 +974,36 @@ function AmcAnalysisTab({
               </text>
 
               {/* Hover Crosshairs */}
-              {hoveredAmc && (
+              {hoveredPoint && (
                 <g className="pointer-events-none">
                   <line
                     x1={padLeft}
-                    y1={hoveredAmc.y}
-                    x2={hoveredAmc.x}
-                    y2={hoveredAmc.y}
+                    y1={hoveredPoint.y}
+                    x2={hoveredPoint.x}
+                    y2={hoveredPoint.y}
                     stroke="#2dd4bf"
                     strokeWidth="1.25"
                     strokeDasharray="4,3"
                     opacity="0.75"
                   />
                   <line
-                    x1={hoveredAmc.x}
-                    y1={hoveredAmc.y}
-                    x2={hoveredAmc.x}
+                    x1={hoveredPoint.x}
+                    y1={hoveredPoint.y}
+                    x2={hoveredPoint.x}
                     y2={chartH - padBottom}
                     stroke="#2dd4bf"
                     strokeWidth="1.25"
                     strokeDasharray="4,3"
                     opacity="0.75"
                   />
-                  <circle cx={padLeft} cy={hoveredAmc.y} r="3" fill="#2dd4bf" />
                   <circle
-                    cx={hoveredAmc.x}
+                    cx={padLeft}
+                    cy={hoveredPoint.y}
+                    r="3"
+                    fill="#2dd4bf"
+                  />
+                  <circle
+                    cx={hoveredPoint.x}
                     cy={chartH - padBottom}
                     r="3"
                     fill="#2dd4bf"
@@ -999,14 +1012,14 @@ function AmcAnalysisTab({
               )}
 
               {/* Bubbles / Points */}
-              {amcData.map((amc, i) => {
+              {analysisData.map((amc, i) => {
                 const cx = getX(amc.avgHoldingDays);
                 const cy = getYVal(amc.cagr);
 
                 const r = 8 + Math.sqrt(amc.weight) * 3.2;
 
-                const isHovered = hoveredAmc?.name === amc.name;
-                const opacity = hoveredAmc ? (isHovered ? 1.0 : 0.25) : 0.85;
+                const isHovered = hoveredPoint?.name === amc.name;
+                const opacity = hoveredPoint ? (isHovered ? 1.0 : 0.25) : 0.85;
 
                 let gradId = `amcGrad-${i}`;
                 let stopColor1 = "#3b82f6";
@@ -1036,13 +1049,13 @@ function AmcAnalysisTab({
                     key={amc.name}
                     className="cursor-pointer"
                     onMouseEnter={() =>
-                      setHoveredAmc({
+                      setHoveredPoint({
                         x: cx,
                         y: cy,
                         ...amc,
                       })
                     }
-                    onMouseLeave={() => setHoveredAmc(null)}
+                    onMouseLeave={() => setHoveredPoint(null)}
                   >
                     <defs>
                       <radialGradient id={gradId} cx="35%" cy="35%" r="65%">
@@ -1109,15 +1122,15 @@ function AmcAnalysisTab({
               })}
 
               {/* Custom Tooltip rendered inside SVG */}
-              {hoveredAmc &&
+              {hoveredPoint &&
                 (() => {
                   const tooltipW = 200;
                   const tooltipH = 105;
-                  let tx = hoveredAmc.x + 15;
+                  let tx = hoveredPoint.x + 15;
                   if (tx + tooltipW > chartW) {
-                    tx = hoveredAmc.x - tooltipW - 15;
+                    tx = hoveredPoint.x - tooltipW - 15;
                   }
-                  let ty = hoveredAmc.y - tooltipH / 2;
+                  let ty = hoveredPoint.y - tooltipH / 2;
                   if (ty < 10) ty = 10;
                   if (ty + tooltipH > chartH - 10) ty = chartH - tooltipH - 10;
 
@@ -1141,28 +1154,28 @@ function AmcAnalysisTab({
                         fontWeight="black"
                         fill="#f1f5f9"
                       >
-                        {hoveredAmc.name.split(" ").slice(0, 3).join(" ")}
+                        {hoveredPoint.name.split(" ").slice(0, 3).join(" ")}
                       </text>
                       <text x={tx + 12} y={ty + 42} fontSize="9" fill="#94a3b8">
                         Weight:{" "}
                         <tspan fill="#f1f5f9" fontWeight="bold">
-                          {hoveredAmc.weight.toFixed(1)}%
+                          {hoveredPoint.weight.toFixed(1)}%
                         </tspan>{" "}
-                        ({formatInrCompact(hoveredAmc.current)})
+                        ({formatInrCompact(hoveredPoint.current)})
                       </text>
                       <text x={tx + 12} y={ty + 60} fontSize="9" fill="#94a3b8">
                         Weighted CAGR:{" "}
                         <tspan
                           fill={
-                            hoveredAmc.cagr >= 15
+                            hoveredPoint.cagr >= 15
                               ? "#2dd4bf"
-                              : hoveredAmc.cagr >= 10
+                              : hoveredPoint.cagr >= 10
                                 ? "#fbbf24"
                                 : "#fb7185"
                           }
                           fontWeight="black"
                         >
-                          {hoveredAmc.cagr.toFixed(2)}%
+                          {hoveredPoint.cagr.toFixed(2)}%
                         </tspan>
                       </text>
                       <text x={tx + 12} y={ty + 78} fontSize="9" fill="#94a3b8">
@@ -1175,7 +1188,7 @@ function AmcAnalysisTab({
                         fill="#f1f5f9"
                         fontWeight="semibold"
                       >
-                        {formatHoldingDays(hoveredAmc.avgHoldingDays)}
+                        {formatHoldingDays(hoveredPoint.avgHoldingDays)}
                       </text>
                     </g>
                   );
@@ -1289,7 +1302,7 @@ function AmcAnalysisTab({
                 Holding Period (Years)
               </text>
 
-              {amcWithReturns.map((amc, i) => {
+              {analysisWithReturns.map((amc, i) => {
                 const cx = getXAbs(i);
                 const cy = getYLeft(amc.absReturn);
                 const cyZero = getYLeft(0);
@@ -1346,7 +1359,7 @@ function AmcAnalysisTab({
                 />
               )}
 
-              {amcWithReturns.map((amc, i) => {
+              {analysisWithReturns.map((amc, i) => {
                 const cx = getXAbs(i);
                 const cy = getYRight(amc.avgHoldingDays);
 
@@ -1372,7 +1385,7 @@ function AmcAnalysisTab({
                 );
               })}
 
-              {amcWithReturns.map((amc, i) => {
+              {analysisWithReturns.map((amc, i) => {
                 const x = getXAbs(i);
                 const isHovered = hoveredIdx === i;
                 const shortName = amc.name
@@ -1411,12 +1424,12 @@ function AmcAnalysisTab({
                 fill="#64748b"
                 className="font-sans"
               >
-                AMC Exposure
+                {entityLabel} Exposure
               </text>
 
               {hoveredIdx !== null &&
                 (() => {
-                  const amc = amcWithReturns[hoveredIdx];
+                  const amc = analysisWithReturns[hoveredIdx];
                   const cx = getXAbs(hoveredIdx);
                   const cy = getYLeft(amc.absReturn);
 
@@ -1590,7 +1603,7 @@ function AmcAnalysisTab({
                 fontWeight="bold"
                 fill="#64748b"
               >
-                AMC XIRR Return (%)
+                {entityLabel} XIRR Return (%)
               </text>
 
               {/* Nifty 3Y Benchmark Line */}
@@ -1616,14 +1629,14 @@ function AmcAnalysisTab({
               </text>
 
               {/* Hover Crosshairs */}
-              {hoveredAmc && (
+              {hoveredPoint && (
                 <g className="pointer-events-none">
                   {/* Horizontal line to Y-axis */}
                   <line
                     x1={padLeft}
-                    y1={hoveredAmc.y}
-                    x2={hoveredAmc.x}
-                    y2={hoveredAmc.y}
+                    y1={hoveredPoint.y}
+                    x2={hoveredPoint.x}
+                    y2={hoveredPoint.y}
                     stroke="#fbbf24"
                     strokeWidth="1.25"
                     strokeDasharray="4,3"
@@ -1631,18 +1644,23 @@ function AmcAnalysisTab({
                   />
                   {/* Vertical line to X-axis */}
                   <line
-                    x1={hoveredAmc.x}
-                    y1={hoveredAmc.y}
-                    x2={hoveredAmc.x}
+                    x1={hoveredPoint.x}
+                    y1={hoveredPoint.y}
+                    x2={hoveredPoint.x}
                     y2={chartH - padBottom}
                     stroke="#fbbf24"
                     strokeWidth="1.25"
                     strokeDasharray="4,3"
                     opacity="0.75"
                   />
-                  <circle cx={padLeft} cy={hoveredAmc.y} r="3" fill="#fbbf24" />
                   <circle
-                    cx={hoveredAmc.x}
+                    cx={padLeft}
+                    cy={hoveredPoint.y}
+                    r="3"
+                    fill="#fbbf24"
+                  />
+                  <circle
+                    cx={hoveredPoint.x}
                     cy={chartH - padBottom}
                     r="3"
                     fill="#fbbf24"
@@ -1651,13 +1669,13 @@ function AmcAnalysisTab({
               )}
 
               {/* Lollipop Sticks and Heads */}
-              {amcData.map((amc) => {
+              {analysisData.map((amc) => {
                 const cx = getX(amc.avgHoldingDays);
                 const cy = getYVal(amc.xirr);
                 const cyZero = getYVal(0);
 
-                const isHovered = hoveredAmc?.name === amc.name;
-                const opacity = hoveredAmc ? (isHovered ? 1.0 : 0.25) : 0.85;
+                const isHovered = hoveredPoint?.name === amc.name;
+                const opacity = hoveredPoint ? (isHovered ? 1.0 : 0.25) : 0.85;
 
                 // Color selection based on XIRR performance
                 let color = "#3b82f6";
@@ -1686,13 +1704,13 @@ function AmcAnalysisTab({
                     key={`lolipop-${amc.name}`}
                     className="cursor-pointer"
                     onMouseEnter={() =>
-                      setHoveredAmc({
+                      setHoveredPoint({
                         x: cx,
                         y: cy,
                         ...amc,
                       })
                     }
-                    onMouseLeave={() => setHoveredAmc(null)}
+                    onMouseLeave={() => setHoveredPoint(null)}
                   >
                     {/* Glow ring on hover */}
                     {isHovered && (
@@ -1742,7 +1760,7 @@ function AmcAnalysisTab({
                       fontSize="9"
                       fontWeight={isHovered ? "black" : "semibold"}
                       fill={isHovered ? "#f1f5f9" : "#64748b"}
-                      opacity={hoveredAmc ? (isHovered ? 1.0 : 0.3) : 0.85}
+                      opacity={hoveredPoint ? (isHovered ? 1.0 : 0.3) : 0.85}
                       className="transition-all duration-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] font-sans"
                     >
                       {shortName}
@@ -1752,15 +1770,15 @@ function AmcAnalysisTab({
               })}
 
               {/* Custom Tooltip */}
-              {hoveredAmc &&
+              {hoveredPoint &&
                 (() => {
                   const tooltipW = 200;
                   const tooltipH = 105;
-                  let tx = hoveredAmc.x + 15;
+                  let tx = hoveredPoint.x + 15;
                   if (tx + tooltipW > chartW) {
-                    tx = hoveredAmc.x - tooltipW - 15;
+                    tx = hoveredPoint.x - tooltipW - 15;
                   }
-                  let ty = hoveredAmc.y - tooltipH / 2;
+                  let ty = hoveredPoint.y - tooltipH / 2;
                   if (ty < 10) ty = 10;
                   if (ty + tooltipH > chartH - 10) ty = chartH - tooltipH - 10;
 
@@ -1785,30 +1803,30 @@ function AmcAnalysisTab({
                         fontWeight="black"
                         fill="#f1f5f9"
                       >
-                        {hoveredAmc.name.split(" ").slice(0, 3).join(" ")}
+                        {hoveredPoint.name.split(" ").slice(0, 3).join(" ")}
                       </text>
 
                       <text x={tx + 12} y={ty + 42} fontSize="9" fill="#94a3b8">
                         Weight:{" "}
                         <tspan fill="#f1f5f9" fontWeight="bold">
-                          {hoveredAmc.weight.toFixed(1)}%
+                          {hoveredPoint.weight.toFixed(1)}%
                         </tspan>{" "}
-                        ({formatInrCompact(hoveredAmc.current)})
+                        ({formatInrCompact(hoveredPoint.current)})
                       </text>
 
                       <text x={tx + 12} y={ty + 60} fontSize="9" fill="#94a3b8">
-                        AMC XIRR Return:{" "}
+                        {entityLabel} XIRR Return:{" "}
                         <tspan
                           fill={
-                            hoveredAmc.xirr >= 15
+                            hoveredPoint.xirr >= 15
                               ? "#2dd4bf"
-                              : hoveredAmc.xirr >= 10
+                              : hoveredPoint.xirr >= 10
                                 ? "#fbbf24"
                                 : "#fb7185"
                           }
                           fontWeight="black"
                         >
-                          {hoveredAmc.xirr.toFixed(2)}%
+                          {hoveredPoint.xirr.toFixed(2)}%
                         </tspan>
                       </text>
 
@@ -1822,7 +1840,7 @@ function AmcAnalysisTab({
                         fill="#f1f5f9"
                         fontWeight="semibold"
                       >
-                        {formatHoldingDays(hoveredAmc.avgHoldingDays)}
+                        {formatHoldingDays(hoveredPoint.avgHoldingDays)}
                       </text>
                     </g>
                   );
@@ -1832,10 +1850,10 @@ function AmcAnalysisTab({
         </div>
       </div>
 
-      {/* Detailed AMC Performance Table */}
+      {/* Detailed allocation performance table */}
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-          AMC Performance Details
+          {entityLabel} Performance Details
         </h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-800">
@@ -1845,54 +1863,54 @@ function AmcAnalysisTab({
                   className="pb-3 pr-4 pl-4 cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("name")}
                 >
-                  AMC Name <AmcSortIcon col="name" />
+                  {entityLabel} Name <SortIcon col="name" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("weight")}
                 >
-                  Weight <AmcSortIcon col="weight" />
+                  Weight <SortIcon col="weight" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("current")}
                 >
-                  Current Value <AmcSortIcon col="current" />
+                  Current Value <SortIcon col="current" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("invested")}
                 >
-                  Invested Value <AmcSortIcon col="invested" />
+                  Invested Value <SortIcon col="invested" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("gain")}
                 >
-                  Gain / Loss <AmcSortIcon col="gain" />
+                  Gain / Loss <SortIcon col="gain" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("cagr")}
                 >
-                  Weighted CAGR <AmcSortIcon col="cagr" />
+                  Weighted CAGR <SortIcon col="cagr" />
                 </th>
                 <th
                   className="pb-3 px-4 text-right cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("xirr")}
                 >
-                  AMC XIRR <AmcSortIcon col="xirr" />
+                  {entityLabel} XIRR <SortIcon col="xirr" />
                 </th>
                 <th
                   className="pb-3 pl-4 text-right pr-4 cursor-pointer hover:text-slate-300 transition-colors"
                   onClick={() => onSort("avgHoldingDays")}
                 >
-                  Avg. Holding Period <AmcSortIcon col="avgHoldingDays" />
+                  Avg. Holding Period <SortIcon col="avgHoldingDays" />
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-sm">
-              {amcWithReturns.map((amc) => {
+              {analysisWithReturns.map((amc) => {
                 const gainPct =
                   amc.invested > 0 ? (amc.gain / amc.invested) * 100 : 0;
 
@@ -2034,6 +2052,81 @@ const FALLBACK_GRADIENT_CLASS =
 const FALLBACK_BADGE_CLASS =
   "bg-slate-500/15 text-slate-300 border-slate-500/25";
 
+const ALLOCATION_ANALYSIS_SORT_KEYS: AllocationAnalysisSortKey[] = [
+  "name",
+  "weight",
+  "current",
+  "invested",
+  "gain",
+  "cagr",
+  "avgHoldingDays",
+  "xirr",
+];
+
+function getAllocationAnalysisSortKey(
+  rawSortKey: string | null
+): AllocationAnalysisSortKey {
+  return ALLOCATION_ANALYSIS_SORT_KEYS.includes(
+    rawSortKey as AllocationAnalysisSortKey
+  )
+    ? (rawSortKey as AllocationAnalysisSortKey)
+    : "current";
+}
+
+function sortAllocationAnalysisData(
+  analysisData: AmcPoint[],
+  sortKey: AllocationAnalysisSortKey,
+  sortDir: "asc" | "desc"
+): AmcPoint[] {
+  return [...analysisData].sort((a, b) => {
+    const av = a[sortKey];
+    const bv = b[sortKey];
+
+    if (typeof av === "string" && typeof bv === "string") {
+      return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+
+    return sortDir === "asc" ? av - bv : bv - av;
+  });
+}
+
+function mapAllocationAnalysisGroups(
+  groups: AllocationAnalysisGroup[],
+  totalCurrent: number
+): AmcPoint[] {
+  return groups
+    .map((group) => {
+      const cagr =
+        group.totalCagrWeight > 0
+          ? group.weightedCagrSum / group.totalCagrWeight
+          : 0;
+      const avgHoldingDays =
+        group.totalHoldingDaysWeight > 0
+          ? group.weightedHoldingDaysSum / group.totalHoldingDaysWeight
+          : 0;
+      const weight =
+        totalCurrent > 0 ? (group.current / totalCurrent) * 100 : 0;
+      const xirr =
+        group.invested > 0 && avgHoldingDays > 0
+          ? (Math.pow(group.current / group.invested, 365.25 / avgHoldingDays) -
+              1) *
+            100
+          : 0;
+
+      return {
+        name: group.name,
+        invested: group.invested,
+        current: group.current,
+        gain: group.gain,
+        cagr,
+        avgHoldingDays,
+        weight,
+        xirr,
+      };
+    })
+    .sort((a, b) => b.current - a.current);
+}
+
 export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -2051,6 +2144,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
       "actions",
       "overlaps",
       "amc",
+      "category",
     ].includes(tabParam)
       ? tabParam
       : "overview";
@@ -2086,6 +2180,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     { id: "actions", label: "Actions", icon: Zap },
     { id: "overlaps", label: "Overlaps", icon: Layers },
     { id: "amc", label: "AMC Analysis", icon: LineChart },
+    { id: "category", label: "Category Allocation", icon: Layers },
   ];
 
   // Decompiled reverse engineering portfolio insights
@@ -2311,19 +2406,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   };
 
   const amcData = useMemo<AmcPoint[]>(() => {
-    const amcMap = new Map<
-      string,
-      {
-        name: string;
-        invested: number;
-        current: number;
-        gain: number;
-        weightedCagrSum: number;
-        weightedHoldingDaysSum: number;
-        totalCagrWeight: number;
-        totalHoldingDaysWeight: number;
-      }
-    >();
+    const amcMap = new Map<string, AllocationAnalysisGroup>();
 
     let totalMfCurrent = 0;
 
@@ -2359,61 +2442,57 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
       amcMap.set(amcName, existing);
     }
 
-    return Array.from(amcMap.values())
-      .map((amc) => {
-        const cagr =
-          amc.totalCagrWeight > 0
-            ? amc.weightedCagrSum / amc.totalCagrWeight
-            : 0;
-        const avgHoldingDays =
-          amc.totalHoldingDaysWeight > 0
-            ? amc.weightedHoldingDaysSum / amc.totalHoldingDaysWeight
-            : 0;
-        const weight =
-          totalMfCurrent > 0 ? (amc.current / totalMfCurrent) * 100 : 0;
-        const xirr =
-          amc.invested > 0 && avgHoldingDays > 0
-            ? (Math.pow(amc.current / amc.invested, 365.25 / avgHoldingDays) -
-                1) *
-              100
-            : 0;
-        return {
-          name: amc.name,
-          invested: amc.invested,
-          current: amc.current,
-          gain: amc.gain,
-          cagr,
-          avgHoldingDays,
-          weight,
-          xirr,
-        };
-      })
-      .sort((a, b) => b.current - a.current);
+    return mapAllocationAnalysisGroups(
+      Array.from(amcMap.values()),
+      totalMfCurrent
+    );
+  }, [data]);
+
+  const categoryData = useMemo<AmcPoint[]>(() => {
+    const categoryMap = new Map<string, AllocationAnalysisGroup>();
+
+    let totalMfCurrent = 0;
+
+    for (const s of data.schemes || []) {
+      const categoryName = s.category || "Uncategorized";
+      totalMfCurrent += s.current;
+
+      const existing = categoryMap.get(categoryName) || {
+        name: categoryName,
+        invested: 0,
+        current: 0,
+        gain: 0,
+        weightedCagrSum: 0,
+        weightedHoldingDaysSum: 0,
+        totalCagrWeight: 0,
+        totalHoldingDaysWeight: 0,
+      };
+
+      existing.invested += s.invested;
+      existing.current += s.current;
+      existing.gain += s.gain;
+
+      existing.weightedCagrSum += s.avgCagr * s.current;
+      existing.totalCagrWeight += s.current;
+
+      for (const h of s.holdings || []) {
+        if (h.holdingDays) {
+          existing.weightedHoldingDaysSum += h.holdingDays * h.current;
+          existing.totalHoldingDaysWeight += h.current;
+        }
+      }
+
+      categoryMap.set(categoryName, existing);
+    }
+
+    return mapAllocationAnalysisGroups(
+      Array.from(categoryMap.values()),
+      totalMfCurrent
+    );
   }, [data]);
 
   const rawAmcSort = searchParams.get("amcSort");
-  const amcSortKey = (
-    [
-      "name",
-      "weight",
-      "current",
-      "invested",
-      "gain",
-      "cagr",
-      "avgHoldingDays",
-      "xirr",
-    ].includes(rawAmcSort || "")
-      ? rawAmcSort
-      : "current"
-  ) as
-    | "name"
-    | "weight"
-    | "current"
-    | "invested"
-    | "gain"
-    | "cagr"
-    | "avgHoldingDays"
-    | "xirr";
+  const amcSortKey = getAllocationAnalysisSortKey(rawAmcSort);
 
   const rawAmcOrder = searchParams.get("amcOrder");
   const amcSortDir = (
@@ -2421,31 +2500,45 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   ) as "asc" | "desc";
 
   const sortedAmcData = useMemo<AmcPoint[]>(() => {
-    const base = [...amcData];
-    return base.sort((a, b) => {
-      let av = a[amcSortKey];
-      let bv = b[amcSortKey];
-
-      if (typeof av === "string" && typeof bv === "string") {
-        return amcSortDir === "asc"
-          ? av.localeCompare(bv)
-          : bv.localeCompare(av);
-      }
-
-      // Numbers
-      return amcSortDir === "asc"
-        ? (av as number) - (bv as number)
-        : (bv as number) - (av as number);
-    });
+    return sortAllocationAnalysisData(amcData, amcSortKey, amcSortDir);
   }, [amcData, amcSortKey, amcSortDir]);
 
-  const handleAmcSort = (key: string) => {
+  const rawCategorySort = searchParams.get("categorySort");
+  const categorySortKey = getAllocationAnalysisSortKey(rawCategorySort);
+
+  const rawCategoryOrder = searchParams.get("categoryOrder");
+  const categorySortDir = (
+    rawCategoryOrder === "asc" || rawCategoryOrder === "desc"
+      ? rawCategoryOrder
+      : "desc"
+  ) as "asc" | "desc";
+
+  const sortedCategoryData = useMemo<AmcPoint[]>(() => {
+    return sortAllocationAnalysisData(
+      categoryData,
+      categorySortKey,
+      categorySortDir
+    );
+  }, [categoryData, categorySortKey, categorySortDir]);
+
+  const handleAmcSort = (key: AllocationAnalysisSortKey) => {
     const params = new URLSearchParams(searchParams.toString());
     if (amcSortKey === key) {
       params.set("amcOrder", amcSortDir === "asc" ? "desc" : "asc");
     } else {
       params.set("amcSort", key);
       params.set("amcOrder", "desc");
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const handleCategorySort = (key: AllocationAnalysisSortKey) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (categorySortKey === key) {
+      params.set("categoryOrder", categorySortDir === "asc" ? "desc" : "asc");
+    } else {
+      params.set("categorySort", key);
+      params.set("categoryOrder", "desc");
     }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
@@ -3786,12 +3879,30 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
           )}
 
           {activeTab === "amc" && (
-            <AmcAnalysisTab
-              amcData={sortedAmcData}
+            <AllocationAnalysisTab
+              analysisData={sortedAmcData}
               niftyBenchmark={niftyBenchmark}
-              amcSortKey={amcSortKey}
-              amcSortDir={amcSortDir}
+              sortKey={amcSortKey}
+              sortDir={amcSortDir}
               onSort={handleAmcSort}
+              entityLabel="AMC"
+              entityDescription="Asset Management Company (AMC)"
+              title="AMC Exposure & Performance Analysis"
+              downloadPrefix="amc"
+            />
+          )}
+
+          {activeTab === "category" && (
+            <AllocationAnalysisTab
+              analysisData={sortedCategoryData}
+              niftyBenchmark={niftyBenchmark}
+              sortKey={categorySortKey}
+              sortDir={categorySortDir}
+              onSort={handleCategorySort}
+              entityLabel="Category"
+              entityDescription="mutual fund category"
+              title="Category Allocation & Performance Analysis"
+              downloadPrefix="category"
             />
           )}
         </motion.div>

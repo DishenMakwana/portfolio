@@ -74,7 +74,14 @@ export interface InsightsData {
 }
 
 export type Tab =
-  "overview" | "funds" | "members" | "sip" | "actions" | "overlaps" | "amc";
+  | "overview"
+  | "funds"
+  | "members"
+  | "sip"
+  | "actions"
+  | "overlaps"
+  | "amc"
+  | "category";
 
 export interface AmcPoint {
   name: string;
@@ -98,6 +105,31 @@ export interface HoveredAmcPoint {
   avgHoldingDays: number;
   weight: number;
   xirr: number;
+}
+
+export type AllocationAnalysisSortKey = keyof AmcPoint;
+
+export interface AllocationAnalysisGroup {
+  name: string;
+  invested: number;
+  current: number;
+  gain: number;
+  weightedCagrSum: number;
+  weightedHoldingDaysSum: number;
+  totalCagrWeight: number;
+  totalHoldingDaysWeight: number;
+}
+
+export interface AllocationAnalysisTabProps {
+  analysisData: AmcPoint[];
+  niftyBenchmark: number;
+  sortKey: AllocationAnalysisSortKey;
+  sortDir: "asc" | "desc";
+  onSort: (key: AllocationAnalysisSortKey) => void;
+  entityLabel: string;
+  entityDescription: string;
+  title: string;
+  downloadPrefix: string;
 }
 
 export type SortKey =
