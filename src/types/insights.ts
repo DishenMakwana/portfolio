@@ -74,7 +74,31 @@ export interface InsightsData {
 }
 
 export type Tab =
-  "overview" | "funds" | "members" | "sip" | "actions" | "overlaps";
+  "overview" | "funds" | "members" | "sip" | "actions" | "overlaps" | "amc";
+
+export interface AmcPoint {
+  name: string;
+  invested: number;
+  current: number;
+  gain: number;
+  cagr: number;
+  avgHoldingDays: number;
+  weight: number;
+  xirr: number;
+}
+
+export interface HoveredAmcPoint {
+  x: number;
+  y: number;
+  name: string;
+  invested: number;
+  current: number;
+  gain: number;
+  cagr: number;
+  avgHoldingDays: number;
+  weight: number;
+  xirr: number;
+}
 
 export type SortKey =
   | "scheme"

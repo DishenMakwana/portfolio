@@ -154,3 +154,16 @@ export function formatUploadedAt(dateStr: string): string {
     hour12: true,
   });
 }
+
+/**
+ * Formats a holding days value into a readable string showing days and approximate years.
+ * Example: 730 → "730 days (~2.0 yrs)"
+ */
+export function formatHoldingDays(days: number): string {
+  const yrs = days / 365;
+  if (yrs < 0.1) return `${Math.round(days)} days`;
+  const formattedDays = Math.round(days).toLocaleString("en-IN");
+  const yrText = yrs.toFixed(1);
+  const suffix = Math.abs(yrs - 1) < 0.05 ? "" : "s";
+  return `${formattedDays} days (~${yrText} yr${suffix})`;
+}
