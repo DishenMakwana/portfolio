@@ -30,9 +30,9 @@ export default function UploadTrackerControls({
     formData.append("file", file);
     const res = await uploadReportAction(formData);
     setIsUploading(false);
-    if (res.success) {
+    if (res.success && res.data?.reportId) {
       router.refresh();
-      router.push(`/uploads?reportId=${res.reportId}`);
+      router.push(`/uploads?reportId=${res.data.reportId}`);
     } else {
       setUploadError(res.error || "Upload failed");
     }

@@ -86,3 +86,5 @@ export interface HoldingDetails {
   reportId?: number | null;
   sector?: string | null;
 }
+
+export type FundTimeframe = "3m" | "6m" | "1y" | "3y" | "5y" | "max";

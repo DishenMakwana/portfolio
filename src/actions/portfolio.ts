@@ -23,12 +23,16 @@ import {
   AutoMapResult,
   DashboardData,
   RawTransaction,
+  ActionResult,
+  BullionRatesResponse,
 } from "@/types/portfolio";
 import { clearAllZerodhaCaches } from "@/lib/zerodhaService";
+import type { MfSearchResult } from "@/types/mf-api";
 import { clearAllMsflCaches } from "@/lib/msflService";
 import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
 import { parseSipExcel } from "@/lib/sipParser";
 import { getBullionData } from "@/lib/bullionService";
+import { getAmcName, getSubCategory } from "@/helpers/allocation";
 import { db } from "@/db/db";
 import {
   transactions as txTable,
@@ -36,12 +40,13 @@ import {
   memberReportCagrs,
 } from "@/db/schema";
 import { eq, lte, inArray } from "drizzle-orm";
-import { BullionRates, ChartDataPoint } from "@/types/bullion";
 
 /**
  * Upload and parse Excel report
  */
-export async function uploadReportAction(formData: FormData) {
+export async function uploadReportAction(
+  formData: FormData
+): Promise<ActionResult<{ reportId?: number }>> {
   try {
     const file = formData.get("file") as File;
     if (!file) {
@@ -87,7 +92,7 @@ export async function uploadReportAction(formData: FormData) {
     );
 
     revalidatePath("/");
-    return { success: true, reportId };
+    return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("Upload Action Error:", error);
     const errorMsg =
@@ -99,10 +104,9 @@ export async function uploadReportAction(formData: FormData) {
 /**
  * Delete a report snapshot
  */
-export async function deleteReportAction(reportId: number): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+export async function deleteReportAction(
+  reportId: number
+): Promise<ActionResult> {
   try {
     await deleteReport(reportId);
     revalidatePath("/");
@@ -121,7 +125,9 @@ export async function deleteReportAction(reportId: number): Promise<{
 /**
  * Search public mutual funds API
  */
-export async function searchMfApiAction(query: string) {
+export async function searchMfApiAction(
+  query: string
+): Promise<ActionResult<MfSearchResult[]>> {
   return await searchMutualFund(query);
 }
 
@@ -184,9 +190,10 @@ export async function autoMapAllSchemesAction(
         .trim();
 
       const searchQuery = cleanName.slice(0, 35);
-      const searchResults = await searchMutualFund(searchQuery);
+      const searchRes = await searchMutualFund(searchQuery);
+      const searchResults = searchRes.data || [];
 
-      if (!searchResults || searchResults.length === 0) {
+      if (!searchRes.success || searchResults.length === 0) {
         results.push({
           schemeId: scheme.id,
           schemeName: scheme.name,
@@ -582,109 +589,6 @@ export async function getDashboardDataAction(
   const capMap = new Map<string, number>();
   const amcMap = new Map<string, number>();
 
-  const getSubCategory = (name: string, category: string): string => {
-    const n = name.toLowerCase();
-    const cat = (category || "").toLowerCase();
-    if (
-      cat.includes("debt") ||
-      n.includes("debt") ||
-      n.includes("bond") ||
-      n.includes("liquid") ||
-      n.includes("gilt") ||
-      n.includes("overnight") ||
-      n.includes("credit risk")
-    )
-      return "Debt";
-    if (n.includes("multi asset") || n.includes("multi-asset"))
-      return "Hybrid: Multi Asset";
-    if (n.includes("balanced advantage") || n.includes("dynamic asset"))
-      return "Hybrid: Balanced Advantage";
-    if (n.includes("aggressive hybrid") || n.includes("equity & debt"))
-      return "Hybrid: Aggressive";
-    if (n.includes("hybrid") || n.includes("conservative hybrid"))
-      return "Hybrid";
-    if (n.includes("long short") || n.includes("long-short"))
-      return cat.includes("equity") ? "SIF: Equity LS" : "SIF: Hybrid LS";
-    if (n.includes("flexi cap") || n.includes("flexicap"))
-      return "Equity: Flexi Cap";
-    if (
-      n.includes("large & mid") ||
-      n.includes("large and mid") ||
-      n.includes("large & mid cap")
-    )
-      return "Equity: Large & Mid Cap";
-    if (n.includes("multi cap") || n.includes("multicap"))
-      return "Equity: Multi Cap";
-    if (n.includes("mid small") || n.includes("mid & small"))
-      return "Equity: Mid Small Cap";
-    if (n.includes("mid cap") || n.includes("midcap")) return "Equity: Mid Cap";
-    if (n.includes("small cap") || n.includes("smallcap"))
-      return "Equity: Small Cap";
-    if (
-      n.includes("large cap") ||
-      n.includes("largecap") ||
-      n.includes("bluechip")
-    )
-      return "Equity: Large Cap";
-    if (n.includes("focused")) return "Equity: Focused";
-    if (
-      n.includes("elss") ||
-      n.includes("tax saver") ||
-      n.includes("tax saving")
-    )
-      return "Equity: ELSS";
-    if (
-      n.includes("thematic") ||
-      n.includes("opportunities") ||
-      n.includes("india opp")
-    )
-      return "Equity: Thematic";
-    if (n.includes("sectoral") || n.includes("sector"))
-      return "Equity: Sectoral";
-    if (n.includes("gold") || n.includes("precious")) return "Gold";
-    if (
-      n.includes("international") ||
-      n.includes("global") ||
-      n.includes("nasdaq") ||
-      n.includes("us ")
-    )
-      return "Global Equity";
-    if (cat.includes("equity") || n.includes("equity")) return "Equity";
-    return "Other";
-  };
-
-  const getAmcName = (name: string): string => {
-    const n = name.trim();
-    if (/^aditya birla/i.test(n)) return "Aditya Birla Sun Life Mutual Fund";
-    if (/^axis/i.test(n)) return "Axis Mutual Fund";
-    if (/^bajaj/i.test(n)) return "Bajaj Finserv Mutual Fund";
-    if (/^bandhan/i.test(n)) return "Bandhan Mutual Fund";
-    if (/^canara/i.test(n)) return "Canara Robeco Mutual Fund";
-    if (/^dsp/i.test(n)) return "DSP Mutual Fund";
-    if (/^edelweiss/i.test(n)) return "Edelweiss Mutual Fund";
-    if (/^franklin/i.test(n)) return "Franklin Templeton Mutual Fund";
-    if (/^hdfc/i.test(n)) return "HDFC Mutual Fund";
-    if (/^hsbc/i.test(n)) return "HSBC Mutual Fund";
-    if (/^icici pru/i.test(n)) return "ICICI Prudential Mutual Fund";
-    if (/^invesco/i.test(n)) return "Invesco Mutual Fund";
-    if (/^kotak/i.test(n)) return "Kotak Mutual Fund";
-    if (/^lic/i.test(n)) return "LIC Mutual Fund";
-    if (/^mirae/i.test(n)) return "Mirae Asset Mutual Fund";
-    if (/^motilal/i.test(n)) return "Motilal Oswal Mutual Fund";
-    if (/^nippon/i.test(n)) return "Nippon India Mutual Fund";
-    if (/^pgim/i.test(n)) return "PGIM India Mutual Fund";
-    if (/^ppfas/i.test(n) || /parag parikh/i.test(n))
-      return "PPFAS Mutual Fund";
-    if (/^quant/i.test(n)) return "Quant Mutual Fund";
-    if (/^sbi/i.test(n)) return "SBI Mutual Fund";
-    if (/^sundaram/i.test(n)) return "Sundaram Mutual Fund";
-    if (/^tata/i.test(n)) return "Tata Mutual Fund";
-    if (/^uti/i.test(n)) return "UTI Mutual Fund";
-    if (/^whiteoak/i.test(n) || /white oak/i.test(n))
-      return "WhiteOak Capital Mutual Fund";
-    return n.split(" ")[0] + " Mutual Fund";
-  };
-
   for (const h of holdings) {
     // Category allocation
     categoryMap.set(
@@ -799,7 +703,11 @@ export async function getDashboardDataAction(
 /**
  * Upload and parse a "My SIP's" Excel file, save mandates to DB.
  */
-export async function uploadSipAction(formData: FormData) {
+export async function uploadSipAction(
+  formData: FormData
+): Promise<
+  ActionResult<{ inserted?: number; skipped?: number; total?: number }>
+> {
   try {
     const file = formData.get("file") as File;
     if (!file) return { success: false, error: "No file uploaded" };
@@ -818,7 +726,10 @@ export async function uploadSipAction(formData: FormData) {
     const { inserted, skipped } = await saveSipMandates(parsed.sips, file.name);
 
     revalidatePath("/sips");
-    return { success: true, inserted, skipped, total: parsed.sips.length };
+    return {
+      success: true,
+      data: { inserted, skipped, total: parsed.sips.length },
+    };
   } catch (err: unknown) {
     console.error("SIP Upload Error:", err);
     const errorMsg =
@@ -837,10 +748,7 @@ export async function getSipMandatesAction() {
 /**
  * Clear all SIP mandates (full reset)
  */
-export async function clearSipMandatesAction(): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+export async function clearSipMandatesAction(): Promise<ActionResult> {
   try {
     await clearSipMandates();
     revalidatePath("/sips");
@@ -855,18 +763,11 @@ export async function clearSipMandatesAction(): Promise<{
 /**
  * Fetch fresh live rates and chart data by bypassing the in-memory cache
  */
-export async function refreshBullionDataAction(): Promise<{
-  success: boolean;
-  data?: {
-    rates: BullionRates;
-    chartData: ChartDataPoint[];
-    isThrottled?: boolean;
-  };
-  error?: string;
-}> {
+export async function refreshBullionDataAction(): Promise<
+  ActionResult<BullionRatesResponse>
+> {
   try {
-    const data = await getBullionData(true);
-    return { success: true, data };
+    return await getBullionData(true);
   } catch (err: unknown) {
     const errorMsg =
       err instanceof Error ? err.message : "Failed to refresh bullion rates";
@@ -880,10 +781,7 @@ export async function refreshBullionDataAction(): Promise<{
 /**
  * Force clear all in-memory caches for NAVs, stocks, and benchmarks
  */
-export async function globalRefreshAction(): Promise<{
-  success: boolean;
-  error?: string;
-}> {
+export async function globalRefreshAction(): Promise<ActionResult> {
   try {
     // 1. Clear in-memory caches
     clearAllAlphaCaches();

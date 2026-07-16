@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
 import { formatCurrency } from "@/lib/formatters";
+import { parseMonthYear } from "@/helpers/dates";
 import type { SipMandateRow } from "@/types/portfolio";
 import type { SipsClientProps } from "@/types/sips";
 
@@ -44,8 +45,11 @@ export default function SipsClient({ mandates }: SipsClientProps) {
     formData.append("file", file);
     const res = await uploadSipAction(formData);
     setIsUploading(false);
-    if (res.success) {
-      setUploadSuccess({ inserted: res.inserted!, total: res.total! });
+    if (res.success && res.data) {
+      setUploadSuccess({
+        inserted: res.data.inserted!,
+        total: res.data.total!,
+      });
       startTransition(() => router.refresh());
     } else {
       setUploadError(res.error || "Upload failed");
@@ -85,33 +89,48 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   const unsortedMonthCols =
     mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
 
-  // Parse a month/year label (e.g. "APR 26") to a Date object for sorting
-  function parseMonthYear(label: string): Date {
-    const parts = label.trim().split(/\s+/);
-    if (parts.length !== 2) return new Date(0);
-    const [m, y] = parts;
-    const monthNames = [
-      "JAN",
-      "FEB",
-      "MAR",
-      "APR",
-      "MAY",
-      "JUN",
-      "JUL",
-      "AUG",
-      "SEP",
-      "OCT",
-      "NOV",
-      "DEC",
-    ];
-    const monthIdx = monthNames.indexOf(m.toUpperCase());
-    const year = 2000 + parseInt(y, 10);
-    return new Date(year, monthIdx >= 0 ? monthIdx : 0, 1);
-  }
-
   const monthCols = [...unsortedMonthCols].sort((a, b) => {
     return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
   });
+
+  const rawCards = [
+    {
+      label: "Total Monthly SIP",
+      value: formatCurrency(totalMonthly),
+      sub: "Active mandates only",
+      color: "text-teal-400",
+      icon: IndianRupee,
+      bg: "bg-teal-500/10",
+      border: "border-teal-500/20",
+    },
+    {
+      label: "Total Mandates",
+      value: String(mandates.length),
+      sub: `${activeSips} active`,
+      color: "text-slate-100",
+      icon: Repeat2,
+      bg: "bg-slate-700/30",
+      border: "border-slate-700/50",
+    },
+    {
+      label: "Active SIPs",
+      value: String(activeSips),
+      sub: "Running this month",
+      color: "text-emerald-400",
+      icon: CheckCircle2,
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/20",
+    },
+    {
+      label: "Paused / Stopped",
+      value: String(pausedSips),
+      sub: "Zero in latest month",
+      color: "text-amber-400",
+      icon: AlertTriangle,
+      bg: "bg-amber-500/10",
+      border: "border-amber-500/20",
+    },
+  ];
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
@@ -214,44 +233,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
         <>
           {/* ── KPI SUMMARY CARDS ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                label: "Total Monthly SIP",
-                value: formatCurrency(totalMonthly),
-                sub: "Active mandates only",
-                color: "text-teal-400",
-                icon: IndianRupee,
-                bg: "bg-teal-500/10",
-                border: "border-teal-500/20",
-              },
-              {
-                label: "Total Mandates",
-                value: String(mandates.length),
-                sub: `${activeSips} active`,
-                color: "text-slate-100",
-                icon: Repeat2,
-                bg: "bg-slate-700/30",
-                border: "border-slate-700/50",
-              },
-              {
-                label: "Active SIPs",
-                value: String(activeSips),
-                sub: "Running this month",
-                color: "text-emerald-400",
-                icon: CheckCircle2,
-                bg: "bg-emerald-500/10",
-                border: "border-emerald-500/20",
-              },
-              {
-                label: "Paused / Stopped",
-                value: String(pausedSips),
-                sub: "Zero in latest month",
-                color: "text-amber-400",
-                icon: AlertTriangle,
-                bg: "bg-amber-500/10",
-                border: "border-amber-500/20",
-              },
-            ].map((card, i) => (
+            {rawCards.map((card, i) => (
               <motion.div
                 key={card.label}
                 initial={{ opacity: 0, y: 16 }}

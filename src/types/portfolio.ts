@@ -1,3 +1,5 @@
+import type { BullionRates, ChartDataPoint } from "./bullion";
+
 export interface HoldingDetails {
   id: number;
   schemeId: number;
@@ -207,4 +209,16 @@ export interface SipMandateRow {
   isActive: boolean;
   uploadedAt: string;
   sourceFile: string | null;
+}
+
+export interface ActionResult<T = undefined> {
+  success: boolean;
+  error?: string;
+  data?: T;
+}
+
+export interface BullionRatesResponse {
+  rates: BullionRates;
+  chartData: ChartDataPoint[];
+  isThrottled?: boolean;
 }

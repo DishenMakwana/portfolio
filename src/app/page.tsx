@@ -1,7 +1,7 @@
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
-import OverviewTab from "@/components/OverviewTab";
-import HeaderClient from "@/components/HeaderClient";
+import OverviewTab from "@/components/mutual-fund/overview/OverviewTab";
+import HeaderClient from "@/components/shared/HeaderClient";
 import { Upload } from "lucide-react";
 
 import { PageProps } from "@/types/overview";

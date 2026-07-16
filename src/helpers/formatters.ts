@@ -64,14 +64,6 @@ export function formatPct(val: number): string {
   return `${val.toFixed(2)}%`;
 }
 
-/**
- * Formats a percentage value to 1 decimal place (no sign prefix).
- * Example: 5.234 → "5.2%"
- */
-export function formatPct1(val: number): string {
-  return `${val.toFixed(1)}%`;
-}
-
 // ─── Misc Formatters ─────────────────────────────────────────────────────────
 
 /**
@@ -80,14 +72,6 @@ export function formatPct1(val: number): string {
  */
 export function formatPointDelta(delta: number): string {
   return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} pp`;
-}
-
-/**
- * Formats a signed percent delta with sign prefix.
- * Example: 5.2 → "+5.20%" | -1.5 → "-1.50%"
- */
-export function formatSignedPercent(val: number): string {
-  return `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`;
 }
 
 // ─── Date & Time Formatters ──────────────────────────────────────────────────
@@ -166,4 +150,28 @@ export function formatHoldingDays(days: number): string {
   const yrText = yrs.toFixed(1);
   const suffix = Math.abs(yrs - 1) < 0.05 ? "" : "s";
   return `${formattedDays} days (~${yrText} yr${suffix})`;
+}
+
+/**
+ * Formats a number as an Indian Rupee currency string with customizable decimal places.
+ */
+export function formatInr(val: number, decimals = 0): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: decimals,
+  }).format(val);
+}
+
+/**
+ * Formats a holding days count into split year/day format.
+ * Example: 740 -> "2 yr 10 d" | 30 -> "30 d"
+ */
+export function formatHoldingDaysDetailed(days: number): string {
+  const yrs = Math.floor(days / 365);
+  const remainingDays = Math.round(days % 365);
+  if (yrs === 0) {
+    return `${remainingDays} d`;
+  }
+  return `${yrs} yr ${remainingDays} d`;
 }

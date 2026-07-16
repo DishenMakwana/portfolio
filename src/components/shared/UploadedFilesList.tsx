@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Search, Clock3, FileSpreadsheet, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import DeleteReportButton from "./DeleteReportButton";
+import DeleteReportButton from "@/components/shared/DeleteReportButton";
 import type { UploadedFilesListProps } from "@/types/upload-tracker";
 import {
   formatLocalDateStr as formatDate,

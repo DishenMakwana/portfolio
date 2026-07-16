@@ -5,10 +5,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import HeaderClient from "@/components/HeaderClient";
-import DeleteReportButton from "@/components/DeleteReportButton";
-import UploadTrackerControls from "@/components/UploadTrackerControls";
-import UploadedFilesList from "@/components/UploadedFilesList";
+import HeaderClient from "@/components/shared/HeaderClient";
+import DeleteReportButton from "@/components/shared/DeleteReportButton";
+import UploadTrackerControls from "@/components/shared/UploadTrackerControls";
+import UploadedFilesList from "@/components/shared/UploadedFilesList";
 import { getReports, getSchemes } from "@/lib/portfolioService";
 import Link from "next/link";
 import {

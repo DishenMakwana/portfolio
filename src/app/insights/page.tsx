@@ -1,5 +1,5 @@
 import { getInsightsData } from "@/lib/insightsService";
-import InsightsDashboard from "@/components/InsightsDashboard";
+import InsightsDashboard from "@/components/mutual-fund/InsightsDashboard";
 import { Lightbulb } from "lucide-react";
 import { Suspense } from "react";
 

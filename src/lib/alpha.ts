@@ -39,10 +39,6 @@ function normaliseSchemeCode(
 // Cache for scheme histories to avoid duplicate DB queries within the same request lifecycle
 const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
 
-export function clearSchemeCache(schemeCode: string) {
-  schemeHistoryCache.delete(schemeCode);
-}
-
 export function clearAllAlphaCaches() {
   schemeHistoryCache.clear();
   benchmarkHistoryCache.clear();
@@ -53,8 +49,9 @@ export function clearAllAlphaCaches() {
  */
 async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
   try {
-    const data = await fetchMfDetails(schemeCode, startDate);
-    if (data && data.meta && data.data && data.data.length > 0) {
+    const res = await fetchMfDetails(schemeCode, startDate);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
       // Upsert scheme cache metadata
       await db
         .insert(schemeNavCacheMeta)
@@ -109,10 +106,6 @@ const benchmarkHistoryCache = new Map<
   Promise<MfDetailsResponse | null>
 >();
 
-export function clearBenchmarkCache(benchmarkCode: string) {
-  benchmarkHistoryCache.delete(benchmarkCode);
-}
-
 async function saveBenchmarkCache(
   benchmarkCode: string,
   data: MfDetailsResponse
@@ -161,8 +154,9 @@ async function triggerBenchmarkCacheUpdate(
   startDate?: string
 ) {
   try {
-    const data = await fetchMfDetails(benchmarkCode, startDate);
-    if (data && data.meta && data.data && data.data.length > 0) {
+    const res = await fetchMfDetails(benchmarkCode, startDate);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await saveBenchmarkCache(benchmarkCode, data);
     }
   } catch (err) {
@@ -257,8 +251,15 @@ export function getBenchmarkHistory(
       }
 
       // Fetch full history for benchmark comparison
-      const data = await fetchMfDetails(benchmarkCode);
-      if (data && data.meta && data.data && data.data.length > 0) {
+      const res = await fetchMfDetails(benchmarkCode);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
         try {
           await saveBenchmarkCache(benchmarkCode, data);
         } catch (e) {
@@ -360,8 +361,15 @@ export function getSchemeHistoryForDbCode(
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
       // Fetch full history to ensure returns graphs work correctly for long-term/insurance portfolios
-      const data = await fetchMfDetails(schemeCode);
-      if (data && data.meta && data.data && data.data.length > 0) {
+      const res = await fetchMfDetails(schemeCode);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
         try {
           // Upsert scheme cache metadata
           await db
@@ -815,22 +823,6 @@ export async function getBenchmarkCodeForCategory(
   return rule.benchmarkCode;
 }
 
-export async function getBenchmarkNameForCode(code: string): Promise<string> {
-  try {
-    const rule = await db
-      .select()
-      .from(benchmarkRules)
-      .where(eq(benchmarkRules.benchmarkCode, code))
-      .limit(1);
-    if (rule.length > 0) {
-      return rule[0].benchmarkName;
-    }
-  } catch (e) {
-    console.error("Error querying benchmarkName from DB:", e);
-  }
-  return "Nifty 500 Index";
-}
-
 export async function getBenchmarkFundNameForCode(
   code: string
 ): Promise<string> {
@@ -981,7 +973,6 @@ export function generateFactsheetChartData(
   if (fundNavHistory.length === 0 || benchNavHistory.length === 0) return [];
 
   const targetDate = new Date(asOfDate);
-  const weeksToFetch = 156; // 3 years of weekly data
 
   // Find earliest date when fund has history data (by comparing parsed date timestamps)
   let earliestFundDate = new Date(0);
@@ -1009,14 +1000,41 @@ export function generateFactsheetChartData(
     }
   }
 
-  // Align start date to either the target 3-years ago, or the earliest fund listing date (whichever is later)
-  const targetStartDate = new Date(
-    targetDate.getTime() - weeksToFetch * 7 * 24 * 60 * 60 * 1000
-  );
-  const finalStartDate =
-    earliestFundDate.getTime() > targetStartDate.getTime()
-      ? earliestFundDate
-      : targetStartDate;
+  // Find earliest date when benchmark has history data
+  let earliestBenchDate = new Date(0);
+  if (benchNavHistory.length > 0) {
+    let minTime = Infinity;
+    for (const p of benchNavHistory) {
+      const parts = p.date.split("-");
+      let d: Date;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      } else {
+        d = new Date(p.date);
+      }
+      const t = d.getTime();
+      if (!isNaN(t) && t < minTime) {
+        minTime = t;
+      }
+    }
+    if (minTime !== Infinity) {
+      earliestBenchDate = new Date(minTime);
+    }
+  }
+
+  // Align start date to the latest of fund listing date or benchmark listing date
+  let finalStartDate = earliestFundDate;
+  if (earliestFundDate.getTime() > 0 && earliestBenchDate.getTime() > 0) {
+    finalStartDate = new Date(
+      Math.max(earliestFundDate.getTime(), earliestBenchDate.getTime())
+    );
+  } else if (earliestBenchDate.getTime() > 0) {
+    finalStartDate = earliestBenchDate;
+  }
 
   const diffTime = targetDate.getTime() - finalStartDate.getTime();
   const weeksToGenerate = Math.max(

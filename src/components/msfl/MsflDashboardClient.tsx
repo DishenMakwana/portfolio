@@ -1,5 +1,8 @@
 "use client";
 
+import MetricCard from "@/components/shared/MetricCard";
+import DeltaBadge from "@/components/shared/DeltaBadge";
+import MsflLeaderboardChart from "@/components/msfl/MsflLeaderboardChart";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -17,14 +20,8 @@ import {
   ChevronUp,
   ChevronDown,
   Target,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react";
-import {
-  formatCurrency,
-  formatPercent,
-  formatPointDelta,
-} from "@/helpers/formatters";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type {
   MsflHoldingData,
@@ -37,390 +34,6 @@ import {
   deleteMsflHoldingsAction,
   updateMsflSchemeMappingAction,
 } from "@/actions/msfl";
-
-function DeltaBadge({
-  delta,
-  label = "vs prev",
-}: {
-  delta: number | null;
-  label?: string;
-}) {
-  if (delta === null) {
-    return (
-      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-        No prior snapshot
-      </span>
-    );
-  }
-
-  const isUp = delta >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-        isUp
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-          : "border-red-500/20 bg-red-500/10 text-red-400"
-      }`}
-    >
-      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-      {formatPointDelta(delta)} {label}
-    </span>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  accentColor = "teal",
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  positive?: boolean;
-  icon: React.ElementType;
-  accentColor?: "indigo" | "teal" | "emerald" | "rose" | "amber";
-}) {
-  const styles = {
-    indigo: {
-      border: "border-indigo-500/20",
-      gradFrom: "from-indigo-500/10",
-      iconBg: "bg-indigo-500/10",
-      iconColor: "text-indigo-400",
-      subColor: "text-slate-400",
-    },
-    teal: {
-      border: "border-teal-500/20",
-      gradFrom: "from-teal-500/10",
-      iconBg: "bg-teal-500/10",
-      iconColor: "text-teal-400",
-      subColor: "text-teal-400",
-    },
-    emerald: {
-      border: "border-emerald-500/20",
-      gradFrom: "from-emerald-500/10",
-      iconBg: "bg-emerald-500/10",
-      iconColor: "text-emerald-400",
-      subColor: "text-emerald-400",
-    },
-    rose: {
-      border: "border-rose-500/20",
-      gradFrom: "from-rose-500/10",
-      iconBg: "bg-rose-500/10",
-      iconColor: "text-rose-400",
-      subColor: "text-rose-400",
-    },
-    amber: {
-      border: "border-amber-500/20",
-      gradFrom: "from-amber-500/10",
-      iconBg: "bg-amber-500/10",
-      iconColor: "text-amber-400",
-      subColor: "text-amber-400",
-    },
-  };
-
-  const currentStyle = styles[accentColor];
-
-  return (
-    <motion.div
-      whileHover={{ y: -3, scale: 1.01 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${currentStyle.border} rounded-2xl p-5 shadow-xl transition-all duration-200 cursor-default`}
-    >
-      <div
-        className={`absolute inset-0 bg-gradient-to-br ${currentStyle.gradFrom} to-transparent pointer-events-none`}
-      />
-      <div className="relative z-10 flex flex-col h-full justify-between">
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              {label}
-            </span>
-            <div className={`p-2 rounded-xl ${currentStyle.iconBg}`}>
-              <Icon size={16} className={currentStyle.iconColor} />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-slate-100 leading-tight font-sans">
-            {value}
-          </div>
-        </div>
-        {sub && (
-          <div
-            className={`text-xs font-semibold mt-2.5 ${currentStyle.subColor}`}
-          >
-            {sub}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── SVG MSFL Stock CAGR Leaderboard Chart ──────────────────────────────────
-
-function MsflLeaderboardChart({
-  mfHoldings,
-  niftyBenchmark,
-}: {
-  mfHoldings: Array<{ symbol: string; cagr: number }>;
-  niftyBenchmark: number;
-}) {
-  const [hoveredBar, setHoveredBar] = useState<{
-    x: number;
-    y: number;
-    symbol: string;
-    cagr: number;
-  } | null>(null);
-
-  const maxCagr = Math.max(...mfHoldings.map((m) => m.cagr), 0);
-  const minCagr = Math.min(...mfHoldings.map((m) => m.cagr), 0);
-  const chartH = 320;
-  const barW = 60;
-  const minGap = 28;
-  const padX = 65;
-  const padY = 40;
-  const benchmark = niftyBenchmark;
-
-  // Set bounds for Y scale
-  const yMax = Math.max(maxCagr, benchmark, 1) * 1.15;
-  const yMin = minCagr < 0 ? minCagr * 1.35 : 0; // Pad negative side slightly to prevent text clipping
-  const totalRange = yMax - yMin;
-
-  const getY = (v: number) =>
-    padY + chartH - ((v - yMin) / totalRange) * chartH;
-
-  const zeroY = getY(0);
-  const benchmarkY = getY(benchmark);
-
-  const n = mfHoldings.length;
-  const neededW = padX * 2 + n * (barW + minGap) - minGap;
-  const totalW = Math.max(800, neededW);
-  const gap = n > 1 ? (totalW - padX * 2 - n * barW) / (n - 1) : 30;
-
-  return (
-    <div className="overflow-x-auto select-none relative">
-      <svg
-        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 60}`}
-        className="w-full min-w-[700px] h-[480px]"
-      >
-        {/* Grid lines */}
-        {[-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 75, 100, 150].map(
-          (v) => {
-            if (v > yMax || v < yMin) return null;
-            const y = getY(v);
-            return (
-              <g key={v}>
-                <line
-                  x1={padX}
-                  y1={y}
-                  x2={totalW - padX}
-                  y2={y}
-                  stroke={v === 0 ? "#475569" : "#1e293b"}
-                  strokeWidth={v === 0 ? "1.5" : "1"}
-                  strokeOpacity={v === 0 ? "0.8" : "1"}
-                />
-                <text
-                  x={padX - 8}
-                  y={y + 4}
-                  textAnchor="end"
-                  fontSize="9"
-                  fill={v === 0 ? "#94a3b8" : "#475569"}
-                  fontWeight={v === 0 ? "bold" : "normal"}
-                >
-                  {v}%
-                </text>
-              </g>
-            );
-          }
-        )}
-
-        {/* Benchmark line */}
-        <line
-          x1={padX}
-          y1={benchmarkY}
-          x2={totalW - padX}
-          y2={benchmarkY}
-          stroke="#f59e0b"
-          strokeWidth="1.5"
-          strokeDasharray="5,3"
-        />
-        <text
-          x={totalW - padX + 4}
-          y={benchmarkY + 3}
-          fontSize="9"
-          fill="#f59e0b"
-          fontWeight="bold"
-        >
-          Nifty {benchmark.toFixed(1)}%
-        </text>
-
-        {/* Bars */}
-        {mfHoldings.map((m, i) => {
-          const x = padX + i * (barW + gap);
-          const valY = getY(m.cagr);
-          const isNegative = m.cagr < 0;
-
-          const rectY = isNegative ? zeroY : valY;
-          const rectH = isNegative ? valY - zeroY : zeroY - valY;
-
-          const isTop = i === 0;
-
-          const isHovered = hoveredBar?.symbol === m.symbol;
-
-          return (
-            <g
-              key={m.symbol}
-              onMouseEnter={() =>
-                setHoveredBar({
-                  x,
-                  y: valY,
-                  symbol: m.symbol,
-                  cagr: m.cagr,
-                })
-              }
-              onMouseLeave={() => setHoveredBar(null)}
-              className="cursor-pointer"
-            >
-              <rect
-                x={x}
-                y={rectY}
-                width={barW}
-                height={Math.max(2, rectH)}
-                rx="6"
-                fill={
-                  isTop
-                    ? "url(#topGrad)"
-                    : m.cagr >= niftyBenchmark
-                      ? "url(#goodGrad)"
-                      : "url(#lowGrad)"
-                }
-                className={`transition-[opacity,filter] duration-200 ${
-                  isTop ? "drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" : ""
-                } ${
-                  hoveredBar
-                    ? isHovered
-                      ? "opacity-100"
-                      : "opacity-[0.45]"
-                    : "opacity-100"
-                }`}
-              />
-              <text
-                x={x + barW / 2}
-                y={isNegative ? valY + 12 : valY - 6}
-                textAnchor="middle"
-                fontSize="9"
-                fill={isNegative ? "#f87171" : "#94a3b8"}
-                fontWeight="bold"
-                className={`transition-opacity duration-200 ${
-                  hoveredBar
-                    ? isHovered
-                      ? "opacity-100"
-                      : "opacity-[0.45]"
-                    : "opacity-100"
-                }`}
-              >
-                {m.cagr.toFixed(1)}%
-              </text>
-              <text
-                x={x + barW / 2}
-                y={padY + chartH + 16}
-                textAnchor="middle"
-                fontSize="8.5"
-                fill="#64748b"
-                fontWeight="bold"
-                className={`transition-opacity duration-200 ${
-                  hoveredBar
-                    ? isHovered
-                      ? "opacity-100"
-                      : "opacity-[0.45]"
-                    : "opacity-100"
-                }`}
-              >
-                {m.symbol}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Custom SVG Tooltip */}
-        {hoveredBar &&
-          (() => {
-            const tooltipX = Math.max(
-              5,
-              Math.min(hoveredBar.x + barW / 2 - 85, totalW - 175)
-            );
-            const isNegative = hoveredBar.cagr < 0;
-            const tooltipY = isNegative
-              ? Math.min(hoveredBar.y + 15, chartH + padY * 2 - 15)
-              : Math.max(hoveredBar.y - 70, 5);
-            return (
-              <g className="pointer-events-none">
-                <rect
-                  x={tooltipX}
-                  y={tooltipY}
-                  width="170"
-                  height="58"
-                  rx="8"
-                  fill="#0f172a"
-                  stroke="#334155"
-                  strokeWidth="1.5"
-                  className="drop-shadow-[0_10px_15px_rgba(0,0,0,0.65)]"
-                />
-                <text
-                  x={tooltipX + 85}
-                  y={tooltipY + 18}
-                  textAnchor="middle"
-                  fill="#f1f5f9"
-                  fontSize="8"
-                  fontWeight="bold"
-                >
-                  {hoveredBar.symbol}
-                </text>
-                <text
-                  x={tooltipX + 85}
-                  y={tooltipY + 33}
-                  textAnchor="middle"
-                  fill="#14b8a6"
-                  fontSize="9"
-                  fontWeight="extrabold"
-                >
-                  CAGR: {hoveredBar.cagr.toFixed(2)}%
-                </text>
-                <text
-                  x={tooltipX + 85}
-                  y={tooltipY + 46}
-                  textAnchor="middle"
-                  fill="#64748b"
-                  fontSize="7"
-                >
-                  {hoveredBar.cagr >= niftyBenchmark
-                    ? "🏆 Outperforming Nifty"
-                    : "Below Nifty"}
-                </text>
-              </g>
-            );
-          })()}
-
-        <defs>
-          <linearGradient id="topGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#14b8a6" />
-            <stop offset="100%" stopColor="#0f766e" />
-          </linearGradient>
-          <linearGradient id="goodGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#1d4ed8" />
-          </linearGradient>
-          <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#b45309" />
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
-  );
-}
-
 // ─── Main Tab Component ────────────────────────────────────────────────────────
 
 export default function MsflDashboardClient({
@@ -508,10 +121,10 @@ export default function MsflDashboardClient({
 
     startTransition(async () => {
       const res = await uploadMsflHoldingsAction(formData);
-      if (res.success) {
+      if (res.success && res.data?.reportId) {
         // Sync selectedReportId in URL
         const params = new URLSearchParams(window.location.search);
-        params.set("msflReportId", String(res.reportId));
+        params.set("msflReportId", String(res.data.reportId));
         router.push(`${window.location.pathname}?${params.toString()}`);
       } else {
         setUploadError(res.error || "Failed to upload report");
@@ -714,7 +327,6 @@ export default function MsflDashboardClient({
               label="Overall Unrealized P&amp;L"
               value={formatCurrency(totals.gain)}
               sub={`${totals.gain >= 0 ? "+" : ""}${totals.absoluteReturn.toFixed(2)}% Absolute`}
-              positive={totals.gain >= 0}
               icon={totals.gain >= 0 ? TrendingUp : TrendingDown}
               accentColor={totals.gain >= 0 ? "emerald" : "rose"}
             />
@@ -730,7 +342,6 @@ export default function MsflDashboardClient({
                   ? benchmarkLabel
                   : `${formatPercent(mfCagrDelta)} vs Nifty Benchmark`
               }
-              positive={mfCagrDelta === null ? undefined : mfCagrDelta >= 0}
               icon={BarChart3}
               accentColor="amber"
             />

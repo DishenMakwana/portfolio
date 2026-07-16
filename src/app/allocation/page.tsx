@@ -1,7 +1,7 @@
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
-import HeaderClient from "@/components/HeaderClient";
-import AllocationClient from "@/components/AllocationClient";
+import HeaderClient from "@/components/shared/HeaderClient";
+import AllocationClient from "@/components/mutual-fund/allocation/AllocationClient";
 import { PageProps } from "@/types/allocation";
 
 export const dynamic = "force-dynamic";

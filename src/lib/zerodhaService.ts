@@ -957,10 +957,6 @@ const zerodhaSchemeHistoryCache = new Map<
   Promise<MfDetailsResponse | null>
 >();
 
-export function clearZerodhaSchemeCache(schemeCode: string) {
-  zerodhaSchemeHistoryCache.delete(schemeCode);
-}
-
 export function normaliseSchemeCode(
   code: string | null | undefined
 ): string | null {
@@ -974,8 +970,9 @@ async function triggerZerodhaNavCacheUpdate(
   startDate?: string
 ) {
   try {
-    const data = await fetchMfDetails(schemeCode, startDate);
-    if (data && data.meta && data.data && data.data.length > 0) {
+    const res = await fetchMfDetails(schemeCode, startDate);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await db
         .insert(zerodhaSchemeNavCacheMeta)
         .values({
@@ -1109,17 +1106,16 @@ export function getZerodhaSchemeHistoryForDbCode(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      // If no data exists, fetch only the last 3 years to keep payload fast and prevent timeouts
-      const nowTime = new Date();
-      const threeYearsAgo = new Date(
-        nowTime.getFullYear() - 3,
-        nowTime.getMonth(),
-        nowTime.getDate()
-      );
-      const threeYearsAgoStr = threeYearsAgo.toISOString().split("T")[0];
-
-      const data = await fetchMfDetails(schemeCode, threeYearsAgoStr);
-      if (data && data.meta && data.data && data.data.length > 0) {
+      // Fetch full history to ensure returns graphs work correctly for long-term/insurance portfolios
+      const res = await fetchMfDetails(schemeCode);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
         try {
           // Upsert scheme cache metadata starting with zerodha_
           await db
@@ -1207,10 +1203,6 @@ const zerodhaStockHistoryCache = new Map<
   Promise<MfDetailsResponse | null>
 >();
 
-export function clearZerodhaStockCache(ticker: string) {
-  zerodhaStockHistoryCache.delete(ticker);
-}
-
 export function clearAllZerodhaCaches() {
   zerodhaSchemeHistoryCache.clear();
   zerodhaStockHistoryCache.clear();
@@ -1290,8 +1282,9 @@ async function saveZerodhaStockCacheAndMapping(
 
 async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
   try {
-    const data = await fetchStockHistory(ticker);
-    if (data && data.meta && data.data && data.data.length > 0) {
+    const res = await fetchStockHistory(ticker);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await saveZerodhaStockCacheAndMapping(ticker, data);
     }
   } catch (err) {
@@ -1369,8 +1362,15 @@ export function getZerodhaStockHistoryForSymbol(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      const data = await fetchStockHistory(ticker);
-      if (data && data.meta && data.data && data.data.length > 0) {
+      const res = await fetchStockHistory(ticker);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
         try {
           await saveZerodhaStockCacheAndMapping(ticker, data);
           return data;

@@ -69,7 +69,7 @@ export default function ZerodhaMappingTab({
     setIsSearchingApi(true);
     try {
       const results = await searchMfApiAction(query);
-      setApiSearchResults(results);
+      setApiSearchResults(results.data || []);
     } catch (e) {
       console.error(e);
     } finally {

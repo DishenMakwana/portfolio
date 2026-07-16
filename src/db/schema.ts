@@ -44,13 +44,17 @@ export const memberReportCagrs = mySchema.table(
   ]
 );
 
-export const schemes = mySchema.table("schemes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  category: text("category").notNull(),
-  schemeCodeApi: text("scheme_code_api"),
-  mappedAt: text("mapped_at"),
-});
+export const schemes = mySchema.table(
+  "schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [index("schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+);
 
 export const holdingsSnapshot = mySchema.table(
   "holdings_snapshot",
@@ -99,6 +103,7 @@ export const transactions = mySchema.table(
     index("transactions_member_id_idx").on(table.memberId),
     index("transactions_scheme_id_idx").on(table.schemeId),
     index("transactions_source_report_id_idx").on(table.sourceReportId),
+    index("transactions_date_idx").on(table.date),
   ]
 );
 
@@ -190,20 +195,29 @@ export const zerodhaHoldings = mySchema.table(
     unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
     unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
   },
-  (table) => [index("zerodha_holdings_report_id_idx").on(table.reportId)]
+  (table) => [
+    index("zerodha_holdings_report_id_idx").on(table.reportId),
+    index("zerodha_holdings_scheme_id_idx").on(table.schemeId),
+  ]
 );
 
-export const zerodhaSchemes = mySchema.table("zerodha_schemes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  category: text("category").notNull(),
-  isin: text("isin"),
-  holdingType: text("holding_type"),
-  sector: text("sector"),
-  instrumentType: text("instrument_type"),
-  schemeCodeApi: text("scheme_code_api"),
-  mappedAt: text("mapped_at"),
-});
+export const zerodhaSchemes = mySchema.table(
+  "zerodha_schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    isin: text("isin"),
+    holdingType: text("holding_type"),
+    sector: text("sector"),
+    instrumentType: text("instrument_type"),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [
+    index("zerodha_schemes_scheme_code_api_idx").on(table.schemeCodeApi),
+  ]
+);
 
 export const zerodhaSchemeNavCacheMeta = mySchema.table(
   "zerodha_scheme_nav_cache_meta",
@@ -292,16 +306,23 @@ export const msflHoldings = mySchema.table(
     unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
     unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
   },
-  (table) => [index("msfl_holdings_report_id_idx").on(table.reportId)]
+  (table) => [
+    index("msfl_holdings_report_id_idx").on(table.reportId),
+    index("msfl_holdings_scheme_id_idx").on(table.schemeId),
+  ]
 );
 
-export const msflSchemes = mySchema.table("msfl_schemes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  category: text("category").notNull(),
-  schemeCodeApi: text("scheme_code_api"),
-  mappedAt: text("mapped_at"),
-});
+export const msflSchemes = mySchema.table(
+  "msfl_schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [index("msfl_schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+);
 
 export const msflSchemeNavCacheMeta = mySchema.table(
   "msfl_scheme_nav_cache_meta",

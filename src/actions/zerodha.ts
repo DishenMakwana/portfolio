@@ -13,10 +13,11 @@ import { zerodhaSchemes } from "@/db/schema";
 import { autoMapScheme } from "@/lib/mfApi";
 import { eq } from "drizzle-orm";
 import { ZerodhaAutoMapResult } from "@/types/zerodha";
+import type { ActionResult } from "@/types/portfolio";
 
 export async function uploadZerodhaHoldingsAction(
   formData: FormData
-): Promise<{ success: boolean; reportId?: number; error?: string }> {
+): Promise<ActionResult<{ reportId?: number }>> {
   try {
     const file = formData.get("file") as File | null;
     if (!file) {
@@ -41,7 +42,7 @@ export async function uploadZerodhaHoldingsAction(
     );
 
     revalidatePath("/zerodha");
-    return { success: true, reportId };
+    return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("Zerodha Upload Action Error:", error);
     const errorMsg =
@@ -52,7 +53,7 @@ export async function uploadZerodhaHoldingsAction(
 
 export async function deleteZerodhaHoldingsAction(
   reportId: number
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ActionResult> {
   try {
     await deleteZerodhaHoldingsReport(reportId);
     revalidatePath("/zerodha");
@@ -86,7 +87,7 @@ export async function getZerodhaDashboardAction(
 export async function updateZerodhaSchemeMappingAction(
   schemeId: number,
   code: string | null
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ActionResult> {
   try {
     await updateZerodhaSchemeCode(schemeId, code);
     revalidatePath("/zerodha");
@@ -170,7 +171,7 @@ export async function autoMapAllZerodhaSchemesAction(
 export async function updateZerodhaSchemeCategoryAction(
   schemeId: number,
   category: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ActionResult> {
   try {
     await db
       .update(zerodhaSchemes)

@@ -1,7 +1,7 @@
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
-import MembersTab from "@/components/MembersTab";
-import HeaderClient from "@/components/HeaderClient";
+import MembersTab from "@/components/mutual-fund/members/MembersTab";
+import HeaderClient from "@/components/shared/HeaderClient";
 import { Suspense } from "react";
 import { PageProps } from "@/types/members";
 

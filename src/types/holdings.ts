@@ -1,5 +1,13 @@
-export type HoldingsSortField =
-  "currentValue" | "xirr" | "alpha" | "gain" | "cagr" | "holdingDays";
+export const HOLDINGS_SORT_FIELDS = [
+  "currentValue",
+  "xirr",
+  "alpha",
+  "gain",
+  "cagr",
+  "holdingDays",
+] as const;
+
+export type HoldingsSortField = (typeof HOLDINGS_SORT_FIELDS)[number];
 
 export interface Holding {
   id: number;

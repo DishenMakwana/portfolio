@@ -34,12 +34,12 @@ import type {
   ZerodhaStockSortField,
 } from "@/types/zerodha";
 import { ZERODHA_COLORS } from "@/types/zerodha";
-import ZerodhaMappingTab from "./ZerodhaMappingTab";
-import ZerodhaOverviewTab from "./ZerodhaOverviewTab";
-import ZerodhaStocksTab from "./ZerodhaStocksTab";
-import ZerodhaFundsTab from "./ZerodhaFundsTab";
-import ZerodhaSnapshotsTab from "./ZerodhaSnapshotsTab";
-import ZerodhaInsightsTab from "./ZerodhaInsightsTab";
+import ZerodhaMappingTab from "@/components/zerodha/mapping/ZerodhaMappingTab";
+import ZerodhaOverviewTab from "@/components/zerodha/overview/ZerodhaOverviewTab";
+import ZerodhaStocksTab from "@/components/zerodha/stocks/ZerodhaStocksTab";
+import ZerodhaFundsTab from "@/components/zerodha/funds/ZerodhaFundsTab";
+import ZerodhaSnapshotsTab from "@/components/zerodha/snapshots/ZerodhaSnapshotsTab";
+import ZerodhaInsightsTab from "@/components/zerodha/insights/ZerodhaInsightsTab";
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -153,9 +153,9 @@ export default function ZerodhaDashboard({
     formData.append("file", file);
     const res = await uploadZerodhaHoldingsAction(formData);
     setIsUploading(false);
-    if (res.success) {
+    if (res.success && res.data?.reportId) {
       router.refresh();
-      router.push(`/zerodha?zerodhaReportId=${res.reportId}`);
+      router.push(`/zerodha?zerodhaReportId=${res.data.reportId}`);
       setActiveTab("overview");
     } else {
       setUploadError(res.error || "Upload failed");

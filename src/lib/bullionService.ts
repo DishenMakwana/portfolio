@@ -1,3 +1,4 @@
+import type { ActionResult, BullionRatesResponse } from "@/types/portfolio";
 import axios from "axios";
 import type {
   BullionCache,
@@ -130,11 +131,9 @@ function getFallbackChartData(): ChartDataPoint[] {
 /**
  * Fetch and process live bullion prices from CoinGecko or fallback (365 days)
  */
-export async function getBullionData(forceRefresh = false): Promise<{
-  rates: BullionRates;
-  chartData: ChartDataPoint[];
-  isThrottled?: boolean;
-}> {
+export async function getBullionData(
+  forceRefresh = false
+): Promise<ActionResult<BullionRatesResponse>> {
   const now = Date.now();
 
   const canMakeExternalCall =
@@ -145,16 +144,22 @@ export async function getBullionData(forceRefresh = false): Promise<{
   if (cache.rates && cache.chartData) {
     if (now - cache.lastFetched < CACHE_TTL && !forceRefresh) {
       return {
-        rates: cache.rates,
-        chartData: cache.chartData,
-        isThrottled: false,
+        success: true,
+        data: {
+          rates: cache.rates,
+          chartData: cache.chartData,
+          isThrottled: false,
+        },
       };
     }
     if (forceRefresh && !canMakeExternalCall) {
       return {
-        rates: cache.rates,
-        chartData: cache.chartData,
-        isThrottled: true,
+        success: true,
+        data: {
+          rates: cache.rates,
+          chartData: cache.chartData,
+          isThrottled: true,
+        },
       };
     }
   }
@@ -305,7 +310,14 @@ export async function getBullionData(forceRefresh = false): Promise<{
     cache.chartData = chartData.length > 0 ? chartData : getFallbackChartData();
     cache.lastFetched = now;
 
-    return { rates: cache.rates, chartData: cache.chartData };
+    return {
+      success: true,
+      data: {
+        rates: cache.rates,
+        chartData: cache.chartData,
+        isThrottled: false,
+      },
+    };
   } catch (error) {
     console.warn(
       "[BULLION SERVICE] Fetching 1-year rates failed. Using fallback data. Error:",
@@ -317,6 +329,13 @@ export async function getBullionData(forceRefresh = false): Promise<{
     cache.chartData = getFallbackChartData();
     cache.lastFetched = now;
 
-    return { rates: cache.rates, chartData: cache.chartData };
+    return {
+      success: true,
+      data: {
+        rates: cache.rates,
+        chartData: cache.chartData,
+        isThrottled: false,
+      },
+    };
   }
 }

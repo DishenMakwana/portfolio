@@ -27,6 +27,7 @@ import {
 import {
   FundDetailsClientProps,
   CustomTooltipProps,
+  FundTimeframe,
 } from "@/types/fund-details";
 import {
   ResponsiveContainer,
@@ -132,9 +133,7 @@ export default function FundDetailsClient({
   const currentVolatilityStats = volatilityStats;
   const [isRefreshingGlobal, setIsRefreshingGlobal] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [timeframe, setTimeframe] = useState<"3m" | "6m" | "1y" | "3y" | "max">(
-    "3y"
-  );
+  const [timeframe, setTimeframe] = useState<FundTimeframe>("3y");
   const isStock = holding.holdingType === "equity";
   const isDebt = (holding.category || "").toLowerCase().includes("debt");
 
@@ -171,6 +170,8 @@ export default function FundDetailsClient({
       cutoffTime = now.getTime() - 365 * 24 * 60 * 60 * 1000;
     } else if (timeframe === "3y") {
       cutoffTime = now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000;
+    } else if (timeframe === "5y") {
+      cutoffTime = now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000;
     } else {
       cutoffTime = 0; // MAX
     }
@@ -220,7 +221,9 @@ export default function FundDetailsClient({
     );
 
     let isTruncated = false;
-    if (timeframe === "3y" && diffDays < 3 * 365 - 30) {
+    if (timeframe === "5y" && diffDays < 5 * 365 - 50) {
+      isTruncated = true;
+    } else if (timeframe === "3y" && diffDays < 3 * 365 - 30) {
       isTruncated = true;
     } else if (timeframe === "1y" && diffDays < 365 - 15) {
       isTruncated = true;
@@ -583,14 +586,10 @@ export default function FundDetailsClient({
           <div className="flex flex-wrap items-center gap-4">
             {/* Timeline Filter Segmented Control */}
             <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800/80">
-              {(["3M", "6M", "1Y", "3Y", "MAX"] as const).map((t) => (
+              {(["3M", "6M", "1Y", "3Y", "5Y", "MAX"] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() =>
-                    setTimeframe(
-                      t.toLowerCase() as "3m" | "6m" | "1y" | "3y" | "max"
-                    )
-                  }
+                  onClick={() => setTimeframe(t.toLowerCase() as FundTimeframe)}
                   className={`px-3 py-1 rounded-md text-[10px] font-extrabold uppercase transition-all duration-200 ${
                     timeframe === t.toLowerCase()
                       ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"

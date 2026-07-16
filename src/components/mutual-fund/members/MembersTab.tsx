@@ -3,43 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
-import {
-  formatCurrency,
-  formatPercent,
-  formatPointDelta,
-} from "@/helpers/formatters";
+import DeltaBadge from "@/components/shared/DeltaBadge";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import type { MembersTabProps } from "@/types/members";
-
-function DeltaBadge({
-  delta,
-  label = "vs prev",
-}: {
-  delta: number | null;
-  label?: string;
-}) {
-  if (delta === null) {
-    return (
-      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-        No prior snapshot
-      </span>
-    );
-  }
-
-  const isUp = delta >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-        isUp
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-          : "border-red-500/20 bg-red-500/10 text-red-400"
-      }`}
-    >
-      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-      {formatPointDelta(delta)} {label}
-    </span>
-  );
-}
 
 export default function MembersTab({
   memberSummaries,

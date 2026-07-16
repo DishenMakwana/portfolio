@@ -2,7 +2,7 @@ import {
   getZerodhaDashboardData,
   getZerodhaSchemes,
 } from "@/lib/zerodhaService";
-import ZerodhaDashboard from "@/components/ZerodhaDashboard";
+import ZerodhaDashboard from "@/components/zerodha/ZerodhaDashboard";
 import { Briefcase } from "lucide-react";
 
 import { PageProps } from "@/types/zerodha";

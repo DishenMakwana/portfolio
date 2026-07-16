@@ -43,6 +43,13 @@
       "when": 1783963270035,
       "tag": "0005_mushy_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784116963974,
+      "tag": "0006_organic_power_pack",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
-import HoldingsTab from "@/components/HoldingsTab";
-import HeaderClient from "@/components/HeaderClient";
+import HoldingsTab from "@/components/mutual-fund/holdings/HoldingsTab";
+import HeaderClient from "@/components/shared/HeaderClient";
 import { PageProps } from "@/types/holdings";
 
 export const dynamic = "force-dynamic";

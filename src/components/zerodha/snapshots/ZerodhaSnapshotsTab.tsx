@@ -21,8 +21,7 @@ import {
 } from "@/helpers/formatters";
 
 import { toDateKey, startOfMonth, eachMonth, eachDay } from "@/helpers/dates";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+import { WEEKDAYS } from "@/types/upload-tracker";
 
 function getCalendarDays(month: Date) {
   const firstDay = startOfMonth(month);

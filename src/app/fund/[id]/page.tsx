@@ -30,7 +30,7 @@ import {
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
-import FundDetailsClient from "../../../components/FundDetailsClient";
+import FundDetailsClient from "@/components/mutual-fund/fund-details/FundDetailsClient";
 import { FundPageProps, HoldingDetails } from "@/types/fund-details";
 
 export const dynamic = "force-dynamic";

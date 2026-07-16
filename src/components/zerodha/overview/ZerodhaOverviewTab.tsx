@@ -13,37 +13,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  BarChart2,
-  Activity,
-  Target,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
+import { BarChart2, Activity, Target } from "lucide-react";
 import { motion } from "framer-motion";
-import {
-  formatCurrency,
-  formatPointDelta,
-  formatNullablePercent,
-} from "@/helpers/formatters";
+import { formatCurrency, formatNullablePercent } from "@/helpers/formatters";
+import DeltaBadge from "@/components/shared/DeltaBadge";
 import { useRouter } from "next/navigation";
 import type { PieSectorDataItem } from "recharts";
-import type {
-  CustomPerformanceTooltipProps,
-  SimplePiePayload,
-  SimplePieTooltipProps,
-  ZerodhaOverviewTabProps,
+import {
+  ZERODHA_COLOR_CLASSES,
+  type CustomPerformanceTooltipProps,
+  type SimplePiePayload,
+  type SimplePieTooltipProps,
+  type ZerodhaOverviewTabProps,
 } from "@/types/zerodha";
-
-const ZERODHA_COLOR_CLASSES = [
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-blue-500",
-  "bg-pink-500",
-  "bg-amber-500",
-  "bg-teal-500",
-  "bg-red-500",
-];
 
 const CustomPerformanceTooltip = ({
   active,
@@ -87,36 +69,6 @@ const CustomPerformanceTooltip = ({
   }
   return null;
 };
-
-function DeltaBadge({
-  delta,
-  label = "vs prev",
-}: {
-  delta: number | null;
-  label?: string;
-}) {
-  if (delta === null) {
-    return (
-      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-        No prior snapshot
-      </span>
-    );
-  }
-
-  const isUp = delta >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-        isUp
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-          : "border-red-500/20 bg-red-500/10 text-red-400"
-      }`}
-    >
-      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-      {formatPointDelta(delta)} {label}
-    </span>
-  );
-}
 
 export default function ZerodhaOverviewTab({
   data,

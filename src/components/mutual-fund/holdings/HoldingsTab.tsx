@@ -4,8 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatHoldingDaysDetailed,
+} from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
+import { HOLDINGS_SORT_FIELDS } from "@/types/holdings";
 import type { HoldingsSortField, HoldingsTabProps } from "@/types/holdings";
 
 export default function HoldingsTab({
@@ -23,9 +28,7 @@ export default function HoldingsTab({
   const initialPlan = searchParams.get("plan") || "All";
   const rawSort = searchParams.get("sort");
   const initialSort = (
-    ["currentValue", "xirr", "alpha", "gain", "cagr", "holdingDays"].includes(
-      rawSort || ""
-    )
+    (HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawSort || "")
       ? rawSort
       : "currentValue"
   ) as HoldingsSortField;
@@ -65,14 +68,7 @@ export default function HoldingsTab({
     setPlanFilter(searchParams.get("plan") || "All");
     const rawS = searchParams.get("sort");
     setSortField(
-      ([
-        "currentValue",
-        "xirr",
-        "alpha",
-        "gain",
-        "cagr",
-        "holdingDays",
-      ].includes(rawS || "")
+      ((HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawS || "")
         ? rawS
         : "currentValue") as HoldingsSortField
     );
@@ -323,8 +319,11 @@ export default function HoldingsTab({
                         {h.absoluteReturn.toFixed(1)}% Abs
                       </div>
                     </td>
-                    <td className="p-4 font-bold text-slate-200 whitespace-nowrap">
-                      {h.holdingDays}
+                    <td className="p-4 text-slate-200 whitespace-nowrap">
+                      <div className="font-bold">{h.holdingDays}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        {formatHoldingDaysDetailed(h.holdingDays)}
+                      </div>
                     </td>
                     <td className="p-4">
                       <div

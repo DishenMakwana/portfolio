@@ -10,11 +10,13 @@ import {
 } from "@/lib/msflService";
 import { db } from "@/db/db";
 import { msflSchemes } from "@/db/schema";
+import type { ActionResult } from "@/types/portfolio";
+import type { AutoMapMsflSchemeResult } from "@/types/msfl";
 import { eq } from "drizzle-orm";
 
 export async function uploadMsflHoldingsAction(
   formData: FormData
-): Promise<{ success: boolean; reportId?: number; error?: string }> {
+): Promise<ActionResult<{ reportId?: number }>> {
   try {
     const file = formData.get("file") as File | null;
     if (!file) {
@@ -38,7 +40,7 @@ export async function uploadMsflHoldingsAction(
     );
 
     revalidatePath("/zerodha");
-    return { success: true, reportId };
+    return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("MSFL Upload Action Error:", error);
     const errorMsg =
@@ -49,7 +51,7 @@ export async function uploadMsflHoldingsAction(
 
 export async function deleteMsflHoldingsAction(
   reportId: number
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ActionResult> {
   try {
     await deleteMsflHoldingsReport(reportId);
     revalidatePath("/zerodha");
@@ -85,7 +87,7 @@ export async function getMsflDashboardAction(
 export async function updateMsflSchemeMappingAction(
   schemeId: number,
   code: string | null
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ActionResult> {
   try {
     await updateMsflSchemeCode(schemeId, code);
     revalidatePath("/zerodha");
@@ -98,14 +100,9 @@ export async function updateMsflSchemeMappingAction(
   }
 }
 
-export async function autoMapAllMsflSchemesAction(onlyUnmapped = true): Promise<
-  Array<{
-    schemeId: number;
-    schemeName: string;
-    status: string;
-    schemeCode: string | null;
-  }>
-> {
+export async function autoMapAllMsflSchemesAction(
+  onlyUnmapped = true
+): Promise<AutoMapMsflSchemeResult[]> {
   try {
     const allSchemes = await db.query.msflSchemes.findMany();
     const results = [];

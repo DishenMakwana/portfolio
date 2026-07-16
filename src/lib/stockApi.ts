@@ -1,3 +1,4 @@
+import type { ActionResult } from "@/types/portfolio";
 import axios from "axios";
 import { MfDetailsResponse } from "@/types/mf-api";
 
@@ -104,20 +105,24 @@ async function fetchFromYahoo(
  */
 export async function fetchStockHistory(
   symbol: string
-): Promise<MfDetailsResponse | null> {
-  if (!symbol) return null;
-  if (isUnlistedStock(symbol)) return null;
+): Promise<ActionResult<MfDetailsResponse>> {
+  if (!symbol) return { success: false, error: "Symbol is required" };
+  if (isUnlistedStock(symbol))
+    return { success: false, error: "Unlisted stock" };
 
   // If a suffix is already specified (like .NS or .BO), fetch it directly.
   if (symbol.includes(".")) {
-    return fetchFromYahoo(symbol, symbol);
+    const data = await fetchFromYahoo(symbol, symbol);
+    return data
+      ? { success: true, data }
+      : { success: false, error: "Failed to fetch Yahoo chart" };
   }
 
   // Try NSE first (.NS)
   const nseTicker = `${symbol}.NS`;
   const nseData = await fetchFromYahoo(nseTicker, symbol);
   if (nseData) {
-    return nseData;
+    return { success: true, data: nseData };
   }
 
   // Fallback to BSE (.BO)
@@ -125,7 +130,10 @@ export async function fetchStockHistory(
   console.log(
     `[Yahoo Finance API] NSE failed or returned empty for ${symbol}. Trying BSE fallback: ${bseTicker}`
   );
-  return fetchFromYahoo(bseTicker, symbol);
+  const bseData = await fetchFromYahoo(bseTicker, symbol);
+  return bseData
+    ? { success: true, data: bseData }
+    : { success: false, error: "Failed to fetch BSE chart fallback" };
 }
 
 const UNLISTED_STOCKS = new Set([

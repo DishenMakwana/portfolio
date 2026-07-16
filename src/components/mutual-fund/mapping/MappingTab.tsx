@@ -109,7 +109,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
     }
     setIsSearchingApi(true);
     const results = await searchMfApiAction(query);
-    setApiSearchResults(results);
+    setApiSearchResults(results.data || []);
     setIsSearchingApi(false);
   };
 

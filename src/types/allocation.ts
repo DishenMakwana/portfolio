@@ -39,7 +39,9 @@ export interface ChartTooltipProps {
   }>;
 }
 
-export type SortState = { col: string; dir: "asc" | "desc" };
+export type SortOrder = "asc" | "desc";
+
+export type SortState = { col: string; dir: SortOrder };
 
 export type SortableRecord = Record<string, string | number>;
 

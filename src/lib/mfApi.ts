@@ -1,3 +1,4 @@
+import type { ActionResult } from "@/types/portfolio";
 import axios from "axios";
 import type { MfDetailsResponse, MfSearchResult } from "@/types/mf-api";
 
@@ -60,17 +61,17 @@ async function axiosGetWithRetry<T>(
  */
 export async function searchMutualFund(
   query: string
-): Promise<MfSearchResult[]> {
-  if (!query || query.trim().length < 3) return [];
+): Promise<ActionResult<MfSearchResult[]>> {
+  if (!query || query.trim().length < 3) return { success: true, data: [] };
   const url = `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`;
   try {
     await throttleRequest();
     const data = await axiosGetWithRetry<MfSearchResult[]>(url, 4000, 1, 500);
-    return Array.isArray(data) ? data : [];
+    return { success: true, data: Array.isArray(data) ? data : [] };
   } catch (e: unknown) {
     const errorMsg = e instanceof Error ? e.message : String(e);
     console.error(`Error searching MF API at "${url}":`, errorMsg);
-    return [];
+    return { success: false, error: errorMsg, data: [] };
   }
 }
 
@@ -82,9 +83,13 @@ export async function fetchMfDetails(
   schemeCode: string,
   startDate?: string,
   endDate?: string
-): Promise<MfDetailsResponse | null> {
-  if (!schemeCode) return null;
-  if (isSpecializedFundSchemeCode(schemeCode)) return null;
+): Promise<ActionResult<MfDetailsResponse>> {
+  if (!schemeCode) return { success: false, error: "Scheme code is required" };
+  if (isSpecializedFundSchemeCode(schemeCode))
+    return {
+      success: false,
+      error: "Specialized fund scheme codes are not supported",
+    };
 
   const params = new URLSearchParams();
   if (startDate) {
@@ -99,7 +104,13 @@ export async function fetchMfDetails(
 
   try {
     await throttleRequest();
-    return await axiosGetWithRetry<MfDetailsResponse>(url, 15000, 2, 1000);
+    const data = await axiosGetWithRetry<MfDetailsResponse>(
+      url,
+      15000,
+      2,
+      1000
+    );
+    return { success: true, data };
   } catch (e: unknown) {
     const errorMsg = e instanceof Error ? e.message : String(e);
     const isTimeout =
@@ -115,7 +126,7 @@ export async function fetchMfDetails(
     } else {
       console.error(`Error fetching MF details from "${url}":`, errorMsg);
     }
-    return null;
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -133,8 +144,9 @@ export async function autoMapScheme(
     .replace(/-*/g, "")
     .trim();
 
-  const searchResults = await searchMutualFund(cleanName.slice(0, 30));
-  if (searchResults.length === 0) return null;
+  const searchRes = await searchMutualFund(cleanName.slice(0, 30));
+  const searchResults = searchRes.data || [];
+  if (!searchRes.success || searchResults.length === 0) return null;
 
   // Let's find the best string match
   let bestMatch = searchResults[0];

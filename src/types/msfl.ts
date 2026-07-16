@@ -108,3 +108,20 @@ export interface MsflDashboardClientProps {
 export interface PageProps {
   searchParams: Promise<{ msflReportId?: string }>;
 }
+
+export interface AutoMapMsflSchemeResult {
+  schemeId: number;
+  schemeName: string;
+  status: string;
+  schemeCode: string | null;
+}
+
+export interface MsflLeaderboardChartProps {
+  mfHoldings: Array<{ symbol: string; cagr: number }>;
+  niftyBenchmark: number;
+}
+
+export interface DeltaBadgeProps {
+  delta: number | null;
+  label?: string;
+}

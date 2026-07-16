@@ -1,5 +1,5 @@
 import { getMsflDashboardData, getMsflSchemes } from "@/lib/msflService";
-import MsflDashboardClient from "@/components/MsflDashboardClient";
+import MsflDashboardClient from "@/components/msfl/MsflDashboardClient";
 import { Briefcase } from "lucide-react";
 import { PageProps } from "@/types/msfl";
 

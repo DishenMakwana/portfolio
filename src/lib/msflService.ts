@@ -252,10 +252,6 @@ const msflStockHistoryCache = new Map<
   Promise<MfDetailsResponse | null>
 >();
 
-export function clearMsflStockCache(ticker: string) {
-  msflStockHistoryCache.delete(ticker);
-}
-
 export function clearAllMsflCaches() {
   msflStockHistoryCache.clear();
 }
@@ -334,8 +330,9 @@ async function saveMsflStockCacheAndMapping(
 
 async function triggerMsflStockNavCacheUpdate(ticker: string) {
   try {
-    const data = await fetchStockHistory(ticker);
-    if (data && data.meta && data.data && data.data.length > 0) {
+    const res = await fetchStockHistory(ticker);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await saveMsflStockCacheAndMapping(ticker, data);
     }
   } catch (err) {
@@ -417,8 +414,15 @@ export function getMsflStockHistoryForSymbol(
 
       // First time fetch
       try {
-        const data = await fetchStockHistory(ticker);
-        if (data && data.meta && data.data && data.data.length > 0) {
+        const res = await fetchStockHistory(ticker);
+        const data = res.data;
+        if (
+          res.success &&
+          data &&
+          data.meta &&
+          data.data &&
+          data.data.length > 0
+        ) {
           await saveMsflStockCacheAndMapping(ticker, data);
           return data;
         }

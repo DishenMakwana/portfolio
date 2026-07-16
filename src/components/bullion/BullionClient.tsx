@@ -1,5 +1,7 @@
 "use client";
 
+import { formatInr } from "@/helpers/formatters";
+import { getAdjustedBullionPrice } from "@/helpers/bullion";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -27,6 +29,15 @@ import {
   BullionRates,
   ChartDataPoint,
   CustomChartTooltipProps,
+  BULLION_METALS,
+  BullionMetal,
+  GOLD_PURITIES,
+  SILVER_PURITIES,
+  PLATINUM_PURITIES,
+  GST_TYPES,
+  GstType,
+  TIMEFRAMES,
+  Timeframe,
 } from "@/types/bullion";
 import { CITIES } from "@/lib/bullionService";
 
@@ -37,12 +48,12 @@ export default function BullionClient({
   const [rates, setRates] = useState<BullionRates>(initialRates);
   const [chartDataState, setChartDataState] =
     useState<ChartDataPoint[]>(initialChartData);
-  const [selectedTab, setSelectedTab] = useState<
-    "Gold" | "Silver" | "Platinum"
-  >("Gold");
+  const [selectedTab, setSelectedTab] = useState<BullionMetal>(
+    BULLION_METALS.GOLD
+  );
   const [selectedCity, setSelectedCity] = useState(CITIES[0]);
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
-  const [timeframe, setTimeframe] = useState<"7D" | "30D" | "1Y">("1Y");
+  const [timeframe, setTimeframe] = useState<Timeframe>(TIMEFRAMES.TF_1Y);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -59,10 +70,10 @@ export default function BullionClient({
   };
 
   // Calculator State
-  const [purity, setPurity] = useState<string>("22K");
+  const [purity, setPurity] = useState<string>(GOLD_PURITIES.K22);
   const [weight, setWeight] = useState<number>(10);
   const [makingCharges, setMakingCharges] = useState<number>(12);
-  const [gstType, setGstType] = useState<"Incl" | "Excl">("Incl");
+  const [gstType, setGstType] = useState<GstType>(GST_TYPES.INCL);
 
   // Budget Calculator State
   const [budget, setBudget] = useState<number>(10000);
@@ -70,43 +81,56 @@ export default function BullionClient({
 
   // Sync default purity when selected tab changes
   useEffect(() => {
-    if (selectedTab === "Gold") {
-      setPurity("22K");
-    } else if (selectedTab === "Silver") {
-      setPurity("999");
-    } else if (selectedTab === "Platinum") {
-      setPurity("PT950");
+    if (selectedTab === BULLION_METALS.GOLD) {
+      setPurity(GOLD_PURITIES.K22);
+    } else if (selectedTab === BULLION_METALS.SILVER) {
+      setPurity(SILVER_PURITIES.P999);
+    } else if (selectedTab === BULLION_METALS.PLATINUM) {
+      setPurity(PLATINUM_PURITIES.PT950);
     }
   }, [selectedTab]);
 
-  // Adjust base price by city offset
-  const getAdjustedPrice = (basePrice: number): number => {
-    return Math.round(basePrice * (1 + selectedCity.offset));
-  };
-
-  // Indian Rupee custom formatter
-  const formatINR = (val: number, decimals = 0) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: decimals,
-    }).format(val);
-  };
-
   // Get active price per gram based on selected purity
   const getActivePricePerGram = (): number => {
-    if (selectedTab === "Gold") {
-      if (purity === "24K") return getAdjustedPrice(rates.gold["24K"]);
-      if (purity === "22K") return getAdjustedPrice(rates.gold["22K"]);
-      if (purity === "18K") return getAdjustedPrice(rates.gold["18K"]);
-    } else if (selectedTab === "Silver") {
-      if (purity === "999") return getAdjustedPrice(rates.silver["999"]);
-      if (purity === "925") return getAdjustedPrice(rates.silver["925"]);
-      if (purity === "800") return getAdjustedPrice(rates.silver["800"]);
+    if (selectedTab === BULLION_METALS.GOLD) {
+      if (purity === GOLD_PURITIES.K24)
+        return getAdjustedBullionPrice(rates.gold["24K"], selectedCity.offset);
+      if (purity === GOLD_PURITIES.K22)
+        return getAdjustedBullionPrice(rates.gold["22K"], selectedCity.offset);
+      if (purity === GOLD_PURITIES.K18)
+        return getAdjustedBullionPrice(rates.gold["18K"], selectedCity.offset);
+    } else if (selectedTab === BULLION_METALS.SILVER) {
+      if (purity === SILVER_PURITIES.P999)
+        return getAdjustedBullionPrice(
+          rates.silver["999"],
+          selectedCity.offset
+        );
+      if (purity === SILVER_PURITIES.P925)
+        return getAdjustedBullionPrice(
+          rates.silver["925"],
+          selectedCity.offset
+        );
+      if (purity === SILVER_PURITIES.P800)
+        return getAdjustedBullionPrice(
+          rates.silver["800"],
+          selectedCity.offset
+        );
     } else {
-      if (purity === "PT950") return getAdjustedPrice(rates.platinum["PT950"]);
-      if (purity === "PT900") return getAdjustedPrice(rates.platinum["PT900"]);
-      if (purity === "PT850") return getAdjustedPrice(rates.platinum["PT850"]);
+      if (purity === PLATINUM_PURITIES.PT950)
+        return getAdjustedBullionPrice(
+          rates.platinum["PT950"],
+          selectedCity.offset
+        );
+      if (purity === PLATINUM_PURITIES.PT900)
+        return getAdjustedBullionPrice(
+          rates.platinum["PT900"],
+          selectedCity.offset
+        );
+      if (purity === PLATINUM_PURITIES.PT850)
+        return getAdjustedBullionPrice(
+          rates.platinum["PT850"],
+          selectedCity.offset
+        );
     }
     return 0;
   };
@@ -120,7 +144,7 @@ export default function BullionClient({
   let gstValue = 0;
   let totalAmount = 0;
 
-  if (gstType === "Incl") {
+  if (gstType === GST_TYPES.INCL) {
     // If GST is included, it means the base+making already includes the 3% GST
     // Total = Base + Making. GST = Total - (Total / 1.03)
     const rawTotal = baseValue + makingChargesVal;
@@ -140,7 +164,7 @@ export default function BullionClient({
     const makingPerGram = basePerGram * (makingCharges / 100);
     const rawTotalPerGram = basePerGram + makingPerGram;
     const totalPerGram =
-      gstType === "Excl" ? rawTotalPerGram * 1.03 : rawTotalPerGram;
+      gstType === GST_TYPES.EXCL ? rawTotalPerGram * 1.03 : rawTotalPerGram;
 
     if (totalPerGram > 0) {
       const calculatedGrams = budget / totalPerGram;
@@ -158,20 +182,21 @@ export default function BullionClient({
   // Prepare chart data for active tab based on selected timeframe
   const getChartData = () => {
     let rawData = chartDataState;
-    if (timeframe === "7D") {
+    if (timeframe === TIMEFRAMES.TF_7D) {
       rawData = chartDataState.slice(-7);
-    } else if (timeframe === "30D") {
+    } else if (timeframe === TIMEFRAMES.TF_30D) {
       rawData = chartDataState.slice(-30);
     }
 
     return rawData.map((d) => ({
       date: d.date,
-      Price: getAdjustedPrice(
-        selectedTab === "Gold"
+      Price: getAdjustedBullionPrice(
+        selectedTab === BULLION_METALS.GOLD
           ? d.Gold
-          : selectedTab === "Silver"
+          : selectedTab === BULLION_METALS.SILVER
             ? d.Silver
-            : d.Platinum
+            : d.Platinum,
+        selectedCity.offset
       ),
     }));
   };
@@ -277,7 +302,13 @@ export default function BullionClient({
 
       {/* Tabs Selector */}
       <div className="flex bg-slate-900/40 p-1 border border-slate-800/80 rounded-2xl max-w-sm">
-        {(["Gold", "Silver", "Platinum"] as const).map((tab) => {
+        {(
+          [
+            BULLION_METALS.GOLD,
+            BULLION_METALS.SILVER,
+            BULLION_METALS.PLATINUM,
+          ] as const
+        ).map((tab) => {
           const isActive = selectedTab === tab;
           return (
             <button
@@ -297,61 +328,70 @@ export default function BullionClient({
 
       {/* Price Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {selectedTab === "Gold" && (
+        {selectedTab === BULLION_METALS.GOLD && (
           <>
             {renderPriceCard(
               "24K Gold /g",
-              getAdjustedPrice(rates.gold["24K"]),
+              getAdjustedBullionPrice(rates.gold["24K"], selectedCity.offset),
               rates.gold.change
             )}
             {renderPriceCard(
               "22K Gold /g",
-              getAdjustedPrice(rates.gold["22K"]),
+              getAdjustedBullionPrice(rates.gold["22K"], selectedCity.offset),
               rates.gold.change * (22 / 24)
             )}
             {renderPriceCard(
               "18K Gold /g",
-              getAdjustedPrice(rates.gold["18K"]),
+              getAdjustedBullionPrice(rates.gold["18K"], selectedCity.offset),
               rates.gold.change * (18 / 24)
             )}
           </>
         )}
 
-        {selectedTab === "Silver" && (
+        {selectedTab === BULLION_METALS.SILVER && (
           <>
             {renderPriceCard(
               "999 Fine Silver /g",
-              getAdjustedPrice(rates.silver["999"]),
+              getAdjustedBullionPrice(rates.silver["999"], selectedCity.offset),
               rates.silver.change
             )}
             {renderPriceCard(
               "925 Sterling Silver /g",
-              getAdjustedPrice(rates.silver["925"]),
+              getAdjustedBullionPrice(rates.silver["925"], selectedCity.offset),
               rates.silver.change * 0.925
             )}
             {renderPriceCard(
               "800 Alloy Silver /g",
-              getAdjustedPrice(rates.silver["800"]),
+              getAdjustedBullionPrice(rates.silver["800"], selectedCity.offset),
               rates.silver.change * 0.8
             )}
           </>
         )}
 
-        {selectedTab === "Platinum" && (
+        {selectedTab === BULLION_METALS.PLATINUM && (
           <>
             {renderPriceCard(
               "PT950 Platinum /g",
-              getAdjustedPrice(rates.platinum["PT950"]),
+              getAdjustedBullionPrice(
+                rates.platinum["PT950"],
+                selectedCity.offset
+              ),
               rates.platinum.change
             )}
             {renderPriceCard(
               "PT900 Platinum /g",
-              getAdjustedPrice(rates.platinum["PT900"]),
+              getAdjustedBullionPrice(
+                rates.platinum["PT900"],
+                selectedCity.offset
+              ),
               rates.platinum.change * 0.9474
             )}
             {renderPriceCard(
               "PT850 Platinum /g",
-              getAdjustedPrice(rates.platinum["PT850"]),
+              getAdjustedBullionPrice(
+                rates.platinum["PT850"],
+                selectedCity.offset
+              ),
               rates.platinum.change * 0.8947
             )}
           </>
@@ -439,9 +479,7 @@ export default function BullionClient({
               <div className="relative w-40">
                 <select
                   value={gstType}
-                  onChange={(e) =>
-                    setGstType(e.target.value as "Incl" | "Excl")
-                  }
+                  onChange={(e) => setGstType(e.target.value as GstType)}
                   className="appearance-none w-full bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-2 text-sm font-semibold text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
                 >
                   <option value="Incl">Incl. 3%</option>
@@ -461,19 +499,19 @@ export default function BullionClient({
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Base value</span>
                 <span className="font-semibold text-slate-200">
-                  {formatINR(baseValue)}
+                  {formatInr(baseValue)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Making charges</span>
                 <span className="font-semibold text-slate-200">
-                  {formatINR(makingChargesVal)}
+                  {formatInr(makingChargesVal)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">GST (3%)</span>
                 <span className="font-semibold text-slate-200">
-                  {formatINR(gstValue)}
+                  {formatInr(gstValue)}
                 </span>
               </div>
             </div>
@@ -483,7 +521,7 @@ export default function BullionClient({
                 Total Amount
               </div>
               <div className="text-3xl font-black text-teal-400 tracking-tight">
-                {formatINR(totalAmount)}
+                {formatInr(totalAmount)}
               </div>
               <div className="text-[10px] text-slate-500 font-semibold mt-1">
                 Incl. all charges
@@ -563,7 +601,9 @@ export default function BullionClient({
             </h2>
           </div>
           <div className="flex bg-slate-950/60 p-0.5 border border-slate-800 rounded-lg text-xs font-bold w-full sm:w-auto">
-            {(["7D", "30D", "1Y"] as const).map((tf) => (
+            {(
+              [TIMEFRAMES.TF_7D, TIMEFRAMES.TF_30D, TIMEFRAMES.TF_1Y] as const
+            ).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -657,7 +697,7 @@ export default function BullionClient({
         </div>
         <div className="flex justify-between items-baseline gap-4 mt-2">
           <div className="text-2xl font-black text-slate-100 tracking-tight">
-            {formatINR(value)}
+            {formatInr(value)}
           </div>
           <div
             className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg border ${
@@ -678,14 +718,20 @@ export default function BullionClient({
   }
 
   function decimalsForChange(): number {
-    return selectedTab === "Gold" ? 0 : 1;
+    return selectedTab === BULLION_METALS.GOLD ? 0 : 1;
   }
 
   // Get active purity list
   function getPurityOptions(): string[] {
-    if (selectedTab === "Gold") return ["24K", "22K", "18K"];
-    if (selectedTab === "Silver") return ["999", "925", "800"];
-    return ["PT950", "PT900", "PT850"];
+    if (selectedTab === BULLION_METALS.GOLD)
+      return [GOLD_PURITIES.K24, GOLD_PURITIES.K22, GOLD_PURITIES.K18];
+    if (selectedTab === BULLION_METALS.SILVER)
+      return [SILVER_PURITIES.P999, SILVER_PURITIES.P925, SILVER_PURITIES.P800];
+    return [
+      PLATINUM_PURITIES.PT950,
+      PLATINUM_PURITIES.PT900,
+      PLATINUM_PURITIES.PT850,
+    ];
   }
 
   // Custom Chart Tooltip
@@ -702,7 +748,7 @@ export default function BullionClient({
             <span className="w-2 h-2 rounded-full bg-teal-400" />
             <span className="text-slate-300">{payload[0].name}:</span>
             <span className="font-bold text-slate-100">
-              {formatINR(payload[0].value)}
+              {formatInr(payload[0].value)}
             </span>
           </div>
         </div>

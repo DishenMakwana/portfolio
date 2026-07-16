@@ -36,11 +36,9 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
-import {
-  formatCurrency,
-  formatPercent,
-  formatPointDelta,
-} from "@/helpers/formatters";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
+import DeltaBadge from "@/components/shared/DeltaBadge";
+import { SortOrder } from "@/types/allocation";
 import {
   CustomTooltipItem,
   CustomTooltipProps,
@@ -115,36 +113,6 @@ function CustomXirrTooltip({
   return null;
 }
 
-function DeltaBadge({
-  delta,
-  label = "vs prev",
-}: {
-  delta: number | null;
-  label?: string;
-}) {
-  if (delta === null) {
-    return (
-      <span className="inline-flex items-center rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-        No prior snapshot
-      </span>
-    );
-  }
-
-  const isUp = delta >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
-        isUp
-          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-          : "border-red-500/20 bg-red-500/10 text-red-400"
-      }`}
-    >
-      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-      {formatPointDelta(delta)} {label}
-    </span>
-  );
-}
-
 export default function OverviewTab({
   totals,
   metricDeltas,
@@ -169,12 +137,12 @@ export default function OverviewTab({
 
   const [investorSort, setInvestorSort] = useState<{
     field: "name" | "value" | "xirr";
-    direction: "asc" | "desc";
+    direction: SortOrder;
   }>({ field: "value", direction: "desc" });
 
   const [subCatSort, setSubCatSort] = useState<{
     field: "name" | "value";
-    direction: "asc" | "desc";
+    direction: SortOrder;
   }>({ field: "value", direction: "desc" });
 
   const handleInvestorSort = (field: "name" | "value" | "xirr") => {
@@ -194,7 +162,7 @@ export default function OverviewTab({
   };
 
   const renderSortIcon = (
-    sortState: { field: string; direction: "asc" | "desc" },
+    sortState: { field: string; direction: SortOrder },
     field: string
   ) => {
     const isActive = sortState.field === field;

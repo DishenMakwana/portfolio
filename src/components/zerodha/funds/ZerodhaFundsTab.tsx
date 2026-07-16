@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { Search } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatHoldingDaysDetailed,
+} from "@/helpers/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaFundsTabProps } from "@/types/zerodha";
 
@@ -161,8 +165,17 @@ export default function ZerodhaFundsTab({
                       {f.unrealizedPnlPct.toFixed(1)}% Abs
                     </div>
                   </td>
-                  <td className="p-4 font-bold text-slate-200 whitespace-nowrap">
-                    {f.holdingDays ?? "-"}
+                  <td className="p-4 text-slate-200 whitespace-nowrap">
+                    {f.holdingDays !== null && f.holdingDays !== undefined ? (
+                      <>
+                        <div className="font-bold">{f.holdingDays}</div>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          {formatHoldingDaysDetailed(f.holdingDays)}
+                        </div>
+                      </>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td
                     className={`p-4 font-bold ${

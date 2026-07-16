@@ -10,3 +10,7 @@ This is a Personal Portfolio & Mutual Fund Tracker. It tracks family-wide mutual
 4.  **Holdings**: Flat list of positions with transaction histories and individual performance stats.
 5.  **SIP Mandates**: Live running list of systematic investment plans, tracking active vs. paused states.
 6.  **Uploads**: Valuation snapshot spreadsheets parser and upload compliance tracker calendar.
+7.  **Zerodha Portfolio**: Stocks, mutual funds, snapshots, mappings, and graph-level AMC/Category/Overlap insights for Zerodha accounts.
+8.  **MSFL Portfolio**: Stock metric lists, valuations, gain/loss calculations, and leaderboards.
+9.  **Bullion Holdings**: Physical asset valuation registry (Gold/Silver).
+

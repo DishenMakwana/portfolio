@@ -359,15 +359,6 @@ export async function getReportHoldings(
 }
 
 /**
- * Get all family members
- */
-export async function getFamilyMembers() {
-  return await db.query.familyMembers.findMany({
-    orderBy: [asc(familyMembers.name)],
-  });
-}
-
-/**
  * Get all schemes mapped & unmapped
  */
 export async function getSchemes() {
