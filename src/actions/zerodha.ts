@@ -31,7 +31,7 @@ export async function uploadZerodhaHoldingsAction(
       return {
         success: false,
         error:
-          "No valid stocks or mutual funds holdings found in sheets 'Equity' or 'Mutual Funds'",
+          "No valid holdings found. Please ensure the uploaded sheet is a valid Zerodha Console Holdings report containing the 'Equity' or 'Mutual Funds' tabs.",
       };
     }
 

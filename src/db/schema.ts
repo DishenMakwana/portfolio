@@ -18,12 +18,26 @@ export const reports = mySchema.table("reports", {
   uploadedAt: text("uploaded_at").notNull(),
   filename: text("filename").notNull(),
   cagr: doublePrecision("cagr"), // Store parsed Grand Total CAGR
+  casId: text("cas_id"),
 });
 
 export const familyMembers = mySchema.table("family_members", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   pan: text("pan"),
+  address: text("address"),
+  email: text("email"),
+  mobile: text("mobile"),
+  dematNominee: text("demat_nominee"),
+  dpId: text("dp_id"),
+  clientId: text("client_id"),
+  dpName: text("dp_name"),
+  boSubStatus: text("bo_sub_status"),
+  bsda: text("bsda"),
+  rgess: text("rgess"),
+  accountStatus: text("account_status"),
+  frozenStatus: text("frozen_status"),
+  boStatus: text("bo_status"),
 });
 
 export const memberReportCagrs = mySchema.table(
@@ -77,6 +91,13 @@ export const holdingsSnapshot = mySchema.table(
     absoluteReturn: doublePrecision("absolute_return").notNull(),
     cagr: doublePrecision("cagr").notNull(),
     comments: text("comments"),
+    modeOfHolding: text("mode_of_holding"),
+    kycStatus: text("kyc_status"),
+    ucc: text("ucc"),
+    email: text("email"),
+    mobile: text("mobile"),
+    nominee: text("nominee"),
+    rta: text("rta"),
   },
   (table) => [
     index("holdings_snapshot_report_id_idx").on(table.reportId),
@@ -154,6 +175,10 @@ export const schemeNavCacheMeta = mySchema.table("scheme_nav_cache_meta", {
   isinGrowth: text("isin_growth"),
   isinDivReinvestment: text("isin_div_reinvestment"),
   lastFetchedAt: text("last_fetched_at").notNull(),
+  launchDate: text("launch_date"),
+  corpusCr: doublePrecision("corpus_cr"),
+  expenseRatio: doublePrecision("expense_ratio"),
+  exitLoad: text("exit_load"),
 });
 
 export const schemeNavHistory = mySchema.table(
@@ -194,6 +219,13 @@ export const zerodhaHoldings = mySchema.table(
     currentValue: doublePrecision("current_value").notNull(),
     unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
     unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+    frozenQuantity: doublePrecision("frozen_quantity"),
+    pledgedQuantity: doublePrecision("pledged_quantity"),
+    pledgeSetupQuantity: doublePrecision("pledge_setup_quantity"),
+    freeQuantity: doublePrecision("free_quantity"),
+    lockinQuantity: doublePrecision("lockin_quantity"),
+    lockinDate: text("lockin_date"),
+    balanceDescription: text("balance_description"),
   },
   (table) => [
     index("zerodha_holdings_report_id_idx").on(table.reportId),
@@ -230,6 +262,10 @@ export const zerodhaSchemeNavCacheMeta = mySchema.table(
     isinGrowth: text("isin_growth"),
     isinDivReinvestment: text("isin_div_reinvestment"),
     lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
   }
 );
 
@@ -261,6 +297,10 @@ export const benchmarkNavCacheMeta = mySchema.table(
     isinGrowth: text("isin_growth"),
     isinDivReinvestment: text("isin_div_reinvestment"),
     lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
   }
 );
 
@@ -335,6 +375,10 @@ export const msflSchemeNavCacheMeta = mySchema.table(
     isinGrowth: text("isin_growth"),
     isinDivReinvestment: text("isin_div_reinvestment"),
     lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
   }
 );
 

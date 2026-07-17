@@ -6,6 +6,8 @@ import {
   benchmarkNavCacheMeta,
   benchmarkNavHistory,
   benchmarkRules,
+  zerodhaSchemeNavCacheMeta,
+  msflSchemeNavCacheMeta,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
@@ -28,7 +30,11 @@ import { NavPoint, ParsedNavPoint } from "@/types/alpha";
 import { CashFlow } from "@/types/xirr";
 import { MfDetailsResponse } from "@/types/mf-api";
 import { BenchmarkRuleDetails } from "@/types/benchmark";
-import { fetchMfDetails, isSpecializedFundSchemeCode } from "./mfApi";
+import {
+  fetchMfDetails,
+  isSpecializedFundSchemeCode,
+  fetchUpvalyMfDetails,
+} from "./mfApi";
 
 function normaliseSchemeCode(
   schemeCode: string | number | null | undefined
@@ -52,6 +58,22 @@ async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
     const res = await fetchMfDetails(schemeCode, startDate);
     const data = res.data;
     if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      let launchDate: string | null = null;
+      let corpusCr: number | null = null;
+      let expenseRatio: number | null = null;
+      let exitLoad: string | null = null;
+
+      const isin = data.meta.isin_growth || data.meta.isin_div_reinvestment;
+      if (isin) {
+        const factsheet = await fetchUpvalyMfDetails(isin);
+        if (factsheet) {
+          launchDate = factsheet.inceptionDate || null;
+          corpusCr = factsheet.aum || null;
+          expenseRatio = factsheet.expenseRatio || null;
+          exitLoad = factsheet.exitLoadMessage || null;
+        }
+      }
+
       // Upsert scheme cache metadata
       await db
         .insert(schemeNavCacheMeta)
@@ -64,6 +86,10 @@ async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
           isinGrowth: data.meta.isin_growth || null,
           isinDivReinvestment: data.meta.isin_div_reinvestment || null,
           lastFetchedAt: new Date().toISOString(),
+          launchDate,
+          corpusCr,
+          expenseRatio,
+          exitLoad,
         })
         .onConflictDoUpdate({
           target: schemeNavCacheMeta.schemeCode,
@@ -75,6 +101,10 @@ async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
             isinGrowth: data.meta.isin_growth || null,
             isinDivReinvestment: data.meta.isin_div_reinvestment || null,
             lastFetchedAt: new Date().toISOString(),
+            launchDate,
+            corpusCr,
+            expenseRatio,
+            exitLoad,
           },
         });
 
@@ -110,6 +140,22 @@ async function saveBenchmarkCache(
   benchmarkCode: string,
   data: MfDetailsResponse
 ) {
+  let launchDate: string | null = null;
+  let corpusCr: number | null = null;
+  let expenseRatio: number | null = null;
+  let exitLoad: string | null = null;
+
+  const isin = data.meta.isin_growth || data.meta.isin_div_reinvestment;
+  if (isin) {
+    const factsheet = await fetchUpvalyMfDetails(isin);
+    if (factsheet) {
+      launchDate = factsheet.inceptionDate || null;
+      corpusCr = factsheet.aum || null;
+      expenseRatio = factsheet.expenseRatio || null;
+      exitLoad = factsheet.exitLoadMessage || null;
+    }
+  }
+
   await db
     .insert(benchmarkNavCacheMeta)
     .values({
@@ -121,6 +167,10 @@ async function saveBenchmarkCache(
       isinGrowth: data.meta.isin_growth || null,
       isinDivReinvestment: data.meta.isin_div_reinvestment || null,
       lastFetchedAt: new Date().toISOString(),
+      launchDate,
+      corpusCr,
+      expenseRatio,
+      exitLoad,
     })
     .onConflictDoUpdate({
       target: benchmarkNavCacheMeta.benchmarkCode,
@@ -132,6 +182,10 @@ async function saveBenchmarkCache(
         isinGrowth: data.meta.isin_growth || null,
         isinDivReinvestment: data.meta.isin_div_reinvestment || null,
         lastFetchedAt: new Date().toISOString(),
+        launchDate,
+        corpusCr,
+        expenseRatio,
+        exitLoad,
       },
     });
 
@@ -790,19 +844,56 @@ export async function getBenchmarkRule(
 export async function getFactsheetMetadata(
   category: string | null,
   launchDateStr: string | null,
-  schemeName?: string | null
+  schemeName?: string | null,
+  schemeCodeApi?: string | null,
+  isZerodha = false,
+  isMsfl = false
 ): Promise<{
   profile: FactsheetProfile;
   allocation: AssetAllocation;
 }> {
   const rule = await getBenchmarkRule(category, schemeName);
 
+  let dbLaunchDate: string | null = null;
+  let dbCorpusCr: number | null = null;
+  let dbExpenseRatio: number | null = null;
+  let dbExitLoad: string | null = null;
+
+  if (schemeCodeApi) {
+    try {
+      let metaRecord;
+      if (isMsfl) {
+        metaRecord = await db.query.msflSchemeNavCacheMeta.findFirst({
+          where: eq(msflSchemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      } else if (isZerodha) {
+        metaRecord = await db.query.zerodhaSchemeNavCacheMeta.findFirst({
+          where: eq(zerodhaSchemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      } else {
+        metaRecord = await db.query.schemeNavCacheMeta.findFirst({
+          where: eq(schemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      }
+
+      if (metaRecord) {
+        dbLaunchDate = metaRecord.launchDate || null;
+        dbCorpusCr = metaRecord.corpusCr || null;
+        dbExpenseRatio = metaRecord.expenseRatio || null;
+        dbExitLoad = metaRecord.exitLoad || null;
+      }
+    } catch (err) {
+      console.error("Error reading factsheet metadata from cache table:", err);
+    }
+  }
+
   return {
     profile: {
-      launchDate: launchDateStr || "27 Aug 1998",
-      corpusCr: rule.corpusCr ?? 12500,
-      expenseRatio: rule.expenseRatio ?? 1.25,
-      exitLoad: rule.exitLoad ?? "1% for redemption within 365 days",
+      launchDate: dbLaunchDate || launchDateStr || "27 Aug 1998",
+      corpusCr: dbCorpusCr ?? rule.corpusCr ?? 12500,
+      expenseRatio: dbExpenseRatio ?? rule.expenseRatio ?? 1.25,
+      exitLoad:
+        dbExitLoad ?? rule.exitLoad ?? "1% for redemption within 365 days",
       benchmarkName: rule.benchmarkFundName,
     },
     allocation: {

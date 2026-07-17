@@ -3,7 +3,29 @@ import type { HoldingParsed, ParseResult } from "@/types/parser";
 
 export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
-  const sheetName = workbook.SheetNames[0]; // Usually '1. Mutual Fund'
+  const sheetNames = workbook.SheetNames;
+  if (!sheetNames.includes("1. Mutual Fund")) {
+    if (sheetNames.includes("Equity") || sheetNames.includes("Mutual Funds")) {
+      throw new Error(
+        "Invalid file: This appears to be a Zerodha holdings file. Please upload a Mutual Fund Valuation sheet."
+      );
+    }
+    if (sheetNames.includes("Holding_Report")) {
+      throw new Error(
+        "Invalid file: This appears to be an MSFL holdings file. Please upload a Mutual Fund Valuation sheet."
+      );
+    }
+    if (sheetNames.some((n) => n.toLowerCase().includes("sip"))) {
+      throw new Error(
+        "Invalid file: This appears to be a SIP mandates file. Please upload a Mutual Fund Valuation sheet."
+      );
+    }
+    throw new Error(
+      "Invalid file: Sheet '1. Mutual Fund' not found. Please upload a valid Mutual Fund Valuation sheet."
+    );
+  }
+
+  const sheetName = "1. Mutual Fund";
   const sheet = workbook.Sheets[sheetName];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 

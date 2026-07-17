@@ -28,6 +28,7 @@ import {
   autoMapScheme,
   fetchMfDetails,
   isSpecializedFundSchemeCode,
+  fetchUpvalyMfDetails,
 } from "./mfApi";
 import { ZerodhaHoldingParsed } from "@/types/zerodha-parser";
 import { MfDetailsResponse } from "@/types/mf-api";
@@ -174,6 +175,13 @@ export async function saveZerodhaHoldingsReport(
         currentValue: h.currentValue,
         unrealizedPnl: h.unrealizedPnl,
         unrealizedPnlPct: h.unrealizedPnlPct,
+        frozenQuantity: h.frozenQuantity,
+        pledgedQuantity: h.pledgedQuantity,
+        pledgeSetupQuantity: h.pledgeSetupQuantity,
+        freeQuantity: h.freeQuantity,
+        lockinQuantity: h.lockinQuantity,
+        lockinDate: h.lockinDate,
+        balanceDescription: h.balanceDescription,
       };
     })
   );
@@ -375,6 +383,13 @@ async function getZerodhaReportWeightedMetrics(
       isin: zerodhaSchemes.isin,
       sector: zerodhaSchemes.sector,
       instrumentType: zerodhaSchemes.instrumentType,
+      frozenQuantity: zerodhaHoldings.frozenQuantity,
+      pledgedQuantity: zerodhaHoldings.pledgedQuantity,
+      pledgeSetupQuantity: zerodhaHoldings.pledgeSetupQuantity,
+      freeQuantity: zerodhaHoldings.freeQuantity,
+      lockinQuantity: zerodhaHoldings.lockinQuantity,
+      lockinDate: zerodhaHoldings.lockinDate,
+      balanceDescription: zerodhaHoldings.balanceDescription,
     })
     .from(zerodhaHoldings)
     .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
@@ -533,6 +548,13 @@ export async function getZerodhaDashboardData(
       isin: zerodhaSchemes.isin,
       sector: zerodhaSchemes.sector,
       instrumentType: zerodhaSchemes.instrumentType,
+      frozenQuantity: zerodhaHoldings.frozenQuantity,
+      pledgedQuantity: zerodhaHoldings.pledgedQuantity,
+      pledgeSetupQuantity: zerodhaHoldings.pledgeSetupQuantity,
+      freeQuantity: zerodhaHoldings.freeQuantity,
+      lockinQuantity: zerodhaHoldings.lockinQuantity,
+      lockinDate: zerodhaHoldings.lockinDate,
+      balanceDescription: zerodhaHoldings.balanceDescription,
     })
     .from(zerodhaHoldings)
     .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
@@ -973,6 +995,22 @@ async function triggerZerodhaNavCacheUpdate(
     const res = await fetchMfDetails(schemeCode, startDate);
     const data = res.data;
     if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      let launchDate: string | null = null;
+      let corpusCr: number | null = null;
+      let expenseRatio: number | null = null;
+      let exitLoad: string | null = null;
+
+      const isin = data.meta.isin_growth || data.meta.isin_div_reinvestment;
+      if (isin) {
+        const factsheet = await fetchUpvalyMfDetails(isin);
+        if (factsheet) {
+          launchDate = factsheet.inceptionDate || null;
+          corpusCr = factsheet.aum || null;
+          expenseRatio = factsheet.expenseRatio || null;
+          exitLoad = factsheet.exitLoadMessage || null;
+        }
+      }
+
       await db
         .insert(zerodhaSchemeNavCacheMeta)
         .values({
@@ -984,6 +1022,10 @@ async function triggerZerodhaNavCacheUpdate(
           isinGrowth: data.meta.isin_growth || null,
           isinDivReinvestment: data.meta.isin_div_reinvestment || null,
           lastFetchedAt: new Date().toISOString(),
+          launchDate,
+          corpusCr,
+          expenseRatio,
+          exitLoad,
         })
         .onConflictDoUpdate({
           target: zerodhaSchemeNavCacheMeta.schemeCode,
@@ -995,6 +1037,10 @@ async function triggerZerodhaNavCacheUpdate(
             isinGrowth: data.meta.isin_growth || null,
             isinDivReinvestment: data.meta.isin_div_reinvestment || null,
             lastFetchedAt: new Date().toISOString(),
+            launchDate,
+            corpusCr,
+            expenseRatio,
+            exitLoad,
           },
         });
 
@@ -1280,9 +1326,12 @@ async function saveZerodhaStockCacheAndMapping(
   }
 }
 
-async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
+async function triggerZerodhaStockNavCacheUpdate(
+  ticker: string,
+  range = "max"
+) {
   try {
-    const res = await fetchStockHistory(ticker);
+    const res = await fetchStockHistory(ticker, range);
     const data = res.data;
     if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await saveZerodhaStockCacheAndMapping(ticker, data);
@@ -1292,102 +1341,65 @@ async function triggerZerodhaStockNavCacheUpdate(ticker: string) {
   }
 }
 
-export function getZerodhaStockHistoryForSymbol(
-  ticker: string
+export async function getZerodhaStockHistoryForSymbol(
+  ticker: string,
+  range = "max"
 ): Promise<MfDetailsResponse | null> {
-  if (!ticker) return Promise.resolve(null);
+  if (!ticker) return null;
 
-  let cachedPromise = zerodhaStockHistoryCache.get(ticker);
-  if (!cachedPromise) {
-    cachedPromise = (async () => {
-      // 1. Check if we have cached metadata in PostgreSQL
-      const cachedMeta = await db.query.zerodhaSchemeNavCacheMeta.findFirst({
-        where: eq(zerodhaSchemeNavCacheMeta.schemeCode, ticker),
-      });
+  // 1. Check if we have cached metadata in PostgreSQL
+  const cachedMeta = await db.query.zerodhaSchemeNavCacheMeta.findFirst({
+    where: eq(zerodhaSchemeNavCacheMeta.schemeCode, ticker),
+  });
 
-      const now = new Date();
-      const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
-      const isFresh =
-        cachedMeta &&
-        now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
-          cacheAgeLimit;
+  const now = new Date();
+  const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+  const isFresh =
+    cachedMeta &&
+    now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+      cacheAgeLimit;
 
-      if (cachedMeta) {
-        if (!isFresh) {
-          try {
-            await triggerZerodhaStockNavCacheUpdate(ticker);
-            const updatedHistory =
-              await db.query.zerodhaSchemeNavHistory.findMany({
-                where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
-              });
-            if (updatedHistory.length > 0) {
-              return {
-                meta: {
-                  fund_house: cachedMeta.fundHouse,
-                  scheme_type: cachedMeta.schemeType,
-                  scheme_category: cachedMeta.schemeCategory,
-                  scheme_code: 0,
-                  scheme_name: cachedMeta.schemeName,
-                },
-                data: updatedHistory.map((h) => ({
-                  date: h.date,
-                  nav: String(h.nav),
-                })),
-              };
-            }
-          } catch (e) {
-            console.error("[SYNC ZERODHA STOCK CACHE UPDATE ERROR]", e);
-          }
-        }
-
-        const history = await db.query.zerodhaSchemeNavHistory.findMany({
-          where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
-        });
-
-        if (history.length > 0) {
-          return {
-            meta: {
-              fund_house: cachedMeta.fundHouse,
-              scheme_type: cachedMeta.schemeType,
-              scheme_category: cachedMeta.schemeCategory,
-              scheme_code: 0,
-              scheme_name: cachedMeta.schemeName,
-            },
-            data: history.map((h) => ({
-              date: h.date,
-              nav: String(h.nav),
-            })),
-          };
-        }
+  if (cachedMeta) {
+    if (!isFresh) {
+      try {
+        await triggerZerodhaStockNavCacheUpdate(ticker, range);
+      } catch (e) {
+        console.error("[SYNC ZERODHA STOCK CACHE UPDATE ERROR]", e);
       }
+    }
 
-      // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      const res = await fetchStockHistory(ticker);
-      const data = res.data;
-      if (
-        res.success &&
-        data &&
-        data.meta &&
-        data.data &&
-        data.data.length > 0
-      ) {
-        try {
-          await saveZerodhaStockCacheAndMapping(ticker, data);
-          return data;
-        } catch (dbErr) {
-          console.error(
-            `Failed to cache stock history for ${ticker} in DB:`,
-            dbErr
-          );
-          return data;
-        }
-      }
+    const history = await db.query.zerodhaSchemeNavHistory.findMany({
+      where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
+    });
 
-      return null;
-    })();
-
-    zerodhaStockHistoryCache.set(ticker, cachedPromise);
+    if (history.length > 0) {
+      return {
+        meta: {
+          fund_house: cachedMeta.fundHouse,
+          scheme_type: cachedMeta.schemeType,
+          scheme_category: cachedMeta.schemeCategory,
+          scheme_code: 0,
+          scheme_name: cachedMeta.schemeName,
+        },
+        data: history.map((h) => ({
+          date: h.date,
+          nav: String(h.nav),
+        })),
+      };
+    }
   }
 
-  return cachedPromise;
+  // 2. Fetch fresh details from API (Sync fallback because no cache exists)
+  try {
+    const res = await fetchStockHistory(ticker, range);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      await saveZerodhaStockCacheAndMapping(ticker, data);
+      return data;
+    }
+  } catch (err) {
+    console.error(`Failed first-time fetch for stock ${ticker}:`, err);
+  }
+
+  return null;
 }

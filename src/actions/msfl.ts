@@ -29,7 +29,8 @@ export async function uploadMsflHoldingsAction(
     if (parsed.holdings.length === 0) {
       return {
         success: false,
-        error: "No valid stocks holdings found in sheet 'Holding_Report'",
+        error:
+          "No valid stock holdings found. Please ensure the uploaded sheet is a valid MSFL Holdings report containing the 'Holding_Report' tab.",
       };
     }
 

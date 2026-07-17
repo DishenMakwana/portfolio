@@ -85,6 +85,21 @@ export interface HoldingDetails {
   isin?: string;
   reportId?: number | null;
   sector?: string | null;
+  frozenQuantity?: number | null;
+  pledgedQuantity?: number | null;
+  pledgeSetupQuantity?: number | null;
+  freeQuantity?: number | null;
+  lockinQuantity?: number | null;
+  lockinDate?: string | null;
+  balanceDescription?: string | null;
+}
+
+export interface EntryPointMarker {
+  timestamp: number;
+  fundReturn: number;
+  nav: number;
+  label: string;
+  txType: "BUY" | "SELL";
 }
 
 export type FundTimeframe = "3m" | "6m" | "1y" | "3y" | "5y" | "max";

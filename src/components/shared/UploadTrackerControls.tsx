@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, RefreshCw, AlertTriangle, X } from "lucide-react";
+import { Upload, RefreshCw } from "lucide-react";
 import { uploadReportAction } from "@/actions/portfolio";
 import type { UploadTrackerControlsProps } from "@/types/upload-tracker";
+import { toast } from "react-hot-toast";
 
 export default function UploadTrackerControls({
   reportsList,
@@ -13,7 +14,6 @@ export default function UploadTrackerControls({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleReportChange = (reportId: string) => {
     startTransition(() => {
@@ -25,16 +25,16 @@ export default function UploadTrackerControls({
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    setUploadError(null);
     const formData = new FormData();
     formData.append("file", file);
     const res = await uploadReportAction(formData);
     setIsUploading(false);
     if (res.success && res.data?.reportId) {
+      toast.success("Mutual Fund Valuation sheet uploaded successfully!");
       router.refresh();
       router.push(`/uploads?reportId=${res.data.reportId}`);
     } else {
-      setUploadError(res.error || "Upload failed");
+      toast.error(res.error || "Upload failed");
     }
     // Reset file input
     e.target.value = "";
@@ -82,21 +82,6 @@ export default function UploadTrackerControls({
           />
         </label>
       </div>
-
-      {/* Upload error toast */}
-      {uploadError && (
-        <div className="fixed bottom-4 right-4 z-50 bg-red-950/90 border border-red-800/80 rounded-xl p-3 flex items-center gap-3 text-red-300 text-sm shadow-2xl backdrop-blur-md">
-          <AlertTriangle size={16} className="shrink-0" />
-          <span className="flex-1">{uploadError}</span>
-          <button
-            onClick={() => setUploadError(null)}
-            className="ml-auto text-red-400 hover:text-red-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-red-500/10 transition"
-            aria-label="Close error"
-          >
-            <X size={15} />
-          </button>
-        </div>
-      )}
 
       {/* Full-screen upload loader */}
       {isUploading && (

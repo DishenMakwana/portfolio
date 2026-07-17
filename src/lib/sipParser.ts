@@ -3,11 +3,32 @@ import type { SipParsed, SipRow } from "@/types/sip-parser";
 
 export function parseSipExcel(buffer: Buffer, filename: string): SipParsed {
   const wb = XLSX.read(buffer, { type: "buffer" });
+  const sheetNames = wb.SheetNames;
+  const hasSipSheet = sheetNames.some((n) => n.toLowerCase().includes("sip"));
+
+  if (!hasSipSheet) {
+    if (sheetNames.includes("1. Mutual Fund")) {
+      throw new Error(
+        "Invalid file: This appears to be a Mutual Fund Valuation sheet. Please upload a SIP mandates sheet."
+      );
+    }
+    if (sheetNames.includes("Holding_Report")) {
+      throw new Error(
+        "Invalid file: This appears to be an MSFL holdings file. Please upload a SIP mandates sheet."
+      );
+    }
+    if (sheetNames.includes("Equity") || sheetNames.includes("Mutual Funds")) {
+      throw new Error(
+        "Invalid file: This appears to be a Zerodha holdings file. Please upload a SIP mandates sheet."
+      );
+    }
+    throw new Error(
+      "Invalid file: No sheet containing 'SIP' found. Please upload a valid SIP mandates sheet."
+    );
+  }
 
   // Find the SIPs sheet (name may vary — look for first sheet that contains "SIP")
-  const sheetName =
-    wb.SheetNames.find((n) => n.toLowerCase().includes("sip")) ||
-    wb.SheetNames[0];
+  const sheetName = sheetNames.find((n) => n.toLowerCase().includes("sip"))!;
   const ws = wb.Sheets[sheetName];
   const raw: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, {
     header: 1,

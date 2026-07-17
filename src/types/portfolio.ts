@@ -20,6 +20,13 @@ export interface HoldingDetails {
   comments: string | null;
   memberName: string;
   memberPan: string | null;
+  modeOfHolding: string | null;
+  kycStatus: string | null;
+  ucc: string | null;
+  email: string | null;
+  mobile: string | null;
+  nominee: string | null;
+  rta: string | null;
 }
 
 export interface PortfolioTransaction {
@@ -99,6 +106,7 @@ export interface ReportSummary {
   uploadedAt: string;
   filename: string;
   cagr: number | null;
+  casId?: string | null;
 }
 
 export interface DashboardData {
@@ -126,6 +134,19 @@ export interface DashboardData {
     cagrDelta: number | null;
     xirrDelta: number | null;
     alphaDelta: number | null;
+    address?: string | null;
+    email?: string | null;
+    mobile?: string | null;
+    dematNominee?: string | null;
+    dpId?: string | null;
+    clientId?: string | null;
+    dpName?: string | null;
+    boSubStatus?: string | null;
+    bsda?: string | null;
+    rgess?: string | null;
+    accountStatus?: string | null;
+    frozenStatus?: string | null;
+    boStatus?: string | null;
   }[];
   holdings: (HoldingDetails & { xirr: number; alpha: number })[];
   categoryAllocation: { name: string; value: number }[];

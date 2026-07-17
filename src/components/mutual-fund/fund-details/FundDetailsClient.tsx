@@ -28,6 +28,7 @@ import {
   FundDetailsClientProps,
   CustomTooltipProps,
   FundTimeframe,
+  EntryPointMarker,
 } from "@/types/fund-details";
 import {
   ResponsiveContainer,
@@ -239,41 +240,53 @@ export default function FundDetailsClient({
     return null;
   }, [filteredChartData, timeframe]);
 
-  // Find the entry point to display as a marker on the chart (only if it falls within the selected timeline)
-  const entryPoint = useMemo(() => {
-    if (!filteredChartData.length || !currentChartData.length) return null;
+  // Find ALL buy entry points to display as markers on the chart (only those within the selected timeline)
+  const entryPoints: EntryPointMarker[] = useMemo(() => {
+    if (!filteredChartData.length || !currentChartData.length) return [];
+
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
     // 1. For standard funds with transactions:
-    // Find the very first buy transaction in all history
-    const allBuyTxs = transactions.filter((t) => t.type === "BUY");
-    if (allBuyTxs.length > 0) {
-      const firstBuyTx = allBuyTxs.reduce((oldest, current) =>
-        new Date(current.date).getTime() < new Date(oldest.date).getTime()
-          ? current
-          : oldest
-      );
-      const firstBuyTime = new Date(firstBuyTx.date).getTime();
+    // Find ALL buy and sell transactions and create markers for each one
+    const allTxs = transactions.filter(
+      (t) => t.type === "BUY" || t.type === "SELL"
+    );
+    if (allTxs.length > 0) {
+      const markers: EntryPointMarker[] = [];
 
-      // Check if this first buy transaction falls within the currently filtered timeframe
-      const isVisible = filteredChartData.some(
-        (pt) => Math.abs(pt.timestamp - firstBuyTime) < 7 * 24 * 60 * 60 * 1000
-      );
-      if (isVisible) {
-        // Find the closest point in the filtered view
+      for (const tx of allTxs) {
+        const txTime = new Date(tx.date).getTime();
+        const txType = tx.type as "BUY" | "SELL";
+
+        // Check if this transaction falls within the currently filtered timeframe
+        const isVisible = filteredChartData.some(
+          (pt) => Math.abs(pt.timestamp - txTime) < ONE_WEEK_MS
+        );
+        if (!isVisible) continue;
+
+        // Find the closest chart point to this transaction date
         const txPoint = filteredChartData.reduce((prev, cur) =>
-          Math.abs(cur.timestamp - firstBuyTime) <
-          Math.abs(prev.timestamp - firstBuyTime)
+          Math.abs(cur.timestamp - txTime) < Math.abs(prev.timestamp - txTime)
             ? cur
             : prev
         );
-        return {
+
+        // Avoid duplicate markers of same type on the same chart point
+        const alreadyMarked = markers.some(
+          (m) => m.timestamp === txPoint.timestamp && m.txType === txType
+        );
+        if (alreadyMarked) continue;
+
+        markers.push({
           timestamp: txPoint.timestamp,
           fundReturn: txPoint.fundReturn,
           nav: txPoint.fundNav,
-          label: `Bought: ₹${txPoint.fundNav.toFixed(2)}`,
-        };
+          label: txType === "BUY" ? "Buy" : "Sell",
+          txType,
+        });
       }
-      return null;
+
+      return markers;
     }
 
     // 2. For Zerodha/MSFL (using purchaseNav fallback):
@@ -282,20 +295,22 @@ export default function FundDetailsClient({
       // Fallback: earliest point in full chart history is listing/allotment date
       const firstPt = currentChartData[0];
       if (firstPt) {
-        // Only show if the listing date is within the active filtered range
         const visibleFirstPt = filteredChartData.find(
           (pt) => pt.timestamp === firstPt.timestamp
         );
         if (visibleFirstPt) {
-          return {
-            timestamp: visibleFirstPt.timestamp,
-            fundReturn: visibleFirstPt.fundReturn,
-            nav: visibleFirstPt.fundNav,
-            label: `Allotment: ₹${visibleFirstPt.fundNav.toFixed(2)}`,
-          };
+          return [
+            {
+              timestamp: visibleFirstPt.timestamp,
+              fundReturn: visibleFirstPt.fundReturn,
+              nav: visibleFirstPt.fundNav,
+              label: `Allotment: ₹${visibleFirstPt.fundNav.toFixed(2)}`,
+              txType: "BUY" as const,
+            },
+          ];
         }
       }
-      return null;
+      return [];
     }
 
     // Find the point in full chartData closest to purchaseNav (the absolute entry point)
@@ -314,15 +329,18 @@ export default function FundDetailsClient({
       (pt) => pt.timestamp === bestFullPt.timestamp
     );
     if (visiblePt) {
-      return {
-        timestamp: visiblePt.timestamp,
-        fundReturn: visiblePt.fundReturn,
-        nav: visiblePt.fundNav,
-        label: `Avg Cost: ₹${targetNav.toLocaleString("en-IN")}`,
-      };
+      return [
+        {
+          timestamp: visiblePt.timestamp,
+          fundReturn: visiblePt.fundReturn,
+          nav: visiblePt.fundNav,
+          label: `Avg Cost: ₹${targetNav.toLocaleString("en-IN")}`,
+          txType: "BUY" as const,
+        },
+      ];
     }
 
-    return null;
+    return [];
   }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
   const cleanCategory = holding.category || "N/A";
@@ -365,6 +383,14 @@ export default function FundDetailsClient({
                   • Folio:{" "}
                   <span className="font-mono text-slate-300 font-bold">
                     {holding.folioNo}
+                  </span>
+                </>
+              )}
+              {holding.isin && (
+                <>
+                  • ISIN:{" "}
+                  <span className="font-mono text-slate-300 font-bold">
+                    {holding.isin}
                   </span>
                 </>
               )}
@@ -683,32 +709,34 @@ export default function FundDetailsClient({
                   fill="url(#colorBench)"
                   strokeDasharray="4 4"
                 />
-                {entryPoint && (
+                {entryPoints.map((ep, idx) => (
                   <ReferenceLine
-                    x={entryPoint.timestamp}
-                    stroke="#14b8a6"
+                    key={`entry-line-${idx}`}
+                    x={ep.timestamp}
+                    stroke={ep.txType === "BUY" ? "#14b8a6" : "#f43f5e"}
                     strokeDasharray="3 3"
                     opacity={0.4}
                   />
-                )}
-                {entryPoint && (
+                ))}
+                {entryPoints.map((ep, idx) => (
                   <ReferenceDot
-                    x={entryPoint.timestamp}
-                    y={entryPoint.fundReturn}
+                    key={`entry-dot-${idx}`}
+                    x={ep.timestamp}
+                    y={ep.fundReturn}
                     r={6}
-                    fill="#14b8a6"
+                    fill={ep.txType === "BUY" ? "#14b8a6" : "#f43f5e"}
                     stroke="#0f172a"
                     strokeWidth={2}
                     label={{
-                      value: entryPoint.label,
-                      position: "top",
-                      fill: "#34d399",
+                      value: ep.label,
+                      position: idx % 2 === 0 ? "top" : "bottom",
+                      fill: ep.txType === "BUY" ? "#34d399" : "#fb7185",
                       fontSize: 10,
                       fontWeight: "bold",
                       offset: 10,
                     }}
                   />
-                )}
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -1315,6 +1343,74 @@ export default function FundDetailsClient({
                 </div>
               </>
             )}
+            {holding.freeQuantity !== undefined &&
+              holding.freeQuantity !== null && (
+                <div className="border-b border-slate-850/60 pb-2">
+                  <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                    Free Quantity
+                  </div>
+                  <div className="font-mono text-slate-200 mt-0.5 font-bold">
+                    {holding.freeQuantity.toFixed(3)}
+                  </div>
+                </div>
+              )}
+            {holding.frozenQuantity !== undefined &&
+              holding.frozenQuantity !== null &&
+              holding.frozenQuantity > 0 && (
+                <div className="border-b border-slate-850/60 pb-2">
+                  <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                    Frozen Quantity
+                  </div>
+                  <div className="font-mono text-slate-200 mt-0.5 font-bold text-red-400">
+                    {holding.frozenQuantity.toFixed(3)}
+                  </div>
+                </div>
+              )}
+            {holding.pledgedQuantity !== undefined &&
+              holding.pledgedQuantity !== null &&
+              holding.pledgedQuantity > 0 && (
+                <div className="border-b border-slate-850/60 pb-2">
+                  <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                    Pledged Quantity
+                  </div>
+                  <div className="font-mono text-slate-200 mt-0.5 font-bold text-amber-400">
+                    {holding.pledgedQuantity.toFixed(3)}
+                  </div>
+                </div>
+              )}
+            {holding.lockinQuantity !== undefined &&
+              holding.lockinQuantity !== null &&
+              holding.lockinQuantity > 0 && (
+                <>
+                  <div className="border-b border-slate-850/60 pb-2">
+                    <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                      Lock-in Quantity
+                    </div>
+                    <div className="font-mono text-slate-200 mt-0.5 font-bold text-teal-400">
+                      {holding.lockinQuantity.toFixed(3)}
+                    </div>
+                  </div>
+                  {holding.lockinDate && (
+                    <div className="border-b border-slate-850/60 pb-2">
+                      <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
+                        Lock-in Release Date
+                      </div>
+                      <div className="text-slate-200 mt-0.5 font-bold">
+                        {new Date(holding.lockinDate).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          }
+                        )}
+                        {holding.balanceDescription &&
+                          ` (${holding.balanceDescription})`}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             <div className="col-span-2">
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                 Comments

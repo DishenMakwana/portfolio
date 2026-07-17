@@ -34,6 +34,7 @@ import {
   deleteMsflHoldingsAction,
   updateMsflSchemeMappingAction,
 } from "@/actions/msfl";
+import { toast } from "react-hot-toast";
 // ─── Main Tab Component ────────────────────────────────────────────────────────
 
 export default function MsflDashboardClient({
@@ -42,7 +43,6 @@ export default function MsflDashboardClient({
 }: MsflDashboardClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Sorting state for MSFL Stock Holdings
@@ -115,19 +115,19 @@ export default function MsflDashboardClient({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadError(null);
     const formData = new FormData();
     formData.append("file", file);
 
     startTransition(async () => {
       const res = await uploadMsflHoldingsAction(formData);
       if (res.success && res.data?.reportId) {
+        toast.success("MSFL Holdings sheet uploaded successfully!");
         // Sync selectedReportId in URL
         const params = new URLSearchParams(window.location.search);
         params.set("msflReportId", String(res.data.reportId));
         router.push(`${window.location.pathname}?${params.toString()}`);
       } else {
-        setUploadError(res.error || "Failed to upload report");
+        toast.error(res.error || "Failed to upload report");
       }
     });
   };
@@ -283,13 +283,6 @@ export default function MsflDashboardClient({
           </label>
         </div>
       </div>
-
-      {uploadError && (
-        <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 text-xs font-semibold flex items-center gap-2">
-          <AlertTriangle size={15} />
-          {uploadError}
-        </div>
-      )}
 
       {reportsList.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/10 py-16 px-6 text-center">

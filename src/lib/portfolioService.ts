@@ -120,6 +120,17 @@ export async function saveReportSnapshot(
       scheme = inserted;
     }
 
+    // Try to find a previous snapshot for the same folio and member to inherit details
+    const prevSnapshot = await db.query.holdingsSnapshot.findFirst({
+      where: (table, { eq, and, isNotNull }) =>
+        and(
+          eq(table.memberId, member.id),
+          eq(table.folioNo, item.folioNo),
+          isNotNull(table.modeOfHolding)
+        ),
+      orderBy: (table, { desc }) => [desc(table.id)],
+    });
+
     // 3.3 Insert Holdings Snapshot
     await db.insert(holdingsSnapshot).values({
       reportId: newReport.id,
@@ -137,6 +148,13 @@ export async function saveReportSnapshot(
       absoluteReturn: item.absoluteReturn,
       cagr: item.cagr,
       comments: item.comments || null,
+      modeOfHolding: prevSnapshot?.modeOfHolding || null,
+      kycStatus: prevSnapshot?.kycStatus || null,
+      ucc: prevSnapshot?.ucc || null,
+      email: prevSnapshot?.email || null,
+      mobile: prevSnapshot?.mobile || null,
+      nominee: prevSnapshot?.nominee || null,
+      rta: prevSnapshot?.rta || null,
     });
   }
 
@@ -349,6 +367,13 @@ export async function getReportHoldings(
       comments: holdingsSnapshot.comments,
       memberName: familyMembers.name,
       memberPan: familyMembers.pan,
+      modeOfHolding: holdingsSnapshot.modeOfHolding,
+      kycStatus: holdingsSnapshot.kycStatus,
+      ucc: holdingsSnapshot.ucc,
+      email: holdingsSnapshot.email,
+      mobile: holdingsSnapshot.mobile,
+      nominee: holdingsSnapshot.nominee,
+      rta: holdingsSnapshot.rta,
     })
     .from(holdingsSnapshot)
     .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))

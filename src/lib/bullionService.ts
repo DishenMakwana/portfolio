@@ -21,11 +21,6 @@ const GRAMS_PER_TROY_ONCE = 31.1034768;
 const GOLD_INDIA_MULTIPLIER = 1.15626;
 const SILVER_INDIA_MULTIPLIER = 1.3072;
 
-// Standard baseline prices for July 6, 2026 as fallback
-const FALLBACK_GOLD_24K = 14667;
-const FALLBACK_SILVER_999 = 248;
-const FALLBACK_PLATINUM_PT950 = 3120;
-
 export const CITIES = [
   { id: "rajkot", name: "Rajkot", offset: 0.0 },
   { id: "mumbai", name: "Mumbai", offset: -0.0015 },
@@ -38,101 +33,11 @@ export const CITIES = [
 ];
 
 /**
- * Generates high-fidelity 1-year fallback data
- */
-function getFallbackRates(): BullionRates {
-  const today = new Date().toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
-  return {
-    asOfDate: today,
-    gold: {
-      "24K": FALLBACK_GOLD_24K,
-      "22K": Math.round((FALLBACK_GOLD_24K * 22) / 24),
-      "18K": Math.round((FALLBACK_GOLD_24K * 18) / 24) + 2, // Slight premium adjust to match screenshot
-      change: -11,
-    },
-    silver: {
-      "999": FALLBACK_SILVER_999,
-      "925": Math.round(FALLBACK_SILVER_999 * 0.925),
-      "800": Math.round(FALLBACK_SILVER_999 * 0.8),
-      change: -2.0,
-    },
-    platinum: {
-      PT950: FALLBACK_PLATINUM_PT950,
-      PT900: Math.round(FALLBACK_PLATINUM_PT950 * 0.9474),
-      PT850: Math.round(FALLBACK_PLATINUM_PT950 * 0.8947),
-      change: -5.0,
-    },
-  };
-}
-
-/**
- * Generates high-fidelity 1-year fallback chart data
- */
-function getFallbackChartData(): ChartDataPoint[] {
-  const data: ChartDataPoint[] = [];
-  const now = new Date();
-
-  const totalDays = 365;
-  // Dynamic growth simulation over the last 1 year
-  const currentGold = 10500;
-  const currentSilver = 190;
-  const currentPlat = 2500;
-
-  const stepGold = (FALLBACK_GOLD_24K - 10500) / totalDays;
-  const stepSilver = (FALLBACK_SILVER_999 - 190) / totalDays;
-  const stepPlat = (FALLBACK_PLATINUM_PT950 - 2500) / totalDays;
-
-  for (let i = totalDays; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(now.getDate() - i);
-    const dateStr = d.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "2-digit",
-    });
-
-    // Smooth sinusoidal noise for realistic financial line
-    const factor =
-      Math.sin(d.getTime() / (1000 * 60 * 60 * 24 * 5)) * 250 +
-      Math.cos(d.getTime() / (1000 * 60 * 60 * 24)) * 60;
-    const silFactor =
-      Math.sin(d.getTime() / (1000 * 60 * 60 * 24 * 5)) * 8 +
-      Math.cos(d.getTime() / (1000 * 60 * 60 * 24)) * 2.5;
-    const platFactor =
-      Math.sin(d.getTime() / (1000 * 60 * 60 * 24 * 5)) * 60 +
-      Math.cos(d.getTime() / (1000 * 60 * 60 * 24)) * 12;
-
-    const finalG = Math.round(
-      currentGold + stepGold * (totalDays - i) + factor
-    );
-    const finalS = Math.round(
-      currentSilver + stepSilver * (totalDays - i) + silFactor
-    );
-    const finalP = Math.round(
-      currentPlat + stepPlat * (totalDays - i) + platFactor
-    );
-
-    data.push({
-      date: dateStr,
-      Gold: i === 0 ? FALLBACK_GOLD_24K : finalG,
-      Silver: i === 0 ? FALLBACK_SILVER_999 : finalS,
-      Platinum: i === 0 ? FALLBACK_PLATINUM_PT950 : finalP,
-    });
-  }
-
-  return data;
-}
-
-/**
- * Fetch and process live bullion prices from CoinGecko or fallback (365 days)
+ * Fetch and process live bullion prices from CoinGecko
  */
 export async function getBullionData(
-  forceRefresh = false
+  forceRefresh = false,
+  days: string | number = 365
 ): Promise<ActionResult<BullionRatesResponse>> {
   const now = Date.now();
 
@@ -178,35 +83,30 @@ export async function getBullionData(
     );
 
     const priceData = cgRes.data;
-    const goldOunceINR = priceData["pax-gold"]?.inr;
-    const silverOunceINR = priceData["kinesis-silver"]?.inr;
+    const goldOunceINR: number | undefined = priceData["pax-gold"]?.inr;
+    const silverOunceINR: number | undefined = priceData["kinesis-silver"]?.inr;
 
     if (!goldOunceINR || !silverOunceINR) {
       throw new Error("Invalid data format from CoinGecko");
     }
 
-    // 2. Fetch 1-year historical rates (days=365)
-    let goldHistory: [number, number][] = [];
-    let silverHistory: [number, number][] = [];
+    // 2. Fetch historical rates (days)
+    const [goldHistRes, silverHistRes] = await Promise.all([
+      axios.get(
+        `https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=inr&days=${days}&interval=daily`,
+        { timeout: 4000 }
+      ),
+      axios.get(
+        `https://api.coingecko.com/api/v3/coins/kinesis-silver/market_chart?vs_currency=inr&days=${days}&interval=daily`,
+        { timeout: 4000 }
+      ),
+    ]);
 
-    try {
-      const [goldHistRes, silverHistRes] = await Promise.all([
-        axios.get(
-          "https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=inr&days=365&interval=daily",
-          { timeout: 4000 }
-        ),
-        axios.get(
-          "https://api.coingecko.com/api/v3/coins/kinesis-silver/market_chart?vs_currency=inr&days=365&interval=daily",
-          { timeout: 4000 }
-        ),
-      ]);
-      goldHistory = goldHistRes.data.prices || [];
-      silverHistory = silverHistRes.data.prices || [];
-    } catch (e) {
-      console.warn(
-        "Failed to fetch historical rates from CoinGecko, using empty history:",
-        e
-      );
+    const goldHistory: [number, number][] = goldHistRes.data.prices || [];
+    const silverHistory: [number, number][] = silverHistRes.data.prices || [];
+
+    if (goldHistory.length === 0 || silverHistory.length === 0) {
+      throw new Error("Empty historical data received from CoinGecko");
     }
 
     // 3. Process current rates
@@ -219,9 +119,9 @@ export async function getBullionData(
     const platinumPT950 = Math.round(gold24K * 0.2127); // Platinum ratio relative to gold
 
     // Calculate daily changes based on history (yesterday vs today)
-    let goldChange = -11; // fallback default
-    let silverChange = -2.0; // fallback default
-    let platinumChange = -5.0; // fallback default
+    let goldChange = -11; // default fallback if history is less than 2
+    let silverChange = -2.0; // default fallback if history is less than 2
+    let platinumChange = -5.0; // default fallback if history is less than 2
 
     if (goldHistory.length >= 2) {
       const yesterdayGold =
@@ -271,43 +171,39 @@ export async function getBullionData(
       },
     };
 
-    // 4. Compile chart data (365 days)
+    // 4. Compile chart data
     const chartData: ChartDataPoint[] = [];
     const minLen = Math.min(goldHistory.length, silverHistory.length);
 
-    if (minLen > 0) {
-      for (let i = 0; i < minLen; i++) {
-        const time = goldHistory[i][0];
-        const gPriceOunce = goldHistory[i][1];
-        const sPriceOunce = silverHistory[i][1];
+    for (let i = 0; i < minLen; i++) {
+      const time = goldHistory[i][0];
+      const gPriceOunce = goldHistory[i][1];
+      const sPriceOunce = silverHistory[i][1];
 
-        const dateStr = new Date(time).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "2-digit",
-        });
-        const gG = Math.round(
-          (gPriceOunce / GRAMS_PER_TROY_ONCE) * GOLD_INDIA_MULTIPLIER
-        );
-        const sS = Math.round(
-          (sPriceOunce / GRAMS_PER_TROY_ONCE) * SILVER_INDIA_MULTIPLIER
-        );
-        const pP = Math.round(gG * 0.2127);
+      const dateStr = new Date(time).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "2-digit",
+      });
+      const gG = Math.round(
+        (gPriceOunce / GRAMS_PER_TROY_ONCE) * GOLD_INDIA_MULTIPLIER
+      );
+      const sS = Math.round(
+        (sPriceOunce / GRAMS_PER_TROY_ONCE) * SILVER_INDIA_MULTIPLIER
+      );
+      const pP = Math.round(gG * 0.2127);
 
-        chartData.push({
-          date: dateStr,
-          Gold: gG,
-          Silver: sS,
-          Platinum: pP,
-        });
-      }
-    } else {
-      cache.chartData = getFallbackChartData();
+      chartData.push({
+        date: dateStr,
+        Gold: gG,
+        Silver: sS,
+        Platinum: pP,
+      });
     }
 
     // Update Cache
     cache.rates = rates;
-    cache.chartData = chartData.length > 0 ? chartData : getFallbackChartData();
+    cache.chartData = chartData;
     cache.lastFetched = now;
 
     return {
@@ -319,23 +215,15 @@ export async function getBullionData(
       },
     };
   } catch (error) {
-    console.warn(
-      "[BULLION SERVICE] Fetching 1-year rates failed. Using fallback data. Error:",
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(
+      "[BULLION SERVICE] Fetching bullion rates failed. Error:",
       error
     );
 
-    // Fill cache with fallback
-    cache.rates = getFallbackRates();
-    cache.chartData = getFallbackChartData();
-    cache.lastFetched = now;
-
     return {
-      success: true,
-      data: {
-        rates: cache.rates,
-        chartData: cache.chartData,
-        isThrottled: false,
-      },
+      success: false,
+      error: `Failed to fetch live bullion prices: ${errorMsg}`,
     };
   }
 }

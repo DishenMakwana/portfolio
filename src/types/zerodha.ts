@@ -21,6 +21,13 @@ export interface ZerodhaHolding {
   alpha?: number | null;
   benchmarkCode?: string | null;
   benchmarkName?: string | null;
+  frozenQuantity?: number | null;
+  pledgedQuantity?: number | null;
+  pledgeSetupQuantity?: number | null;
+  freeQuantity?: number | null;
+  lockinQuantity?: number | null;
+  lockinDate?: string | null;
+  balanceDescription?: string | null;
 }
 
 export interface ZerodhaScheme {

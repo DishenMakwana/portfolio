@@ -210,3 +210,34 @@ function editDistance(s1: string, s2: string): number {
   }
   return costs[s2.length];
 }
+
+/**
+ * Fetch mutual fund factsheet details from Upvaly API
+ */
+export async function fetchUpvalyMfDetails(isin: string): Promise<{
+  inceptionDate?: string;
+  aum?: number;
+  expenseRatio?: number;
+  exitLoadMessage?: string;
+} | null> {
+  if (!isin) return null;
+  const url = `https://finapi.upvaly.com/api/mf/isin/${isin}`;
+  try {
+    const res = await axios.get(url, { timeout: 8000 });
+    if (res.data?.status === "success" && res.data?.data) {
+      const d = res.data.data;
+      return {
+        inceptionDate: d.inceptionDate || undefined,
+        aum: d.aum ? parseFloat(d.aum.replace(/,/g, "")) : undefined,
+        expenseRatio: d.expenseRatio ? parseFloat(d.expenseRatio) : undefined,
+        exitLoadMessage: d.exitLoadMessage || undefined,
+      };
+    }
+  } catch (error) {
+    console.warn(
+      `[Upvaly API] Failed to fetch factsheet for ISIN ${isin}:`,
+      error
+    );
+  }
+  return null;
+}

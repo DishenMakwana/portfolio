@@ -328,9 +328,9 @@ async function saveMsflStockCacheAndMapping(
   }
 }
 
-async function triggerMsflStockNavCacheUpdate(ticker: string) {
+async function triggerMsflStockNavCacheUpdate(ticker: string, range = "max") {
   try {
-    const res = await fetchStockHistory(ticker);
+    const res = await fetchStockHistory(ticker, range);
     const data = res.data;
     if (res.success && data && data.meta && data.data && data.data.length > 0) {
       await saveMsflStockCacheAndMapping(ticker, data);
@@ -343,99 +343,67 @@ async function triggerMsflStockNavCacheUpdate(ticker: string) {
   }
 }
 
-export function getMsflStockHistoryForSymbol(
-  ticker: string
+export async function getMsflStockHistoryForSymbol(
+  ticker: string,
+  range = "max"
 ): Promise<MfDetailsResponse | null> {
-  if (!ticker) return Promise.resolve(null);
+  if (!ticker) return null;
 
-  let cachedPromise = msflStockHistoryCache.get(ticker);
-  if (!cachedPromise) {
-    cachedPromise = (async () => {
-      const cachedMeta = await db.query.msflSchemeNavCacheMeta.findFirst({
-        where: eq(msflSchemeNavCacheMeta.schemeCode, ticker),
-      });
+  // 1. Check if we have cached metadata in PostgreSQL
+  const cachedMeta = await db.query.msflSchemeNavCacheMeta.findFirst({
+    where: eq(msflSchemeNavCacheMeta.schemeCode, ticker),
+  });
 
-      const now = new Date();
-      const cacheAgeLimit = 24 * 60 * 60 * 1000;
-      const isFresh =
-        cachedMeta &&
-        now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
-          cacheAgeLimit;
+  const now = new Date();
+  const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+  const isFresh =
+    cachedMeta &&
+    now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+      cacheAgeLimit;
 
-      if (cachedMeta) {
-        if (!isFresh) {
-          try {
-            await triggerMsflStockNavCacheUpdate(ticker);
-            const updatedHistory = await db.query.msflSchemeNavHistory.findMany(
-              {
-                where: eq(msflSchemeNavHistory.schemeCode, ticker),
-              }
-            );
-            if (updatedHistory.length > 0) {
-              return {
-                meta: {
-                  fund_house: cachedMeta.fundHouse,
-                  scheme_type: cachedMeta.schemeType,
-                  scheme_category: cachedMeta.schemeCategory,
-                  scheme_code: 0,
-                  scheme_name: cachedMeta.schemeName,
-                },
-                data: updatedHistory.map((h) => ({
-                  date: h.date,
-                  nav: String(h.nav),
-                })),
-              };
-            }
-          } catch (e) {
-            console.error("[SYNC MSFL STOCK CACHE UPDATE ERROR]", e);
-          }
-        }
-
-        const history = await db.query.msflSchemeNavHistory.findMany({
-          where: eq(msflSchemeNavHistory.schemeCode, ticker),
-        });
-
-        if (history.length > 0) {
-          return {
-            meta: {
-              fund_house: cachedMeta.fundHouse,
-              scheme_type: cachedMeta.schemeType,
-              scheme_category: cachedMeta.schemeCategory,
-              scheme_code: 0,
-              scheme_name: cachedMeta.schemeName,
-            },
-            data: history.map((h) => ({
-              date: h.date,
-              nav: String(h.nav),
-            })),
-          };
-        }
-      }
-
-      // First time fetch
+  if (cachedMeta) {
+    if (!isFresh) {
       try {
-        const res = await fetchStockHistory(ticker);
-        const data = res.data;
-        if (
-          res.success &&
-          data &&
-          data.meta &&
-          data.data &&
-          data.data.length > 0
-        ) {
-          await saveMsflStockCacheAndMapping(ticker, data);
-          return data;
-        }
-      } catch (err) {
-        console.error(`Failed first-time fetch for MSFL stock ${ticker}:`, err);
+        await triggerMsflStockNavCacheUpdate(ticker, range);
+      } catch (e) {
+        console.error("[SYNC MSFL STOCK CACHE UPDATE ERROR]", e);
       }
+    }
 
-      return null;
-    })();
-    msflStockHistoryCache.set(ticker, cachedPromise);
+    const history = await db.query.msflSchemeNavHistory.findMany({
+      where: eq(msflSchemeNavHistory.schemeCode, ticker),
+    });
+
+    if (history.length > 0) {
+      return {
+        meta: {
+          fund_house: cachedMeta.fundHouse,
+          scheme_type: cachedMeta.schemeType,
+          scheme_category: cachedMeta.schemeCategory,
+          scheme_code: 0,
+          scheme_name: cachedMeta.schemeName,
+        },
+        data: history.map((h) => ({
+          date: h.date,
+          nav: String(h.nav),
+        })),
+      };
+    }
   }
 
-  return cachedPromise;
+  // 2. Fetch fresh details from API (Sync fallback because no cache exists)
+  try {
+    const res = await fetchStockHistory(ticker, range);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      await saveMsflStockCacheAndMapping(ticker, data);
+      return data;
+    }
+  } catch (err) {
+    console.error(`Failed first-time fetch for MSFL stock ${ticker}:`, err);
+  }
+
+  return null;
 }
 
 export async function getMsflSchemes() {

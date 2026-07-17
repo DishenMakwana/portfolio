@@ -1,4 +1,4 @@
-import type { OverviewHolding } from "@/types/portfolio";
+import type { OverviewHolding, ReportSummary } from "@/types/portfolio";
 
 export interface MemberSummary {
   name: string;
@@ -12,6 +12,19 @@ export interface MemberSummary {
   cagrDelta: number | null;
   xirrDelta: number | null;
   alphaDelta: number | null;
+  address?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+  dematNominee?: string | null;
+  dpId?: string | null;
+  clientId?: string | null;
+  dpName?: string | null;
+  boSubStatus?: string | null;
+  bsda?: string | null;
+  rgess?: string | null;
+  accountStatus?: string | null;
+  frozenStatus?: string | null;
+  boStatus?: string | null;
 }
 
 export interface Totals {
@@ -36,6 +49,7 @@ export interface MembersTabProps {
     cagr: number | null;
   };
   holdings: OverviewHolding[];
+  selectedReport?: ReportSummary | null;
 }
 
 export interface PageProps {

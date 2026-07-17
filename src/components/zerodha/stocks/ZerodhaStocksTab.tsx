@@ -152,11 +152,11 @@ export default function ZerodhaStocksTab({
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                    <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
+                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] shrink-0 whitespace-nowrap">
                         {s.instrumentType || "EQ"}
                       </span>
-                      <span className="font-mono">{s.isin}</span>
+                      <span className="font-mono shrink-0">{s.isin}</span>
                     </div>
                   </td>
                   {/* Quantity */}

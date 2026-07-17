@@ -38,6 +38,7 @@ import {
   transactions as txTable,
   reports,
   memberReportCagrs,
+  familyMembers,
 } from "@/db/schema";
 import { eq, lte, inArray } from "drizzle-orm";
 
@@ -59,7 +60,8 @@ export async function uploadReportAction(
     if (parsed.holdings.length === 0) {
       return {
         success: false,
-        error: 'No valid holdings found in sheet "1. Mutual Fund"',
+        error:
+          "No valid holdings found. Please ensure the uploaded sheet is a valid Mutual Fund Valuation report containing the '1. Mutual Fund' tab.",
       };
     }
 
@@ -480,6 +482,12 @@ export async function getDashboardDataAction(
   }
 
   // 2. Calculate Family Member Summaries in parallel
+  const dbMembers = await db.select().from(familyMembers);
+  const dbMembersMap = new Map<string, typeof familyMembers.$inferSelect>();
+  dbMembers.forEach((m) => {
+    dbMembersMap.set(m.name, m);
+  });
+
   const members = Array.from(new Set(holdings.map((h) => h.memberName)));
   const memberSummaries = await Promise.all(
     members.map(async (name) => {
@@ -531,6 +539,7 @@ export async function getDashboardDataAction(
 
       const pan = memberHoldings[0]?.memberPan || null;
       const previousMember = previousMemberMetrics.get(name);
+      const profile = dbMembersMap.get(name);
 
       return {
         name,
@@ -544,6 +553,19 @@ export async function getDashboardDataAction(
         cagrDelta: previousMember ? cagr - previousMember.cagr : null,
         xirrDelta: previousMember ? mXirr - previousMember.xirr : null,
         alphaDelta: previousMember ? mAlpha - previousMember.alpha : null,
+        address: profile?.address || null,
+        email: profile?.email || null,
+        mobile: profile?.mobile || null,
+        dematNominee: profile?.dematNominee || null,
+        dpId: profile?.dpId || null,
+        clientId: profile?.clientId || null,
+        dpName: profile?.dpName || null,
+        boSubStatus: profile?.boSubStatus || null,
+        bsda: profile?.bsda || null,
+        rgess: profile?.rgess || null,
+        accountStatus: profile?.accountStatus || null,
+        frozenStatus: profile?.frozenStatus || null,
+        boStatus: profile?.boStatus || null,
       };
     })
   );
@@ -719,7 +741,8 @@ export async function uploadSipAction(
     if (parsed.sips.length === 0) {
       return {
         success: false,
-        error: "No SIP rows found in the uploaded file",
+        error:
+          "No valid SIP mandates found. Please ensure the uploaded sheet contains a tab with 'SIP' in its name.",
       };
     }
 

@@ -40,6 +40,7 @@ export default async function FamilyPage({ searchParams }: PageProps) {
             totals={data.totals}
             metricDeltas={data.metricDeltas}
             holdings={data.holdings}
+            selectedReport={data.selectedReport}
           />
         </Suspense>
       </main>

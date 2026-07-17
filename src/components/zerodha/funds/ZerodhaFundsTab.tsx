@@ -136,12 +136,16 @@ export default function ZerodhaFundsTab({
                     >
                       {f.symbol}
                     </div>
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-1">
-                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] capitalize">
+                    <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                      <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] capitalize shrink-0 whitespace-nowrap">
                         {f.instrumentType || "Mutual Fund"}
                       </span>
-                      <span>• Units: {f.quantity.toFixed(3)}</span>
-                      <span>• NAV: ₹{f.currentPrice.toFixed(2)}</span>
+                      <span className="shrink-0">
+                        • Units: {f.quantity.toFixed(3)}
+                      </span>
+                      <span className="shrink-0">
+                        • NAV: ₹{f.currentPrice.toFixed(2)}
+                      </span>
                     </div>
                   </td>
                   <td className="p-4 font-medium text-slate-200 uppercase tracking-wide">

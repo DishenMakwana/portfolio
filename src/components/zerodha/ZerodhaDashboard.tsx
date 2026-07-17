@@ -7,7 +7,6 @@ import type { Variants } from "framer-motion";
 import {
   Upload,
   Briefcase,
-  AlertTriangle,
   Loader2,
   TrendingUp,
   TrendingDown,
@@ -16,12 +15,12 @@ import {
   Activity,
   Target,
   ChevronUp,
-  X as XIcon,
 } from "lucide-react";
 import {
   uploadZerodhaHoldingsAction,
   deleteZerodhaHoldingsAction,
 } from "@/actions/zerodha";
+import { toast } from "react-hot-toast";
 import {
   formatCurrency,
   formatPercent,
@@ -77,7 +76,6 @@ export default function ZerodhaDashboard({
   };
 
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Search & Filter state for Stocks Table
   const [stockSortField, setStockSortField] =
@@ -148,17 +146,17 @@ export default function ZerodhaDashboard({
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    setUploadError(null);
     const formData = new FormData();
     formData.append("file", file);
     const res = await uploadZerodhaHoldingsAction(formData);
     setIsUploading(false);
     if (res.success && res.data?.reportId) {
+      toast.success("Zerodha Holdings sheet uploaded successfully!");
       router.refresh();
       router.push(`/zerodha?zerodhaReportId=${res.data.reportId}`);
       setActiveTab("overview");
     } else {
-      setUploadError(res.error || "Upload failed");
+      toast.error(res.error || "Upload failed");
     }
     e.target.value = "";
   };
@@ -214,19 +212,6 @@ export default function ZerodhaDashboard({
               className="hidden"
             />
           </label>
-
-          {uploadError && (
-            <div className="mt-6 bg-red-950/80 border border-red-800/80 rounded-xl p-3 flex items-center gap-3 text-red-350 text-sm shadow-2xl text-left max-w-md mx-auto">
-              <AlertTriangle size={16} className="shrink-0" />
-              <span className="flex-1">{uploadError}</span>
-              <button
-                onClick={() => setUploadError(null)}
-                className="text-red-400 hover:text-red-200"
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -281,19 +266,6 @@ export default function ZerodhaDashboard({
           </label>
         </div>
       </div>
-
-      {uploadError && (
-        <div className="bg-red-950/80 border border-red-800/80 rounded-xl p-3 flex items-center gap-3 text-red-300 text-sm shadow-2xl">
-          <AlertTriangle size={16} className="shrink-0" />
-          <span className="flex-1">{uploadError}</span>
-          <button
-            onClick={() => setUploadError(null)}
-            className="text-red-400 hover:text-red-200"
-          >
-            <XIcon size={16} />
-          </button>
-        </div>
-      )}
 
       {/* ── ROW 1: 4 KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

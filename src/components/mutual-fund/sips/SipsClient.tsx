@@ -7,30 +7,24 @@ import {
   Upload,
   Repeat2,
   CheckCircle2,
-  XCircle,
   AlertTriangle,
   Loader2,
   Trash2,
   ChevronDown,
   Users,
   IndianRupee,
-  X,
 } from "lucide-react";
 import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
 import { formatCurrency } from "@/lib/formatters";
 import { parseMonthYear } from "@/helpers/dates";
 import type { SipMandateRow } from "@/types/portfolio";
 import type { SipsClientProps } from "@/types/sips";
+import { toast } from "react-hot-toast";
 
 export default function SipsClient({ mandates }: SipsClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<{
-    inserted: number;
-    total: number;
-  } | null>(null);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
   const [filterMember, setFilterMember] = useState<string>("all");
 
@@ -39,20 +33,17 @@ export default function SipsClient({ mandates }: SipsClientProps) {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    setUploadError(null);
-    setUploadSuccess(null);
     const formData = new FormData();
     formData.append("file", file);
     const res = await uploadSipAction(formData);
     setIsUploading(false);
     if (res.success && res.data) {
-      setUploadSuccess({
-        inserted: res.data.inserted!,
-        total: res.data.total!,
-      });
+      toast.success(
+        `Successfully saved ${res.data.inserted} SIP mandates from ${res.data.total} rows.`
+      );
       startTransition(() => router.refresh());
     } else {
-      setUploadError(res.error || "Upload failed");
+      toast.error(res.error || "Upload failed");
     }
     e.target.value = "";
   };
@@ -61,8 +52,12 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   const handleClear = async () => {
     if (!confirm("Delete all SIP mandates from the database?")) return;
     const res = await clearSipMandatesAction();
-    if (res.success) startTransition(() => router.refresh());
-    else alert(res.error);
+    if (res.success) {
+      toast.success("Successfully cleared all SIP mandates.");
+      startTransition(() => router.refresh());
+    } else {
+      toast.error(res.error || "Failed to clear SIP mandates");
+    }
   };
 
   // ── Derived data
@@ -172,49 +167,6 @@ export default function SipsClient({ mandates }: SipsClientProps) {
             </label>
           </div>
         </div>
-
-        {/* Status alerts */}
-        <AnimatePresence>
-          {uploadError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-4 flex items-center gap-3 bg-red-950/60 border border-red-800/60 rounded-xl px-4 py-3 text-red-300 text-sm animate-fade-in"
-            >
-              <XCircle size={16} className="shrink-0" />
-              <span className="flex-1">{uploadError}</span>
-              <button
-                onClick={() => setUploadError(null)}
-                className="ml-auto text-red-400 hover:text-red-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-red-500/10 transition"
-                aria-label="Close error"
-              >
-                <X size={15} />
-              </button>
-            </motion.div>
-          )}
-          {uploadSuccess && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-4 flex items-center gap-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl px-4 py-3 text-emerald-300 text-sm animate-fade-in"
-            >
-              <CheckCircle2 size={16} className="shrink-0" />
-              <span className="flex-1">
-                Successfully saved <strong>{uploadSuccess.inserted}</strong> SIP
-                mandates from {uploadSuccess.total} rows.
-              </span>
-              <button
-                onClick={() => setUploadSuccess(null)}
-                className="ml-auto text-emerald-400 hover:text-emerald-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-emerald-500/10 transition"
-                aria-label="Close success"
-              >
-                <X size={15} />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {mandates.length === 0 ? (

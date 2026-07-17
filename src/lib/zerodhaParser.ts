@@ -36,6 +36,31 @@ function subtractOneDay(dateStr: string): string {
 
 export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
+  const sheetNames = workbook.SheetNames;
+  const hasEquity = sheetNames.includes("Equity");
+  const hasMf = sheetNames.includes("Mutual Funds");
+
+  if (!hasEquity && !hasMf) {
+    if (sheetNames.includes("1. Mutual Fund")) {
+      throw new Error(
+        "Invalid file: This appears to be a Mutual Fund Valuation sheet. Please upload a Zerodha holdings sheet."
+      );
+    }
+    if (sheetNames.includes("Holding_Report")) {
+      throw new Error(
+        "Invalid file: This appears to be an MSFL holdings file. Please upload a Zerodha holdings sheet."
+      );
+    }
+    if (sheetNames.some((n) => n.toLowerCase().includes("sip"))) {
+      throw new Error(
+        "Invalid file: This appears to be a SIP mandates file. Please upload a Zerodha holdings sheet."
+      );
+    }
+    throw new Error(
+      "Invalid file: Expected sheets 'Equity' or 'Mutual Funds' not found. Please upload a valid Zerodha holdings sheet."
+    );
+  }
+
   const holdings: ZerodhaHoldingParsed[] = [];
   let asOfDate = "";
 

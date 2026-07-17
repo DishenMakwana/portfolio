@@ -4,11 +4,12 @@ import { MfDetailsResponse } from "@/types/mf-api";
 
 async function fetchFromYahoo(
   ticker: string,
-  symbol: string
+  symbol: string,
+  range = "1y"
 ): Promise<MfDetailsResponse | null> {
   const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
-  )}?range=1y&interval=1d`;
+  )}?range=${range}&interval=1d`;
 
   try {
     const res = await axios.get(url, {
@@ -104,7 +105,8 @@ async function fetchFromYahoo(
  * Fetch stock price history from Yahoo Finance and format it like Mutual Fund NAV history.
  */
 export async function fetchStockHistory(
-  symbol: string
+  symbol: string,
+  range = "1y"
 ): Promise<ActionResult<MfDetailsResponse>> {
   if (!symbol) return { success: false, error: "Symbol is required" };
   if (isUnlistedStock(symbol))
@@ -112,7 +114,7 @@ export async function fetchStockHistory(
 
   // If a suffix is already specified (like .NS or .BO), fetch it directly.
   if (symbol.includes(".")) {
-    const data = await fetchFromYahoo(symbol, symbol);
+    const data = await fetchFromYahoo(symbol, symbol, range);
     return data
       ? { success: true, data }
       : { success: false, error: "Failed to fetch Yahoo chart" };
@@ -120,7 +122,7 @@ export async function fetchStockHistory(
 
   // Try NSE first (.NS)
   const nseTicker = `${symbol}.NS`;
-  const nseData = await fetchFromYahoo(nseTicker, symbol);
+  const nseData = await fetchFromYahoo(nseTicker, symbol, range);
   if (nseData) {
     return { success: true, data: nseData };
   }
@@ -130,7 +132,7 @@ export async function fetchStockHistory(
   console.log(
     `[Yahoo Finance API] NSE failed or returned empty for ${symbol}. Trying BSE fallback: ${bseTicker}`
   );
-  const bseData = await fetchFromYahoo(bseTicker, symbol);
+  const bseData = await fetchFromYahoo(bseTicker, symbol, range);
   return bseData
     ? { success: true, data: bseData }
     : { success: false, error: "Failed to fetch BSE chart fallback" };

@@ -12,6 +12,7 @@ import {
   msflHoldings,
   msflReports,
   msflSchemes,
+  schemeNavCacheMeta,
 } from "@/db/schema";
 import { eq, and, lte, asc } from "drizzle-orm";
 import {
@@ -117,6 +118,13 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         reportId: zerodhaReports.id,
         holdingType: zerodhaSchemes.holdingType,
         sector: zerodhaSchemes.sector,
+        frozenQuantity: zerodhaHoldings.frozenQuantity,
+        pledgedQuantity: zerodhaHoldings.pledgedQuantity,
+        pledgeSetupQuantity: zerodhaHoldings.pledgeSetupQuantity,
+        freeQuantity: zerodhaHoldings.freeQuantity,
+        lockinQuantity: zerodhaHoldings.lockinQuantity,
+        lockinDate: zerodhaHoldings.lockinDate,
+        balanceDescription: zerodhaHoldings.balanceDescription,
       })
       .from(zerodhaHoldings)
       .leftJoin(zerodhaReports, eq(zerodhaHoldings.reportId, zerodhaReports.id))
@@ -180,6 +188,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         schemeName: schemes.name,
         category: schemes.category,
         schemeCodeApi: schemes.schemeCodeApi,
+        isin: schemeNavCacheMeta.isinGrowth,
         folioNo: holdingsSnapshot.folioNo,
         balanceUnits: holdingsSnapshot.balanceUnits,
         purchaseNav: holdingsSnapshot.purchaseNav,
@@ -201,6 +210,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
       .leftJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
       .leftJoin(reports, eq(holdingsSnapshot.reportId, reports.id))
+      .leftJoin(
+        schemeNavCacheMeta,
+        eq(schemes.schemeCodeApi, schemeNavCacheMeta.schemeCode)
+      )
       .where(eq(holdingsSnapshot.id, holdingId))
       .then((res) => res[0]);
   }
@@ -209,9 +222,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  const benchmarkCode = isMsfl
-    ? "120716"
-    : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
+  const benchmarkCode =
+    isMsfl && holding.holdingType !== "equity"
+      ? "120716"
+      : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
   const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel
@@ -257,6 +271,37 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     })
   );
 
+  // Dynamically update stock holding latest NAV and asOfDate from Yahoo Finance history cache
+  const fundNavHistory = fundDetails?.data || [];
+  const benchNavHistory = benchDetails?.data || [];
+
+  if (
+    (isMsfl || isZerodha) &&
+    holding.holdingType === "equity" &&
+    fundNavHistory.length > 0
+  ) {
+    const parseApiDate = (s: string) => {
+      const [dd, mm, yyyy] = s.split("-");
+      return new Date(`${yyyy}-${mm}-${dd}`);
+    };
+    const sorted = [...fundNavHistory].sort(
+      (a, b) => parseApiDate(b.date).getTime() - parseApiDate(a.date).getTime()
+    );
+    const latest = sorted[0];
+    holding.currentNav = parseFloat(latest.nav);
+    holding.currentValue = holding.balanceUnits * holding.currentNav;
+    holding.gain = holding.currentValue - holding.purchaseValue;
+    if (holding.purchaseValue > 0) {
+      holding.absoluteReturn = (holding.gain / holding.purchaseValue) * 100;
+    }
+
+    const d = parseApiDate(latest.date);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    holding.asOfDate = `${yyyy}-${mm}-${dd}`;
+  }
+
   // 4. Calculate dynamic XIRR and Alpha
   let metrics = { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
   if (!isMsfl && !isZerodha && mappedTxs.length > 0) {
@@ -280,9 +325,6 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   if (isMsfl || isZerodha) {
     holding.cagr = metrics.portfolioXirr;
   }
-
-  const fundNavHistory = fundDetails?.data || [];
-  const benchNavHistory = benchDetails?.data || [];
 
   // 6. Calculate Volatility Stats
   // Find the true oldest date from the NAV history points
@@ -341,7 +383,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       : await getFactsheetMetadata(
           holding.category,
           formattedLaunchDate,
-          holding.schemeName
+          holding.schemeName,
+          holding.schemeCodeApi,
+          isZerodha,
+          isMsfl
         );
 
   const volatilityStats =
