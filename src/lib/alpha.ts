@@ -332,8 +332,7 @@ export function getSchemeHistoryForDbCode(
   dbSchemeCode: string
 ): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
-  if (!schemeCode || isSpecializedFundSchemeCode(schemeCode))
-    return Promise.resolve(null);
+  if (!schemeCode) return Promise.resolve(null);
 
   let cachedPromise = schemeHistoryCache.get(schemeCode);
   if (!cachedPromise) {
@@ -369,8 +368,8 @@ export function getSchemeHistoryForDbCode(
           }
         }
 
-        // If cache is stale, trigger update
-        if (!isFresh) {
+        // If cache is stale, trigger update (only for non-specialized funds)
+        if (!isFresh && !isSpecializedFundSchemeCode(schemeCode)) {
           try {
             await triggerNavCacheUpdate(schemeCode, latestDateStr);
             const updatedHistory = await db.query.schemeNavHistory.findMany({
@@ -382,7 +381,7 @@ export function getSchemeHistoryForDbCode(
                   fund_house: cachedMeta.fundHouse,
                   scheme_type: cachedMeta.schemeType,
                   scheme_category: cachedMeta.schemeCategory,
-                  scheme_code: parseInt(cachedMeta.schemeCode),
+                  scheme_code: parseInt(cachedMeta.schemeCode) || 0,
                   scheme_name: cachedMeta.schemeName,
                 },
                 data: updatedHistory.map((h) => ({
@@ -402,7 +401,7 @@ export function getSchemeHistoryForDbCode(
               fund_house: cachedMeta.fundHouse,
               scheme_type: cachedMeta.schemeType,
               scheme_category: cachedMeta.schemeCategory,
-              scheme_code: parseInt(cachedMeta.schemeCode),
+              scheme_code: parseInt(cachedMeta.schemeCode) || 0,
               scheme_name: cachedMeta.schemeName,
             },
             data: history.map((h) => ({
@@ -414,7 +413,9 @@ export function getSchemeHistoryForDbCode(
       }
 
       // 2. Fetch fresh details from API (Sync fallback because no cache exists)
-      // Fetch full history to ensure returns graphs work correctly for long-term/insurance portfolios
+      // Skip API fetch for specialized funds
+      if (isSpecializedFundSchemeCode(schemeCode)) return null;
+
       const res = await fetchMfDetails(schemeCode);
       const data = res.data;
       if (
@@ -894,7 +895,9 @@ export async function getFactsheetMetadata(
       expenseRatio: dbExpenseRatio ?? rule.expenseRatio ?? 1.25,
       exitLoad:
         dbExitLoad ?? rule.exitLoad ?? "1% for redemption within 365 days",
-      benchmarkName: rule.benchmarkFundName,
+      benchmarkName: rule.benchmarkName,
+      benchmarkCode: rule.benchmarkCode,
+      benchmarkFundName: rule.benchmarkFundName,
     },
     allocation: {
       equity: rule.allocationEquity,
@@ -930,6 +933,22 @@ export async function getBenchmarkFundNameForCode(
     console.error("Error querying benchmarkFundName from DB:", e);
   }
   return "NSE - Nifty 500 TRI";
+}
+
+export async function getBenchmarkNameForCode(code: string): Promise<string> {
+  try {
+    const rule = await db
+      .select()
+      .from(benchmarkRules)
+      .where(eq(benchmarkRules.benchmarkCode, code))
+      .limit(1);
+    if (rule.length > 0) {
+      return rule[0].benchmarkName;
+    }
+  } catch (e) {
+    console.error("Error querying benchmarkName from DB:", e);
+  }
+  return "Nifty 500 TRI";
 }
 
 export function calculateVolatilityMeasures(

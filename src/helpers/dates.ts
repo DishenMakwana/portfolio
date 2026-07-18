@@ -67,3 +67,18 @@ export function parseMonthYear(label: string): Date {
   const year = 2000 + parseInt(y, 10);
   return new Date(year, monthIdx >= 0 ? monthIdx : 0, 1);
 }
+
+/**
+ * Parses a date string formatted as DD-MM-YYYY or YYYY-MM-DD into a Date object.
+ */
+export function parseHistoryDate(dateStr: string): Date {
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+    } else {
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+  }
+  return new Date(dateStr);
+}

@@ -70,6 +70,8 @@ export interface FactsheetProfile {
   expenseRatio: number;
   exitLoad: string;
   benchmarkName: string;
+  benchmarkCode?: string;
+  benchmarkFundName?: string;
 }
 
 export interface AssetAllocation {

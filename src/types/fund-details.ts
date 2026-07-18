@@ -1,5 +1,4 @@
 import {
-  OverviewHolding,
   VolatilityMeasures,
   FactsheetProfile,
   AssetAllocation,
@@ -7,10 +6,7 @@ import {
 } from "./portfolio";
 
 export interface FundDetailsClientProps {
-  holding: OverviewHolding & {
-    folioNo?: string | null;
-    asOfDate?: string | null;
-  };
+  holding: HoldingDetails;
   transactions: Array<{
     id: number;
     memberId: number | null;
@@ -33,6 +29,8 @@ export interface FundDetailsClientProps {
   };
   volatilityStats: VolatilityMeasures;
   chartData: FactsheetChartPoint[];
+  earliestFundDateStr?: string | null;
+  earliestBenchDateStr?: string | null;
 }
 
 export interface CustomTooltipPoint {
@@ -82,7 +80,7 @@ export interface HoldingDetails {
   memberPan: string | null;
   asOfDate: string | null;
   holdingType?: string;
-  isin?: string;
+  isin?: string | null;
   reportId?: number | null;
   sector?: string | null;
   frozenQuantity?: number | null;

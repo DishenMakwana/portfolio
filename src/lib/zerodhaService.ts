@@ -1343,7 +1343,7 @@ async function triggerZerodhaStockNavCacheUpdate(
 
 export async function getZerodhaStockHistoryForSymbol(
   ticker: string,
-  range = "max"
+  range = "10y"
 ): Promise<MfDetailsResponse | null> {
   if (!ticker) return null;
 

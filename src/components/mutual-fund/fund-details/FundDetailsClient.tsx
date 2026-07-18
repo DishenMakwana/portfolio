@@ -24,6 +24,7 @@ import {
   formatNullableDate,
   formatPercent,
 } from "@/helpers/formatters";
+import { parseHistoryDate } from "@/helpers/dates";
 import {
   FundDetailsClientProps,
   CustomTooltipProps,
@@ -127,6 +128,8 @@ export default function FundDetailsClient({
   factsheetMeta,
   volatilityStats,
   chartData,
+  earliestFundDateStr,
+  earliestBenchDateStr,
 }: FundDetailsClientProps) {
   const router = useRouter();
   const currentMetrics = metrics;
@@ -235,10 +238,32 @@ export default function FundDetailsClient({
     }
 
     if (isTruncated || timeframe === "max") {
-      return `Plotted from ${startDateStr} due to benchmark listing history constraints`;
+      const fundStart = earliestFundDateStr
+        ? parseHistoryDate(earliestFundDateStr)
+        : null;
+      const benchStart = earliestBenchDateStr
+        ? parseHistoryDate(earliestBenchDateStr)
+        : null;
+
+      let constraintWord = "benchmark";
+      if (fundStart && benchStart) {
+        if (benchStart.getTime() > fundStart.getTime()) {
+          constraintWord = "benchmark";
+        } else {
+          constraintWord = isStock ? "stock" : "fund";
+        }
+      }
+
+      return `Plotted from ${startDateStr} due to ${constraintWord} listing history constraints`;
     }
     return null;
-  }, [filteredChartData, timeframe]);
+  }, [
+    filteredChartData,
+    timeframe,
+    earliestFundDateStr,
+    earliestBenchDateStr,
+    isStock,
+  ]);
 
   // Find ALL buy entry points to display as markers on the chart (only those within the selected timeline)
   const entryPoints: EntryPointMarker[] = useMemo(() => {
@@ -373,28 +398,36 @@ export default function FundDetailsClient({
                 </span>
               )}
             </div>
-            <p className="text-slate-400 mt-1 text-sm font-medium">
-              Holder:{" "}
-              <strong className="text-slate-300">
-                {holding.memberName || "Unknown Holder"}
-              </strong>{" "}
+            <div className="text-slate-400 mt-1.5 text-xs sm:text-sm font-medium flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <span>
+                Holder:{" "}
+                <strong className="text-slate-300">
+                  {holding.memberName || "Unknown Holder"}
+                </strong>
+              </span>
               {!isStock && holding.folioNo && (
                 <>
-                  • Folio:{" "}
-                  <span className="font-mono text-slate-300 font-bold">
-                    {holding.folioNo}
+                  <span className="text-slate-700 font-extrabold">•</span>
+                  <span>
+                    Folio:{" "}
+                    <span className="font-mono text-slate-300 font-bold">
+                      {holding.folioNo}
+                    </span>
                   </span>
                 </>
               )}
               {holding.isin && (
                 <>
-                  • ISIN:{" "}
-                  <span className="font-mono text-slate-300 font-bold">
-                    {holding.isin}
+                  <span className="text-slate-700 font-extrabold">•</span>
+                  <span>
+                    ISIN:{" "}
+                    <span className="font-mono text-slate-300 font-bold">
+                      {holding.isin}
+                    </span>
                   </span>
                 </>
               )}
-            </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -1430,19 +1463,29 @@ export default function FundDetailsClient({
             </h3>
 
             <div className="space-y-4">
-              <div className="flex justify-between items-start text-sm">
-                <span className="text-slate-400 font-medium">
-                  {isStock ? "Benchmark Index:" : "Benchmark Scheme:"}
+              <div className="flex justify-between items-start gap-x-4 text-sm">
+                <span className="text-slate-400 font-medium shrink-0">
+                  Benchmark Fund:
                 </span>
                 <span className="font-semibold text-slate-200 text-right text-xs">
-                  {isStock
-                    ? "Nifty 50 TRI (Index)"
-                    : "UTI Nifty 50 Index Fund Direct (120716)"}
+                  {factsheetMeta.profile.benchmarkFundName ||
+                    factsheetMeta.profile.benchmarkName}
+                  {factsheetMeta.profile.benchmarkCode
+                    ? ` (${factsheetMeta.profile.benchmarkCode})`
+                    : ""}
                 </span>
               </div>
-              <div className="flex justify-between items-start text-sm">
-                <span className="text-slate-400 font-medium">
-                  {isStock ? "Stock Symbol:" : "Scheme Code API:"}
+              <div className="flex justify-between items-start gap-x-4 text-sm">
+                <span className="text-slate-400 font-medium shrink-0">
+                  Benchmark Index:
+                </span>
+                <span className="font-semibold text-slate-200 text-right text-xs">
+                  {factsheetMeta.profile.benchmarkName || "Nifty 50 TRI"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center gap-x-4 text-sm">
+                <span className="text-slate-400 font-medium shrink-0">
+                  {isStock ? "Stock Symbol:" : "Scheme Code:"}
                 </span>
                 {holding.schemeCodeApi ? (
                   <span className="font-mono text-emerald-400 font-bold bg-emerald-950/20 px-2.5 py-0.5 border border-emerald-900/40 rounded text-xs">
@@ -1457,8 +1500,8 @@ export default function FundDetailsClient({
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mt-2 font-medium">
                 {isStock
-                  ? "For stock holdings, we query historical daily price charts and metrics directly from Yahoo Finance API. Outperformance metrics are calculated against the Nifty 50 TRI Index."
-                  : "When mapped, we download historical NAV details from `api.mfapi.in` dynamically. Transactions are mirrored into Nifty 50 to compute true portfolio outperformance."}
+                  ? `For stock holdings, we query historical daily price charts and metrics directly from Yahoo Finance API. Outperformance metrics are calculated against the ${factsheetMeta.profile.benchmarkName || "Nifty 50 TRI"}.`
+                  : `When mapped, we download historical NAV details from \`api.mfapi.in\` dynamically. Transactions are mirrored into ${factsheetMeta.profile.benchmarkFundName || factsheetMeta.profile.benchmarkName} to compute true portfolio outperformance.`}
               </p>
             </div>
           </div>

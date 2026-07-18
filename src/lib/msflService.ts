@@ -345,7 +345,7 @@ async function triggerMsflStockNavCacheUpdate(ticker: string, range = "max") {
 
 export async function getMsflStockHistoryForSymbol(
   ticker: string,
-  range = "max"
+  range = "10y"
 ): Promise<MfDetailsResponse | null> {
   if (!ticker) return null;
 

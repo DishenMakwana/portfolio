@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/db";
+import { parseHistoryDate } from "@/helpers/dates";
 import {
   holdingsSnapshot,
   schemes,
@@ -25,6 +26,7 @@ import {
   calculateXirrFromNav,
   getBenchmarkCodeForCategory,
   getBenchmarkFundNameForCode,
+  getBenchmarkNameForCode,
 } from "@/lib/alpha";
 import {
   getZerodhaSchemeHistoryForDbCode,
@@ -226,7 +228,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     isMsfl && holding.holdingType !== "equity"
       ? "120716"
       : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
-  const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
+  const benchmarkFundName = await getBenchmarkFundNameForCode(benchmarkCode);
+  const benchmarkName = await getBenchmarkNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel
   const [fundTxs, fundDetails, benchDetails] = await Promise.all([
@@ -368,9 +371,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             corpusCr: 0,
             expenseRatio: 0,
             exitLoad: "Nil",
-            benchmarkName: benchmarkName.toLowerCase().endsWith("tri")
-              ? benchmarkName
-              : `${benchmarkName} TRI`,
+            benchmarkName: benchmarkName,
+            benchmarkCode,
+            benchmarkFundName: benchmarkFundName,
           },
           allocation: {
             equity: 100,
@@ -419,6 +422,24 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         )
       : [];
 
+  let earliestFundDateStr: string | null = null;
+  if (fundNavHistory.length > 0) {
+    const sorted = [...fundNavHistory].sort(
+      (a, b) =>
+        parseHistoryDate(a.date).getTime() - parseHistoryDate(b.date).getTime()
+    );
+    earliestFundDateStr = sorted[0].date;
+  }
+
+  let earliestBenchDateStr: string | null = null;
+  if (benchNavHistory.length > 0) {
+    const sorted = [...benchNavHistory].sort(
+      (a, b) =>
+        parseHistoryDate(a.date).getTime() - parseHistoryDate(b.date).getTime()
+    );
+    earliestBenchDateStr = sorted[0].date;
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 selection:bg-teal-500/30 selection:text-teal-200">
       <FundDetailsClient
@@ -428,6 +449,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         factsheetMeta={factsheetMeta}
         volatilityStats={volatilityStats}
         chartData={chartData}
+        earliestFundDateStr={earliestFundDateStr}
+        earliestBenchDateStr={earliestBenchDateStr}
       />
     </main>
   );
