@@ -247,8 +247,8 @@ export default function MembersBarChart({
             <stop offset="100%" stopColor="#1d4ed8" />
           </linearGradient>
           <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#b45309" />
+            <stop offset="0%" stopColor="#f87171" />
+            <stop offset="100%" stopColor="#ef4444" />
           </linearGradient>
         </defs>
       </svg>

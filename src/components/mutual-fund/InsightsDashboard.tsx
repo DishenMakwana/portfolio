@@ -1084,57 +1084,98 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                       {isTop && (
                         <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
                       )}
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-base font-bold text-slate-100 leading-tight">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-base font-bold text-slate-100 leading-tight truncate">
                             {medal} {m.memberName.split(" ")[0]}
                           </p>
-                          <p className="text-xs text-slate-500 truncate max-w-[180px]">
+                          <p className="text-xs text-slate-500 leading-normal break-words">
                             {m.memberName}
                           </p>
                         </div>
-                        <span
-                          className={`text-lg font-extrabold ${
-                            m.cagr >= 15
-                              ? "text-emerald-400"
-                              : m.cagr >= niftyBenchmark
-                                ? "text-teal-400"
-                                : m.cagr >= 10
-                                  ? "text-amber-400"
-                                  : "text-rose-400"
-                          }`}
-                        >
-                          {m.cagr.toFixed(2)}%
-                        </span>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs text-slate-500 mb-1">
-                          <span>CAGR</span>
-                          <span>Rank #{i + 1}</span>
+                        <div className="text-right flex flex-col items-end shrink-0">
+                          <span
+                            className={`text-lg font-extrabold ${
+                              m.cagr >= 15
+                                ? "text-emerald-400"
+                                : m.cagr >= niftyBenchmark
+                                  ? "text-teal-400"
+                                  : m.cagr >= 10
+                                    ? "text-amber-400"
+                                    : "text-rose-400"
+                            }`}
+                          >
+                            {m.cagr.toFixed(2)}%
+                          </span>
                         </div>
-                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      </div>
+                      {/* Performance Comparison visual bar */}
+                      <div className="space-y-1.5 mt-2">
+                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          <span>Weighted Return Spread</span>
+                          <span
+                            className={
+                              m.cagr >= niftyBenchmark
+                                ? "text-emerald-400"
+                                : "text-amber-400"
+                            }
+                          >
+                            {m.cagr !== null ? m.cagr.toFixed(2) : "0.00"}% /{" "}
+                            {niftyBenchmark.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden relative border border-slate-700/30">
+                          {/* CAGR progress fill (Green/Blue/Red) */}
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{
-                              width: `${(m.cagr / (data.memberCagrs[0]?.cagr ?? 1)) * 100}%`,
+                              width: `${Math.min(100, ((m.cagr || 0) / Math.max(m.cagr || 0, niftyBenchmark, 1)) * 90)}%`,
                             }}
-                            transition={{ duration: 0.8, delay: i * 0.1 }}
-                            className={`h-full rounded-full ${
+                            transition={{ duration: 0.8 }}
+                            className={`absolute top-0 bottom-0 left-0 h-full rounded-full bg-gradient-to-r ${
                               isTop
-                                ? "bg-gradient-to-r from-teal-400 to-emerald-400"
-                                : "bg-gradient-to-r from-blue-500 to-indigo-400"
+                                ? "from-emerald-500 to-teal-400"
+                                : m.cagr >= niftyBenchmark
+                                  ? "from-blue-500 to-indigo-400"
+                                  : "from-red-500 to-rose-400"
+                            } ${m.cagr >= niftyBenchmark ? "z-10" : "z-20"}`}
+                          />
+
+                          {/* Benchmark target fill (Yellow/Amber) */}
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{
+                              width: `${Math.min(100, (niftyBenchmark / Math.max(m.cagr || 0, niftyBenchmark, 1)) * 90)}%`,
+                            }}
+                            transition={{ duration: 0.8 }}
+                            className={`absolute top-0 bottom-0 left-0 h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 ${
+                              m.cagr >= niftyBenchmark ? "z-20" : "z-10"
                             }`}
                           />
+
+                          {/* Benchmark target line indicator */}
+                          <motion.div
+                            className="absolute top-0 bottom-0 w-0.5 bg-amber-500 z-30"
+                            animate={{
+                              left: `${Math.min(100, (niftyBenchmark / Math.max(m.cagr || 0, niftyBenchmark, 1)) * 90)}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[8px] text-slate-500 font-bold uppercase tracking-wider">
+                          <span>MF Portfolio</span>
+                          <span>Nifty Index Line</span>
                         </div>
                       </div>
                       <p className="text-xs text-slate-500">
                         {m.cagr >= niftyBenchmark ? (
-                          <span className="text-emerald-400 flex items-center gap-1">
-                            <CheckCircle2 size={11} /> Above {benchmarkLabel}
+                          <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                            <CheckCircle2 size={11} /> Above Nifty by{" "}
+                            {(m.cagr - niftyBenchmark).toFixed(2)}%
                           </span>
                         ) : (
-                          <span className="text-amber-400 flex items-center gap-1">
-                            <AlertTriangle size={11} /> Below {benchmarkLabel}
+                          <span className="text-rose-400 flex items-center gap-1 font-medium">
+                            <AlertTriangle size={11} /> Below Nifty by{" "}
+                            {Math.abs(m.cagr - niftyBenchmark).toFixed(2)}%
                           </span>
                         )}
                       </p>
