@@ -179,10 +179,9 @@ export default function MembersTab({
                 {avgHoldingDays} Days
               </div>
               <div className="text-[10px] text-slate-500 mt-1">
-                {formatHoldingYearsAndDays(avgHoldingDays)}
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1">
-                Weighted Avg
+                {formatHoldingYearsAndDays(avgHoldingDays)
+                  ? `${formatHoldingYearsAndDays(avgHoldingDays)} • Weighted Avg`
+                  : "Weighted Avg"}
               </div>
             </div>
           </div>

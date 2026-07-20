@@ -23,6 +23,7 @@ import {
   formatCurrency,
   formatNullableDate,
   formatPercent,
+  formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
 import { parseHistoryDate } from "@/helpers/dates";
 import {
@@ -527,7 +528,9 @@ export default function FundDetailsClient({
                   {holding.holdingDays.toLocaleString("en-IN")}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-                  Days held
+                  {formatHoldingYearsAndDays(holding.holdingDays)
+                    ? `${formatHoldingYearsAndDays(holding.holdingDays)} • Days held`
+                    : "Days held"}
                 </div>
               </div>
             </div>
@@ -1336,6 +1339,9 @@ export default function FundDetailsClient({
               </div>
               <div className="text-slate-200 mt-0.5 font-bold">
                 {holding.holdingDays} Days
+                {formatHoldingYearsAndDays(holding.holdingDays)
+                  ? ` (${formatHoldingYearsAndDays(holding.holdingDays)})`
+                  : ""}
               </div>
             </div>
             <div className="border-b border-slate-850/60 pb-2">

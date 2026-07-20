@@ -164,30 +164,19 @@ export function formatInr(val: number, decimals = 0): string {
 }
 
 /**
- * Formats a holding days count into split year/day format.
- * Example: 740 -> "2 yr 10 d" | 30 -> "30 d"
- */
-export function formatHoldingDaysDetailed(days: number): string {
-  const yrs = Math.floor(days / 365);
-  const remainingDays = Math.round(days % 365);
-  if (yrs === 0) {
-    return `${remainingDays} d`;
-  }
-  return `${yrs} yr ${remainingDays} d`;
-}
-
-/**
- * Formats a holding days count into compact year/day format (e.g., 888 -> "2y 158d", 395 -> "1y 30d").
+ * Formats a holding days count into compact year/day format (e.g., 888 -> "2yr 158d", 395 -> "1yr 30d").
+ * Returns "" if holding days is less than 1 year (365 days) to avoid redundant repetition.
  */
 export function formatHoldingYearsAndDays(days: number): string {
   const roundedDays = Math.round(days);
   const yrs = Math.floor(roundedDays / 365);
   const remainingDays = roundedDays % 365;
+
   if (yrs === 0) {
-    return `${remainingDays}d`;
+    return "";
   }
   if (remainingDays === 0) {
-    return `${yrs}y`;
+    return `${yrs}yr`;
   }
-  return `${yrs}y ${remainingDays}d`;
+  return `${yrs}yr ${remainingDays}d`;
 }

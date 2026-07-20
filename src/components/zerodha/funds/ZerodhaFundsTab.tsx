@@ -5,7 +5,7 @@ import { Search } from "lucide-react";
 import {
   formatCurrency,
   formatPercent,
-  formatHoldingDaysDetailed,
+  formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
 import { useRouter } from "next/navigation";
 import type { ZerodhaFundsTabProps } from "@/types/zerodha";
@@ -173,9 +173,11 @@ export default function ZerodhaFundsTab({
                     {f.holdingDays !== null && f.holdingDays !== undefined ? (
                       <>
                         <div className="font-bold">{f.holdingDays}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">
-                          {formatHoldingDaysDetailed(f.holdingDays)}
-                        </div>
+                        {formatHoldingYearsAndDays(f.holdingDays) && (
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            {formatHoldingYearsAndDays(f.holdingDays)}
+                          </div>
+                        )}
                       </>
                     ) : (
                       "-"

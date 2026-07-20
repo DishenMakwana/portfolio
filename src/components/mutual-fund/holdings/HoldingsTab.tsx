@@ -7,7 +7,7 @@ import { Search, ChevronUp, ChevronDown } from "lucide-react";
 import {
   formatCurrency,
   formatPercent,
-  formatHoldingDaysDetailed,
+  formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import { HOLDINGS_SORT_FIELDS } from "@/types/holdings";
@@ -321,9 +321,11 @@ export default function HoldingsTab({
                     </td>
                     <td className="p-4 text-slate-200 whitespace-nowrap">
                       <div className="font-bold">{h.holdingDays}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        {formatHoldingDaysDetailed(h.holdingDays)}
-                      </div>
+                      {formatHoldingYearsAndDays(h.holdingDays) && (
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          {formatHoldingYearsAndDays(h.holdingDays)}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4">
                       <div
