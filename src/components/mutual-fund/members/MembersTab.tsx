@@ -15,7 +15,11 @@ import {
   ExternalLink,
 } from "lucide-react";
 import DeltaBadge from "@/components/shared/DeltaBadge";
-import { formatCurrency, formatPercent } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatHoldingYearsAndDays,
+} from "@/helpers/formatters";
 import type { MembersTabProps } from "@/types/members";
 
 export default function MembersTab({
@@ -173,6 +177,9 @@ export default function MembersTab({
               </div>
               <div className="text-xl font-black text-slate-200 mt-1.5">
                 {avgHoldingDays} Days
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                {formatHoldingYearsAndDays(avgHoldingDays)}
               </div>
               <div className="text-[10px] text-slate-500 mt-1">
                 Weighted Avg

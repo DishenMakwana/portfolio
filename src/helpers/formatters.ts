@@ -175,3 +175,19 @@ export function formatHoldingDaysDetailed(days: number): string {
   }
   return `${yrs} yr ${remainingDays} d`;
 }
+
+/**
+ * Formats a holding days count into compact year/day format (e.g., 888 -> "2y 158d", 395 -> "1y 30d").
+ */
+export function formatHoldingYearsAndDays(days: number): string {
+  const roundedDays = Math.round(days);
+  const yrs = Math.floor(roundedDays / 365);
+  const remainingDays = roundedDays % 365;
+  if (yrs === 0) {
+    return `${remainingDays}d`;
+  }
+  if (remainingDays === 0) {
+    return `${yrs}y`;
+  }
+  return `${yrs}y ${remainingDays}d`;
+}
