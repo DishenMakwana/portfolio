@@ -42,7 +42,7 @@ export default function UploadedFilesList({
       </div>
 
       {/* List Container */}
-      <div className="flex-1 overflow-y-auto max-h-[580px] custom-scrollbar">
+      <div className="flex-1 overflow-y-auto max-h-[230px] custom-scrollbar">
         {filteredReports.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2 min-h-40">
             <FileSpreadsheet size={24} className="opacity-20 text-slate-400" />

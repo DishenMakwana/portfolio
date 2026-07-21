@@ -410,7 +410,7 @@ export default function ZerodhaSnapshotsTab({
               </div>
 
               {/* List Container */}
-              <div className="flex-1 overflow-y-auto max-h-[420px] custom-scrollbar">
+              <div className="flex-1 overflow-y-auto max-h-[230px] custom-scrollbar">
                 {filteredReports.length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2 min-h-40">
                     <FileSpreadsheet
@@ -478,17 +478,17 @@ export default function ZerodhaSnapshotsTab({
         </div>
       </div>
 
-      {/* ── MISSED DATES LIST ── */}
+      {/* ── MISSED DATES CARD (FULL WIDTH) ── */}
       {missedDays.length > 0 && (
-        <section className="rounded-2xl border border-red-500/20 bg-slate-900/70 p-6 shadow-xl">
+        <section className="rounded-2xl border border-red-500/20 bg-slate-900/70 p-6 shadow-xl w-full">
           <div className="mb-4 flex items-center gap-2">
             <XCircle size={17} className="text-red-400" />
             <h2 className="text-sm font-bold uppercase tracking-widest text-slate-100">
-              Missed Dates
+              Missed Dates ({missedDays.length})
             </h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            {missedDays.map((day) => (
+            {[...missedDays].reverse().map((day) => (
               <span
                 key={toDateKey(day)}
                 className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-300"
