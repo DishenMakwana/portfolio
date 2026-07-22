@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:root1234@host.docker.internal:5432/postgres?schema=portfolio
+    restart: unless-stopped

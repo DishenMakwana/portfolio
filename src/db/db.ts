@@ -10,7 +10,9 @@ const databaseUrl =
 const pool = new Pool({
   connectionString: databaseUrl,
   ssl:
-    databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1")
+    databaseUrl.includes("localhost") ||
+    databaseUrl.includes("127.0.0.1") ||
+    databaseUrl.includes("host.docker.internal")
       ? false
       : { rejectUnauthorized: false },
 });
