@@ -22,6 +22,62 @@
       "when": 1783404938674,
       "tag": "0002_large_the_captain",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783959779512,
+      "tag": "0003_tidy_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783960552109,
+      "tag": "0004_chunky_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783963270035,
+      "tag": "0005_mushy_leper_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784116963974,
+      "tag": "0006_organic_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784177097574,
+      "tag": "0007_famous_grim_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784177601055,
+      "tag": "0008_green_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784200945751,
+      "tag": "0009_wealthy_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784202069992,
+      "tag": "0010_polite_whiplash",
+      "breakpoints": true
     }
   ]
 }

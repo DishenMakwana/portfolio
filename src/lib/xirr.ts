@@ -1,7 +1,4 @@
-export interface CashFlow {
-  amount: number; // Negative for Buy (Inflow), Positive for Valuation/Sell (Outflow)
-  date: Date;
-}
+import { CashFlow } from "@/types/xirr";
 
 /**
  * Calculates XIRR (Internal Rate of Return) for a list of cash flows.

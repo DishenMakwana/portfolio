@@ -1,23 +1,6 @@
-export interface MfSearchResult {
-  schemeCode: number;
-  schemeName: string;
-}
-
-export interface NavDataPoint {
-  date: string; // DD-MM-YYYY
-  nav: string;
-}
-
-export interface MfDetailsResponse {
-  meta: {
-    fund_house: string;
-    scheme_type: string;
-    scheme_category: string;
-    scheme_code: number;
-    scheme_name: string;
-  };
-  data: NavDataPoint[];
-}
+import type { ActionResult } from "@/types/portfolio";
+import axios from "axios";
+import type { MfDetailsResponse, MfSearchResult } from "@/types/mf-api";
 
 export function isSpecializedFundSchemeCode(
   schemeCode: string | null | undefined
@@ -40,66 +23,110 @@ async function throttleRequest(): Promise<void> {
 }
 
 /**
+ * Custom retry helper for axios with exponential backoff
+ */
+async function axiosGetWithRetry<T>(
+  url: string,
+  timeoutMs: number,
+  retries: number,
+  backoffMs: number
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const response = await axios.get<T>(url, {
+        headers: {
+          Accept: "application/json",
+        },
+        timeout: timeoutMs,
+      });
+      return response.data;
+    } catch (error: unknown) {
+      attempt++;
+      if (attempt > retries) {
+        throw error;
+      }
+      const delay = backoffMs * Math.pow(2, attempt - 1);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[AXIOS RETRY] Request to "${url}" failed (Attempt ${attempt}/${retries + 1}). Retrying in ${delay}ms... Reason: ${errorMsg}`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+/**
  * Search mutual funds by text query on api.mfapi.in
  */
 export async function searchMutualFund(
   query: string
-): Promise<MfSearchResult[]> {
-  if (!query || query.trim().length < 3) return [];
+): Promise<ActionResult<MfSearchResult[]>> {
+  if (!query || query.trim().length < 3) return { success: true, data: [] };
+  const url = `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`;
   try {
     await throttleRequest();
-    const res = await fetch(
-      `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(4000),
-      }
-    );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (e: any) {
-    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
-      console.warn(
-        `[API TIMEOUT] api.mfapi.in timed out searching for: "${query}"`
-      );
-    } else {
-      console.error("Error searching MF API:", e);
-    }
-    return [];
+    const data = await axiosGetWithRetry<MfSearchResult[]>(url, 4000, 1, 500);
+    return { success: true, data: Array.isArray(data) ? data : [] };
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error(`Error searching MF API at "${url}":`, errorMsg);
+    return { success: false, error: errorMsg, data: [] };
   }
 }
 
 /**
  * Fetch scheme details and historical NAVs by scheme code
  */
+
 export async function fetchMfDetails(
-  schemeCode: string
-): Promise<MfDetailsResponse | null> {
-  if (!schemeCode) return null;
-  if (isSpecializedFundSchemeCode(schemeCode)) return null;
+  schemeCode: string,
+  startDate?: string,
+  endDate?: string
+): Promise<ActionResult<MfDetailsResponse>> {
+  if (!schemeCode) return { success: false, error: "Scheme code is required" };
+  if (isSpecializedFundSchemeCode(schemeCode))
+    return {
+      success: false,
+      error: "Specialized fund scheme codes are not supported",
+    };
+
+  const params = new URLSearchParams();
+  if (startDate) {
+    params.append("startDate", startDate);
+    const resolvedEndDate = endDate || new Date().toISOString().split("T")[0];
+    params.append("endDate", resolvedEndDate);
+  } else if (endDate) {
+    params.append("endDate", endDate);
+  }
+  const queryString = params.toString();
+  const url = `https://api.mfapi.in/mf/${schemeCode}${queryString ? `?${queryString}` : ""}`;
 
   try {
     await throttleRequest();
-    const res = await fetch(`https://api.mfapi.in/mf/${schemeCode}`, {
-      headers: {
-        Accept: "application/json",
-      },
-      signal: AbortSignal.timeout(3000), // Lowered to 3s for fast user page loading
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e: any) {
-    if (e.name === "TimeoutError" || e.code === 23 || e.name === "AbortError") {
+    const data = await axiosGetWithRetry<MfDetailsResponse>(
+      url,
+      15000,
+      2,
+      1000
+    );
+    return { success: true, data };
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    const isTimeout =
+      (e &&
+        typeof e === "object" &&
+        "code" in e &&
+        e.code === "ECONNABORTED") ||
+      errorMsg.includes("timeout");
+    if (isTimeout) {
       console.warn(
-        `[API TIMEOUT] api.mfapi.in timed out fetching details for scheme ${schemeCode}. Using cache or fallback.`
+        `[API TIMEOUT] api.mfapi.in timed out fetching details. URL: "${url}". Using cache or fallback.`
       );
     } else {
-      console.error(`Error fetching MF details for ${schemeCode}:`, e);
+      console.error(`Error fetching MF details from "${url}":`, errorMsg);
     }
-    return null;
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -117,8 +144,9 @@ export async function autoMapScheme(
     .replace(/-*/g, "")
     .trim();
 
-  const searchResults = await searchMutualFund(cleanName.slice(0, 30));
-  if (searchResults.length === 0) return null;
+  const searchRes = await searchMutualFund(cleanName.slice(0, 30));
+  const searchResults = searchRes.data || [];
+  if (!searchRes.success || searchResults.length === 0) return null;
 
   // Let's find the best string match
   let bestMatch = searchResults[0];
@@ -181,4 +209,35 @@ function editDistance(s1: string, s2: string): number {
     }
   }
   return costs[s2.length];
+}
+
+/**
+ * Fetch mutual fund factsheet details from Upvaly API
+ */
+export async function fetchUpvalyMfDetails(isin: string): Promise<{
+  inceptionDate?: string;
+  aum?: number;
+  expenseRatio?: number;
+  exitLoadMessage?: string;
+} | null> {
+  if (!isin) return null;
+  const url = `https://finapi.upvaly.com/api/mf/isin/${isin}`;
+  try {
+    const res = await axios.get(url, { timeout: 8000 });
+    if (res.data?.status === "success" && res.data?.data) {
+      const d = res.data.data;
+      return {
+        inceptionDate: d.inceptionDate || undefined,
+        aum: d.aum ? parseFloat(d.aum.replace(/,/g, "")) : undefined,
+        expenseRatio: d.expenseRatio ? parseFloat(d.expenseRatio) : undefined,
+        exitLoadMessage: d.exitLoadMessage || undefined,
+      };
+    }
+  } catch (error) {
+    console.warn(
+      `[Upvaly API] Failed to fetch factsheet for ISIN ${isin}:`,
+      error
+    );
+  }
+  return null;
 }

@@ -1,6 +1,6 @@
 import { getSipMandates, getSchemes, getReports } from "@/lib/portfolioService";
-import HeaderClient from "@/components/HeaderClient";
-import SipsClient from "@/components/SipsClient";
+import HeaderClient from "@/components/shared/HeaderClient";
+import SipsClient from "@/components/mutual-fund/sips/SipsClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My SIPs — Family Portfolio" };

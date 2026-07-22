@@ -1,5 +1,18 @@
 # Changelog - changelog.md
 
+## [2026-07-15] Modular Component Architecture & Code Cleanup
+### Added
+*   Shared components (`MetricCard.tsx`, `CagrBar.tsx`, `DonutChart.tsx`, `MembersBarChart.tsx`, `AllocationAnalysisTab.tsx`) inside `src/components/shared/` to share UI logic across dashboards.
+*   Centralized helper file `src/helpers/allocation.ts` for calculations (e.g., `getAmcName`, `mapAllocationAnalysisGroups`, `sortAllocationAnalysisData`, and `futureValueGrowingAnnuity`).
+
+### Modified
+*   Reorganized flat components folder under `src/components/` into structured subdirectories (`shared`, `mutual-fund`, `zerodha`, `msfl`, `bullion`).
+*   Refactored `InsightsDashboard.tsx`, `ZerodhaInsightsTab.tsx`, and `MsflDashboardClient.tsx` to import the modular shared components and helpers.
+*   Removed unused local function declarations, variables, and parameters (including `overlaps` state, `getAllocationAnalysisSortKey` definition, and redundant `positive` props).
+*   Updated `project-brain/memory/frontend.md` and `overview.md` to capture the new modular filesystem layout.
+
+---
+
 ## [2026-07-07] Scaffolding & Optimizations
 ### Added
 *   `project-brain` directory containing system layers, memory layers, review checklists, cache, runtime specifications, task tracking, and graph schemas.

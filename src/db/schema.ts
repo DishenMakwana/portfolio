@@ -18,12 +18,26 @@ export const reports = mySchema.table("reports", {
   uploadedAt: text("uploaded_at").notNull(),
   filename: text("filename").notNull(),
   cagr: doublePrecision("cagr"), // Store parsed Grand Total CAGR
+  casId: text("cas_id"),
 });
 
 export const familyMembers = mySchema.table("family_members", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   pan: text("pan"),
+  address: text("address"),
+  email: text("email"),
+  mobile: text("mobile"),
+  dematNominee: text("demat_nominee"),
+  dpId: text("dp_id"),
+  clientId: text("client_id"),
+  dpName: text("dp_name"),
+  boSubStatus: text("bo_sub_status"),
+  bsda: text("bsda"),
+  rgess: text("rgess"),
+  accountStatus: text("account_status"),
+  frozenStatus: text("frozen_status"),
+  boStatus: text("bo_status"),
 });
 
 export const memberReportCagrs = mySchema.table(
@@ -44,13 +58,17 @@ export const memberReportCagrs = mySchema.table(
   ]
 );
 
-export const schemes = mySchema.table("schemes", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  category: text("category").notNull(),
-  schemeCodeApi: text("scheme_code_api"),
-  mappedAt: text("mapped_at"),
-});
+export const schemes = mySchema.table(
+  "schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [index("schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+);
 
 export const holdingsSnapshot = mySchema.table(
   "holdings_snapshot",
@@ -73,6 +91,13 @@ export const holdingsSnapshot = mySchema.table(
     absoluteReturn: doublePrecision("absolute_return").notNull(),
     cagr: doublePrecision("cagr").notNull(),
     comments: text("comments"),
+    modeOfHolding: text("mode_of_holding"),
+    kycStatus: text("kyc_status"),
+    ucc: text("ucc"),
+    email: text("email"),
+    mobile: text("mobile"),
+    nominee: text("nominee"),
+    rta: text("rta"),
   },
   (table) => [
     index("holdings_snapshot_report_id_idx").on(table.reportId),
@@ -87,6 +112,7 @@ export const transactions = mySchema.table(
     id: serial("id").primaryKey(),
     memberId: integer("member_id").references(() => familyMembers.id),
     schemeId: integer("scheme_id").references(() => schemes.id),
+    folioNo: text("folio_no"),
     date: text("date").notNull(),
     type: text("type").notNull(), // 'BUY', 'SELL'
     units: doublePrecision("units").notNull(),
@@ -98,6 +124,7 @@ export const transactions = mySchema.table(
     index("transactions_member_id_idx").on(table.memberId),
     index("transactions_scheme_id_idx").on(table.schemeId),
     index("transactions_source_report_id_idx").on(table.sourceReportId),
+    index("transactions_date_idx").on(table.date),
   ]
 );
 
@@ -145,7 +172,13 @@ export const schemeNavCacheMeta = mySchema.table("scheme_nav_cache_meta", {
   schemeType: text("scheme_type").notNull(),
   schemeCategory: text("scheme_category").notNull(),
   schemeName: text("scheme_name").notNull(),
+  isinGrowth: text("isin_growth"),
+  isinDivReinvestment: text("isin_div_reinvestment"),
   lastFetchedAt: text("last_fetched_at").notNull(),
+  launchDate: text("launch_date"),
+  corpusCr: doublePrecision("corpus_cr"),
+  expenseRatio: doublePrecision("expense_ratio"),
+  exitLoad: text("exit_load"),
 });
 
 export const schemeNavHistory = mySchema.table(
@@ -161,3 +194,227 @@ export const schemeNavHistory = mySchema.table(
     unique("scheme_nav_history_code_date_uq").on(table.schemeCode, table.date),
   ]
 );
+
+export const zerodhaReports = mySchema.table("zerodha_reports", {
+  id: serial("id").primaryKey(),
+  asOfDate: text("as_of_date").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  filename: text("filename").notNull(),
+});
+
+export const zerodhaHoldings = mySchema.table(
+  "zerodha_holdings",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => zerodhaReports.id, {
+      onDelete: "cascade",
+    }),
+    schemeId: integer("scheme_id")
+      .references(() => zerodhaSchemes.id, { onDelete: "cascade" })
+      .notNull(),
+    quantity: doublePrecision("quantity").notNull(),
+    averagePrice: doublePrecision("average_price").notNull(),
+    currentPrice: doublePrecision("current_price").notNull(),
+    investedValue: doublePrecision("invested_value").notNull(),
+    currentValue: doublePrecision("current_value").notNull(),
+    unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
+    unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+    frozenQuantity: doublePrecision("frozen_quantity"),
+    pledgedQuantity: doublePrecision("pledged_quantity"),
+    pledgeSetupQuantity: doublePrecision("pledge_setup_quantity"),
+    freeQuantity: doublePrecision("free_quantity"),
+    lockinQuantity: doublePrecision("lockin_quantity"),
+    lockinDate: text("lockin_date"),
+    balanceDescription: text("balance_description"),
+  },
+  (table) => [
+    index("zerodha_holdings_report_id_idx").on(table.reportId),
+    index("zerodha_holdings_scheme_id_idx").on(table.schemeId),
+  ]
+);
+
+export const zerodhaSchemes = mySchema.table(
+  "zerodha_schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    isin: text("isin"),
+    holdingType: text("holding_type"),
+    sector: text("sector"),
+    instrumentType: text("instrument_type"),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [
+    index("zerodha_schemes_scheme_code_api_idx").on(table.schemeCodeApi),
+  ]
+);
+
+export const zerodhaSchemeNavCacheMeta = mySchema.table(
+  "zerodha_scheme_nav_cache_meta",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    fundHouse: text("fund_house").notNull(),
+    schemeType: text("scheme_type").notNull(),
+    schemeCategory: text("scheme_category").notNull(),
+    schemeName: text("scheme_name").notNull(),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
+  }
+);
+
+export const zerodhaSchemeNavHistory = mySchema.table(
+  "zerodha_scheme_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("zerodha_scheme_nav_history_code_date_uq").on(
+      table.schemeCode,
+      table.date
+    ),
+  ]
+);
+
+export const benchmarkNavCacheMeta = mySchema.table(
+  "benchmark_nav_cache_meta",
+  {
+    benchmarkCode: text("benchmark_code").primaryKey(),
+    benchmarkName: text("benchmark_name").notNull(),
+    fundHouse: text("fund_house"),
+    schemeType: text("scheme_type"),
+    schemeCategory: text("scheme_category"),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
+  }
+);
+
+export const benchmarkNavHistory = mySchema.table(
+  "benchmark_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    benchmarkCode: text("benchmark_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("benchmark_nav_history_code_date_uq").on(
+      table.benchmarkCode,
+      table.date
+    ),
+  ]
+);
+
+export const msflReports = mySchema.table("msfl_reports", {
+  id: serial("id").primaryKey(),
+  asOfDate: text("as_of_date").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  filename: text("filename").notNull(),
+});
+
+export const msflHoldings = mySchema.table(
+  "msfl_holdings",
+  {
+    id: serial("id").primaryKey(),
+    reportId: integer("report_id").references(() => msflReports.id, {
+      onDelete: "cascade",
+    }),
+    schemeId: integer("scheme_id")
+      .references(() => msflSchemes.id, { onDelete: "cascade" })
+      .notNull(),
+    quantity: doublePrecision("quantity").notNull(),
+    averagePrice: doublePrecision("average_price").notNull(),
+    currentPrice: doublePrecision("current_price").notNull(),
+    investedValue: doublePrecision("invested_value").notNull(),
+    currentValue: doublePrecision("current_value").notNull(),
+    unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
+    unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+  },
+  (table) => [
+    index("msfl_holdings_report_id_idx").on(table.reportId),
+    index("msfl_holdings_scheme_id_idx").on(table.schemeId),
+  ]
+);
+
+export const msflSchemes = mySchema.table(
+  "msfl_schemes",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    category: text("category").notNull(),
+    schemeCodeApi: text("scheme_code_api"),
+    mappedAt: text("mapped_at"),
+  },
+  (table) => [index("msfl_schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+);
+
+export const msflSchemeNavCacheMeta = mySchema.table(
+  "msfl_scheme_nav_cache_meta",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    fundHouse: text("fund_house").notNull(),
+    schemeType: text("scheme_type").notNull(),
+    schemeCategory: text("scheme_category").notNull(),
+    schemeName: text("scheme_name").notNull(),
+    isinGrowth: text("isin_growth"),
+    isinDivReinvestment: text("isin_div_reinvestment"),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+    launchDate: text("launch_date"),
+    corpusCr: doublePrecision("corpus_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
+  }
+);
+
+export const msflSchemeNavHistory = mySchema.table(
+  "msfl_scheme_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (table) => [
+    unique("msfl_scheme_nav_history_code_date_uq").on(
+      table.schemeCode,
+      table.date
+    ),
+  ]
+);
+
+export const benchmarkRules = mySchema.table("benchmark_rules", {
+  id: serial("id").primaryKey(),
+  categoryPattern: text("category_pattern"),
+  schemeNamePattern: text("scheme_name_pattern"),
+  benchmarkCode: text("benchmark_code").notNull(),
+  benchmarkName: text("benchmark_name").notNull(),
+  benchmarkFundName: text("benchmark_fund_name").notNull(),
+  priority: integer("priority").default(0).notNull(),
+  corpusCr: doublePrecision("corpus_cr"),
+  expenseRatio: doublePrecision("expense_ratio"),
+  exitLoad: text("exit_load"),
+  allocationEquity: doublePrecision("allocation_equity").default(0).notNull(),
+  allocationDebt: doublePrecision("allocation_debt").default(0).notNull(),
+  allocationGold: doublePrecision("allocation_gold").default(0).notNull(),
+  allocationGlobalEquity: doublePrecision("allocation_global_equity")
+    .default(0)
+    .notNull(),
+  allocationOther: doublePrecision("allocation_other").default(0).notNull(),
+});

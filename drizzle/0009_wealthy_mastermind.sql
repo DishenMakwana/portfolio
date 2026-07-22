@@ -1,0 +1,21 @@
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "address" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "email" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "mobile" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "demat_nominee" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "dp_id" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "client_id" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "dp_name" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "bo_sub_status" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "bsda" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "rgess" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "account_status" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "frozen_status" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."family_members" ADD COLUMN "bo_status" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "mode_of_holding" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "kyc_status" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "ucc" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "email" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "mobile" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "nominee" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."holdings_snapshot" ADD COLUMN "rta" text;--> statement-breakpoint
+ALTER TABLE "portfolio"."reports" ADD COLUMN "cas_id" text;

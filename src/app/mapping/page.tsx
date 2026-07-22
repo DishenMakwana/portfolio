@@ -1,9 +1,10 @@
 import { getSchemes } from "@/lib/portfolioService";
 import { getReports } from "@/lib/portfolioService";
-import MappingTab from "@/components/MappingTab";
-import HeaderClient from "@/components/HeaderClient";
+import MappingTab from "@/components/mutual-fund/mapping/MappingTab";
+import HeaderClient from "@/components/shared/HeaderClient";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Fund Mapping" };
 
 export default async function MappingPage() {
   const [allSchemes, reportsList] = await Promise.all([

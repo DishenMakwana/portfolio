@@ -1,12 +1,40 @@
-import { calculateXIRR, CashFlow } from "./xirr";
+import { calculateXIRR } from "./xirr";
+import { db } from "@/db/db";
+import {
+  schemeNavCacheMeta,
+  schemeNavHistory,
+  benchmarkNavCacheMeta,
+  benchmarkNavHistory,
+  benchmarkRules,
+  zerodhaSchemeNavCacheMeta,
+  msflSchemeNavCacheMeta,
+} from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import {
+  PortfolioTransaction,
+  VolatilityMeasures,
+  FactsheetProfile,
+  AssetAllocation,
+  FactsheetChartPoint,
+} from "@/types/portfolio";
+import {
+  DEFAULT_BENCHMARK_CODE,
+  DEFAULT_BENCHMARK_NAME,
+  DEFAULT_BENCHMARK_FUND_NAME,
+  DEFAULT_CORPUS_CR,
+  DEFAULT_EXPENSE_RATIO,
+  DEFAULT_EXIT_LOAD,
+  DEFAULT_ASSET_ALLOCATION,
+} from "@/types/constants";
+import { NavPoint, ParsedNavPoint } from "@/types/alpha";
+import { CashFlow } from "@/types/xirr";
+import { MfDetailsResponse } from "@/types/mf-api";
+import { BenchmarkRuleDetails } from "@/types/benchmark";
 import {
   fetchMfDetails,
   isSpecializedFundSchemeCode,
-  MfDetailsResponse,
+  fetchUpvalyMfDetails,
 } from "./mfApi";
-import { db } from "@/db/db";
-import { schemeNavCacheMeta, schemeNavHistory } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 function normaliseSchemeCode(
   schemeCode: string | number | null | undefined
@@ -17,15 +45,294 @@ function normaliseSchemeCode(
 // Cache for scheme histories to avoid duplicate DB queries within the same request lifecycle
 const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
 
+export function clearAllAlphaCaches() {
+  schemeHistoryCache.clear();
+  benchmarkHistoryCache.clear();
+}
+
 /**
  * Fetch scheme NAV history for the code passed from the database cache.
  */
+async function triggerNavCacheUpdate(schemeCode: string, startDate?: string) {
+  try {
+    const res = await fetchMfDetails(schemeCode, startDate);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      let launchDate: string | null = null;
+      let corpusCr: number | null = null;
+      let expenseRatio: number | null = null;
+      let exitLoad: string | null = null;
+
+      const isin = data.meta.isin_growth || data.meta.isin_div_reinvestment;
+      if (isin) {
+        const factsheet = await fetchUpvalyMfDetails(isin);
+        if (factsheet) {
+          launchDate = factsheet.inceptionDate || null;
+          corpusCr = factsheet.aum || null;
+          expenseRatio = factsheet.expenseRatio || null;
+          exitLoad = factsheet.exitLoadMessage || null;
+        }
+      }
+
+      // Upsert scheme cache metadata
+      await db
+        .insert(schemeNavCacheMeta)
+        .values({
+          schemeCode,
+          fundHouse: data.meta.fund_house || "Unknown",
+          schemeType: data.meta.scheme_type || "Unknown",
+          schemeCategory: data.meta.scheme_category || "Unknown",
+          schemeName: data.meta.scheme_name || "Unknown",
+          isinGrowth: data.meta.isin_growth || null,
+          isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+          lastFetchedAt: new Date().toISOString(),
+          launchDate,
+          corpusCr,
+          expenseRatio,
+          exitLoad,
+        })
+        .onConflictDoUpdate({
+          target: schemeNavCacheMeta.schemeCode,
+          set: {
+            fundHouse: data.meta.fund_house || "Unknown",
+            schemeType: data.meta.scheme_type || "Unknown",
+            schemeCategory: data.meta.scheme_category || "Unknown",
+            schemeName: data.meta.scheme_name || "Unknown",
+            isinGrowth: data.meta.isin_growth || null,
+            isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+            lastFetchedAt: new Date().toISOString(),
+            launchDate,
+            corpusCr,
+            expenseRatio,
+            exitLoad,
+          },
+        });
+
+      // Prepare history values for insertion
+      const historyValues = data.data.map((p) => ({
+        schemeCode,
+        date: p.date,
+        nav: parseFloat(p.nav) || 0,
+        fetchedAt: new Date().toISOString(),
+      }));
+
+      // Batch insert in chunks of 500
+      const chunkSize = 500;
+      for (let i = 0; i < historyValues.length; i += chunkSize) {
+        const chunk = historyValues.slice(i, i + chunkSize);
+        await db.insert(schemeNavHistory).values(chunk).onConflictDoNothing();
+      }
+    }
+  } catch (err) {
+    console.error(
+      `Failed background cache update for family scheme ${schemeCode}:`,
+      err
+    );
+  }
+}
+
+const benchmarkHistoryCache = new Map<
+  string,
+  Promise<MfDetailsResponse | null>
+>();
+
+async function saveBenchmarkCache(
+  benchmarkCode: string,
+  data: MfDetailsResponse
+) {
+  let launchDate: string | null = null;
+  let corpusCr: number | null = null;
+  let expenseRatio: number | null = null;
+  let exitLoad: string | null = null;
+
+  const isin = data.meta.isin_growth || data.meta.isin_div_reinvestment;
+  if (isin) {
+    const factsheet = await fetchUpvalyMfDetails(isin);
+    if (factsheet) {
+      launchDate = factsheet.inceptionDate || null;
+      corpusCr = factsheet.aum || null;
+      expenseRatio = factsheet.expenseRatio || null;
+      exitLoad = factsheet.exitLoadMessage || null;
+    }
+  }
+
+  await db
+    .insert(benchmarkNavCacheMeta)
+    .values({
+      benchmarkCode,
+      benchmarkName: data.meta.scheme_name || "Unknown",
+      fundHouse: data.meta.fund_house || null,
+      schemeType: data.meta.scheme_type || null,
+      schemeCategory: data.meta.scheme_category || null,
+      isinGrowth: data.meta.isin_growth || null,
+      isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+      lastFetchedAt: new Date().toISOString(),
+      launchDate,
+      corpusCr,
+      expenseRatio,
+      exitLoad,
+    })
+    .onConflictDoUpdate({
+      target: benchmarkNavCacheMeta.benchmarkCode,
+      set: {
+        benchmarkName: data.meta.scheme_name || "Unknown",
+        fundHouse: data.meta.fund_house || null,
+        schemeType: data.meta.scheme_type || null,
+        schemeCategory: data.meta.scheme_category || null,
+        isinGrowth: data.meta.isin_growth || null,
+        isinDivReinvestment: data.meta.isin_div_reinvestment || null,
+        lastFetchedAt: new Date().toISOString(),
+        launchDate,
+        corpusCr,
+        expenseRatio,
+        exitLoad,
+      },
+    });
+
+  const historyValues = data.data.map((p) => ({
+    benchmarkCode,
+    date: p.date,
+    nav: parseFloat(p.nav) || 0,
+    fetchedAt: new Date().toISOString(),
+  }));
+
+  const chunkSize = 500;
+  for (let i = 0; i < historyValues.length; i += chunkSize) {
+    const chunk = historyValues.slice(i, i + chunkSize);
+    await db.insert(benchmarkNavHistory).values(chunk).onConflictDoNothing();
+  }
+}
+
+async function triggerBenchmarkCacheUpdate(
+  benchmarkCode: string,
+  startDate?: string
+) {
+  try {
+    const res = await fetchMfDetails(benchmarkCode, startDate);
+    const data = res.data;
+    if (res.success && data && data.meta && data.data && data.data.length > 0) {
+      await saveBenchmarkCache(benchmarkCode, data);
+    }
+  } catch (err) {
+    console.error(
+      `Failed background cache update for benchmark ${benchmarkCode}:`,
+      err
+    );
+  }
+}
+
+export function getBenchmarkHistory(
+  dbBenchmarkCode: string
+): Promise<MfDetailsResponse | null> {
+  const benchmarkCode = normaliseSchemeCode(dbBenchmarkCode);
+  if (!benchmarkCode || isSpecializedFundSchemeCode(benchmarkCode))
+    return Promise.resolve(null);
+
+  let cachedPromise = benchmarkHistoryCache.get(benchmarkCode);
+  if (!cachedPromise) {
+    cachedPromise = (async () => {
+      const cachedMeta = await db.query.benchmarkNavCacheMeta.findFirst({
+        where: eq(benchmarkNavCacheMeta.benchmarkCode, benchmarkCode),
+      });
+
+      const now = new Date();
+      const cacheAgeLimit = 24 * 60 * 60 * 1000; // 24 hours
+      const isFresh =
+        cachedMeta &&
+        now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
+          cacheAgeLimit;
+
+      if (cachedMeta) {
+        const history = await db.query.benchmarkNavHistory.findMany({
+          where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+        });
+
+        // Find latest date in cache to fetch from that date onwards
+        let latestDateStr: string | undefined = undefined;
+        if (history.length > 0) {
+          let latest = new Date(0);
+          for (const pt of history) {
+            const [d, m, y] = pt.date.split("-");
+            const date = new Date(`${y}-${m}-${d}`);
+            if (date.getTime() > latest.getTime()) {
+              latest = date;
+              latestDateStr = `${y}-${m}-${d}`;
+            }
+          }
+        }
+
+        if (!isFresh) {
+          try {
+            await triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr);
+            const updatedHistory = await db.query.benchmarkNavHistory.findMany({
+              where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+            });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: "Benchmark",
+                  scheme_type: "Index",
+                  scheme_category: "Benchmark Index",
+                  scheme_code: parseInt(cachedMeta.benchmarkCode),
+                  scheme_name: cachedMeta.benchmarkName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC BENCHMARK CACHE UPDATE ERROR]", e);
+          }
+        }
+
+        if (history.length > 0) {
+          return {
+            meta: {
+              fund_house: "Benchmark",
+              scheme_type: "Index",
+              scheme_category: "Benchmark Index",
+              scheme_code: parseInt(cachedMeta.benchmarkCode),
+              scheme_name: cachedMeta.benchmarkName,
+            },
+            data: history.map((h) => ({
+              date: h.date,
+              nav: String(h.nav),
+            })),
+          };
+        }
+      }
+
+      // Fetch full history for benchmark comparison
+      const res = await fetchMfDetails(benchmarkCode);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
+        try {
+          await saveBenchmarkCache(benchmarkCode, data);
+        } catch (e) {
+          console.error("Error writing benchmark NAV cache:", e);
+        }
+        return data;
+      }
+      return null;
+    })();
+    benchmarkHistoryCache.set(benchmarkCode, cachedPromise);
+  }
+  return cachedPromise;
+}
+
 export function getSchemeHistoryForDbCode(
   dbSchemeCode: string
 ): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
-  if (!schemeCode || isSpecializedFundSchemeCode(schemeCode))
-    return Promise.resolve(null);
+  if (!schemeCode) return Promise.resolve(null);
 
   let cachedPromise = schemeHistoryCache.get(schemeCode);
   if (!cachedPromise) {
@@ -42,10 +349,51 @@ export function getSchemeHistoryForDbCode(
         now.getTime() - new Date(cachedMeta.lastFetchedAt).getTime() <
           cacheAgeLimit;
 
-      if (cachedMeta && isFresh) {
+      if (cachedMeta) {
         const history = await db.query.schemeNavHistory.findMany({
           where: eq(schemeNavHistory.schemeCode, schemeCode),
         });
+
+        // Find latest date in cache to fetch from that date onwards
+        let latestDateStr: string | undefined = undefined;
+        if (history.length > 0) {
+          let latest = new Date(0);
+          for (const pt of history) {
+            const [d, m, y] = pt.date.split("-");
+            const date = new Date(`${y}-${m}-${d}`);
+            if (date.getTime() > latest.getTime()) {
+              latest = date;
+              latestDateStr = `${y}-${m}-${d}`;
+            }
+          }
+        }
+
+        // If cache is stale, trigger update (only for non-specialized funds)
+        if (!isFresh && !isSpecializedFundSchemeCode(schemeCode)) {
+          try {
+            await triggerNavCacheUpdate(schemeCode, latestDateStr);
+            const updatedHistory = await db.query.schemeNavHistory.findMany({
+              where: eq(schemeNavHistory.schemeCode, schemeCode),
+            });
+            if (updatedHistory.length > 0) {
+              return {
+                meta: {
+                  fund_house: cachedMeta.fundHouse,
+                  scheme_type: cachedMeta.schemeType,
+                  scheme_category: cachedMeta.schemeCategory,
+                  scheme_code: parseInt(cachedMeta.schemeCode) || 0,
+                  scheme_name: cachedMeta.schemeName,
+                },
+                data: updatedHistory.map((h) => ({
+                  date: h.date,
+                  nav: String(h.nav),
+                })),
+              };
+            }
+          } catch (e) {
+            console.error("[SYNC CACHE UPDATE ERROR]", e);
+          }
+        }
 
         if (history.length > 0) {
           return {
@@ -53,7 +401,7 @@ export function getSchemeHistoryForDbCode(
               fund_house: cachedMeta.fundHouse,
               scheme_type: cachedMeta.schemeType,
               scheme_category: cachedMeta.schemeCategory,
-              scheme_code: parseInt(cachedMeta.schemeCode),
+              scheme_code: parseInt(cachedMeta.schemeCode) || 0,
               scheme_name: cachedMeta.schemeName,
             },
             data: history.map((h) => ({
@@ -64,9 +412,19 @@ export function getSchemeHistoryForDbCode(
         }
       }
 
-      // 2. Fetch fresh details from API
-      const data = await fetchMfDetails(schemeCode);
-      if (data && data.meta && data.data && data.data.length > 0) {
+      // 2. Fetch fresh details from API (Sync fallback because no cache exists)
+      // Skip API fetch for specialized funds
+      if (isSpecializedFundSchemeCode(schemeCode)) return null;
+
+      const res = await fetchMfDetails(schemeCode);
+      const data = res.data;
+      if (
+        res.success &&
+        data &&
+        data.meta &&
+        data.data &&
+        data.data.length > 0
+      ) {
         try {
           // Upsert scheme cache metadata
           await db
@@ -77,6 +435,8 @@ export function getSchemeHistoryForDbCode(
               schemeType: data.meta.scheme_type || "Unknown",
               schemeCategory: data.meta.scheme_category || "Unknown",
               schemeName: data.meta.scheme_name || "Unknown",
+              isinGrowth: data.meta.isin_growth || null,
+              isinDivReinvestment: data.meta.isin_div_reinvestment || null,
               lastFetchedAt: new Date().toISOString(),
             })
             .onConflictDoUpdate({
@@ -86,6 +446,8 @@ export function getSchemeHistoryForDbCode(
                 schemeType: data.meta.scheme_type || "Unknown",
                 schemeCategory: data.meta.scheme_category || "Unknown",
                 schemeName: data.meta.scheme_name || "Unknown",
+                isinGrowth: data.meta.isin_growth || null,
+                isinDivReinvestment: data.meta.isin_div_reinvestment || null,
                 lastFetchedAt: new Date().toISOString(),
               },
             });
@@ -113,29 +475,6 @@ export function getSchemeHistoryForDbCode(
         return data;
       }
 
-      // 3. Fallback to expired database cache if API fetch fails
-      if (cachedMeta) {
-        const history = await db.query.schemeNavHistory.findMany({
-          where: eq(schemeNavHistory.schemeCode, schemeCode),
-        });
-
-        if (history.length > 0) {
-          return {
-            meta: {
-              fund_house: cachedMeta.fundHouse,
-              scheme_type: cachedMeta.schemeType,
-              scheme_category: cachedMeta.schemeCategory,
-              scheme_code: parseInt(cachedMeta.schemeCode),
-              scheme_name: cachedMeta.schemeName,
-            },
-            data: history.map((h) => ({
-              date: h.date,
-              nav: String(h.nav),
-            })),
-          };
-        }
-      }
-
       return null;
     })();
     schemeHistoryCache.set(schemeCode, cachedPromise);
@@ -147,7 +486,7 @@ export function getSchemeHistoryForDbCode(
  * Find the closest NAV on or before a given date
  * dateStr format: YYYY-MM-DD
  */
-function findClosestNav(
+export function findClosestNav(
   navHistory: { date: string; nav: string }[],
   targetDateStr: string
 ): number {
@@ -180,6 +519,10 @@ function findClosestNav(
   }
 
   const MAX_LOOKBACK_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+  if (closestDateDiff === Infinity) {
+    // Target date is before fund inception. Use oldest available NAV.
+    return sortedNavs[0].nav;
+  }
   if (closestDateDiff > MAX_LOOKBACK_MS) {
     // Check if targetDate is slightly before first NAV (inception fallback)
     const oldestPoint = sortedNavs[0];
@@ -195,11 +538,130 @@ function findClosestNav(
   return closestNav;
 }
 
-export interface PortfolioTransaction {
-  date: string; // YYYY-MM-DD
-  type: "BUY" | "SELL";
-  amount: number; // Positive absolute value
-  units: number;
+/**
+ * Parses and sorts the raw NAV history data ascending by date.
+ */
+export function parseAndSortNavHistory(
+  navHistory: NavPoint[],
+  parseDateFn: (s: string) => Date
+): ParsedNavPoint[] {
+  return [...navHistory]
+    .map((p) => ({ date: parseDateFn(p.date), nav: parseFloat(p.nav) }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+/**
+ * Finds the closest date and NAV entry in historical data for a given purchase price.
+ * If purchaseNav is 0 or missing, falls back to the earliest listing entry.
+ */
+export function findSyntheticInvestmentEntry(
+  purchaseNav: number,
+  sortedHistory: ParsedNavPoint[]
+): ParsedNavPoint | null {
+  if (!sortedHistory.length) return null;
+
+  const actualPurchaseNav = purchaseNav;
+  if (!actualPurchaseNav || actualPurchaseNav <= 0) {
+    const earliestEntry = sortedHistory[0];
+    return earliestEntry && earliestEntry.nav > 0 ? earliestEntry : null;
+  }
+
+  let bestEntry = sortedHistory[0];
+  let bestDiff = Math.abs(sortedHistory[0].nav - actualPurchaseNav);
+  for (const entry of sortedHistory) {
+    const diff = Math.abs(entry.nav - actualPurchaseNav);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestEntry = entry;
+    }
+  }
+  return bestEntry;
+}
+
+/**
+ * Calculates the Compound Annual Growth Rate (CAGR) as a percentage.
+ * Formula: ((current / purchase) ^ (1 / years) - 1) * 100
+ */
+export function calculateCagr(
+  current: number,
+  purchase: number,
+  years: number
+): number {
+  if (years <= 0 || purchase <= 0 || current <= 0) return 0;
+  return (Math.pow(current / purchase, 1 / years) - 1) * 100;
+}
+
+/**
+ * Computes NAV-based XIRR and benchmark XIRR for Zerodha holdings that have
+ * no explicit transaction history. Uses the date in the fund's own NAV history
+ * that is closest to the purchase NAV as the synthetic investment date.
+ */
+export function calculateXirrFromNav(
+  purchaseNav: number,
+  currentNav: number,
+  asOfDate: string,
+  fundNavHistory: { date: string; nav: string }[],
+  benchNavHistory: { date: string; nav: string }[]
+): { portfolioXirr: number; benchmarkXirr: number; alpha: number } {
+  const parseApiDate = (s: string) => {
+    const [dd, mm, yyyy] = s.split("-");
+    return new Date(`${yyyy}-${mm}-${dd}`);
+  };
+
+  if (!fundNavHistory.length || !benchNavHistory.length || !currentNav) {
+    return { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
+  }
+
+  const sorted = parseAndSortNavHistory(fundNavHistory, parseApiDate);
+  const entry = findSyntheticInvestmentEntry(purchaseNav, sorted);
+
+  if (!entry) {
+    return { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
+  }
+
+  const investDate = entry.date;
+  const actualPurchaseNav = entry.nav;
+  const exitDate = new Date(asOfDate);
+
+  // Synthetic cash flows: -₹100 invested, +₹100*(currentNav/actualPurchaseNav) redeemed
+  const invested = 100;
+  const redeemed = invested * (currentNav / actualPurchaseNav);
+  const portfolioXirr = calculateXIRR([
+    { amount: -invested, date: investDate },
+    { amount: redeemed, date: exitDate },
+  ]);
+
+  // Benchmark: how much would ₹100 grow in UTI Nifty 50 over same period?
+  const benchSorted = parseAndSortNavHistory(benchNavHistory, parseApiDate);
+
+  const benchAtBuy = benchSorted.reduce((prev, cur) =>
+    Math.abs(cur.date.getTime() - investDate.getTime()) <
+    Math.abs(prev.date.getTime() - investDate.getTime())
+      ? cur
+      : prev
+  );
+  const benchAtSell = benchSorted.reduce((prev, cur) =>
+    Math.abs(cur.date.getTime() - exitDate.getTime()) <
+    Math.abs(prev.date.getTime() - exitDate.getTime())
+      ? cur
+      : prev
+  );
+
+  const benchRedeemed =
+    benchAtBuy.nav > 0
+      ? invested * (benchAtSell.nav / benchAtBuy.nav)
+      : invested;
+
+  const benchmarkXirr = calculateXIRR([
+    { amount: -invested, date: investDate },
+    { amount: benchRedeemed, date: exitDate },
+  ]);
+
+  return {
+    portfolioXirr,
+    benchmarkXirr,
+    alpha: portfolioXirr - benchmarkXirr,
+  };
 }
 
 /**
@@ -253,7 +715,7 @@ export async function calculateAlpha(
   }
 
   // 2. Fetch Benchmark NAV History
-  const benchmarkDetails = await getSchemeHistoryForDbCode(benchmarkSchemeCode);
+  const benchmarkDetails = await getBenchmarkHistory(benchmarkSchemeCode);
   if (
     !benchmarkDetails ||
     !benchmarkDetails.data ||
@@ -320,152 +782,173 @@ export async function calculateAlpha(
   };
 }
 
-export interface VolatilityMeasures {
-  alpha: number;
-  sharpe: number;
-  mean: number;
-  beta: number;
-  stdDev: number;
-  ytm: number;
-  modifiedDuration: number;
-  avgMaturity: number;
-}
-
-export interface FactsheetProfile {
-  launchDate: string;
-  corpusCr: number;
-  expenseRatio: number;
-  exitLoad: string;
-  benchmarkName: string;
-}
-
-export interface AssetAllocation {
-  equity: number;
-  debt: number;
-  gold: number;
-  globalEquity: number;
-  other: number;
-}
-
-export function getFactsheetMetadata(
+export async function getBenchmarkRule(
   category: string | null,
-  launchDateStr: string | null
-): {
+  schemeName?: string | null
+): Promise<BenchmarkRuleDetails> {
+  try {
+    const rules = await db
+      .select()
+      .from(benchmarkRules)
+      .orderBy(desc(benchmarkRules.priority));
+
+    const cleanCat = (category || "").toLowerCase();
+    const cleanName = (schemeName || "").toLowerCase();
+
+    for (const r of rules) {
+      if (
+        r.schemeNamePattern &&
+        !cleanName.includes(r.schemeNamePattern.toLowerCase())
+      ) {
+        continue;
+      }
+      if (
+        r.categoryPattern &&
+        !cleanCat.includes(r.categoryPattern.toLowerCase())
+      ) {
+        continue;
+      }
+      return {
+        benchmarkCode: r.benchmarkCode,
+        benchmarkName: r.benchmarkName,
+        benchmarkFundName: r.benchmarkFundName,
+        corpusCr: r.corpusCr,
+        expenseRatio: r.expenseRatio,
+        exitLoad: r.exitLoad,
+        allocationEquity: r.allocationEquity,
+        allocationDebt: r.allocationDebt,
+        allocationGold: r.allocationGold,
+        allocationGlobalEquity: r.allocationGlobalEquity,
+        allocationOther: r.allocationOther,
+      };
+    }
+  } catch (e) {
+    console.error("Error reading benchmark_rules from DB:", e);
+  }
+
+  // Fallback default in case DB query fails or table is empty
+  return {
+    benchmarkCode: DEFAULT_BENCHMARK_CODE,
+    benchmarkName: DEFAULT_BENCHMARK_NAME,
+    benchmarkFundName: DEFAULT_BENCHMARK_FUND_NAME,
+    corpusCr: DEFAULT_CORPUS_CR,
+    expenseRatio: DEFAULT_EXPENSE_RATIO,
+    exitLoad: DEFAULT_EXIT_LOAD,
+    allocationEquity: DEFAULT_ASSET_ALLOCATION.equity,
+    allocationDebt: DEFAULT_ASSET_ALLOCATION.debt,
+    allocationGold: DEFAULT_ASSET_ALLOCATION.gold,
+    allocationGlobalEquity: DEFAULT_ASSET_ALLOCATION.globalEquity,
+    allocationOther: DEFAULT_ASSET_ALLOCATION.other,
+  };
+}
+
+export async function getFactsheetMetadata(
+  category: string | null,
+  launchDateStr: string | null,
+  schemeName?: string | null,
+  schemeCodeApi?: string | null,
+  isZerodha = false,
+  isMsfl = false
+): Promise<{
   profile: FactsheetProfile;
   allocation: AssetAllocation;
-} {
-  const cleanCat = (category || "").toLowerCase();
+}> {
+  const rule = await getBenchmarkRule(category, schemeName);
 
-  // Default values
-  let corpusCr = 12500;
-  let expenseRatio = 1.25;
-  let exitLoad = "1% for redemption within 365 days";
-  let benchmarkName = "NSE - Nifty 500 TRI";
+  let dbLaunchDate: string | null = null;
+  let dbCorpusCr: number | null = null;
+  let dbExpenseRatio: number | null = null;
+  let dbExitLoad: string | null = null;
 
-  let allocation: AssetAllocation = {
-    equity: 98.2,
-    debt: 1.8,
-    gold: 0.0,
-    globalEquity: 0.0,
-    other: 0.0,
-  };
+  if (schemeCodeApi) {
+    try {
+      let metaRecord;
+      if (isMsfl) {
+        metaRecord = await db.query.msflSchemeNavCacheMeta.findFirst({
+          where: eq(msflSchemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      } else if (isZerodha) {
+        metaRecord = await db.query.zerodhaSchemeNavCacheMeta.findFirst({
+          where: eq(zerodhaSchemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      } else {
+        metaRecord = await db.query.schemeNavCacheMeta.findFirst({
+          where: eq(schemeNavCacheMeta.schemeCode, schemeCodeApi),
+        });
+      }
 
-  if (cleanCat.includes("flexi")) {
-    corpusCr = 26032;
-    expenseRatio = 1.37;
-    exitLoad = "1% for redemption within 90 days";
-    benchmarkName = "NSE - Nifty 500 TRI";
-    allocation = {
-      equity: 99.2,
-      debt: 0.8,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("small")) {
-    corpusCr = 18450;
-    expenseRatio = 1.58;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty Smallcap 250 TRI";
-    allocation = {
-      equity: 96.5,
-      debt: 3.5,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("mid")) {
-    corpusCr = 22100;
-    expenseRatio = 1.48;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty Midcap 150 TRI";
-    allocation = {
-      equity: 97.4,
-      debt: 2.6,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (cleanCat.includes("large") || cleanCat.includes("index")) {
-    corpusCr = 34500;
-    expenseRatio = 1.05;
-    exitLoad = "1% for redemption within 30 days";
-    benchmarkName = "Nifty 50 TRI";
-    allocation = {
-      equity: 98.9,
-      debt: 1.1,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
-  } else if (
-    cleanCat.includes("debt") ||
-    cleanCat.includes("liquid") ||
-    cleanCat.includes("income") ||
-    cleanCat.includes("gilt") ||
-    cleanCat.includes("bond")
-  ) {
-    corpusCr = 8400;
-    expenseRatio = 0.42;
-    exitLoad = cleanCat.includes("liquid")
-      ? "0.0070% to Nil depending on redemption day"
-      : "Nil";
-    benchmarkName = "Nifty Short Duration Debt Index";
-    allocation = {
-      equity: 0.0,
-      debt: 98.4,
-      gold: 0.0,
-      globalEquity: 0.0,
-      other: 1.6,
-    };
-  } else if (
-    cleanCat.includes("hybrid") ||
-    cleanCat.includes("balanced") ||
-    cleanCat.includes("alloc")
-  ) {
-    corpusCr = 14200;
-    expenseRatio = 1.18;
-    exitLoad = "1% for redemption within 365 days";
-    benchmarkName = "Nifty 50 Hybrid Composite debt 65:35 Index";
-    allocation = {
-      equity: 65.5,
-      debt: 31.0,
-      gold: 3.5,
-      globalEquity: 0.0,
-      other: 0.0,
-    };
+      if (metaRecord) {
+        dbLaunchDate = metaRecord.launchDate || null;
+        dbCorpusCr = metaRecord.corpusCr || null;
+        dbExpenseRatio = metaRecord.expenseRatio || null;
+        dbExitLoad = metaRecord.exitLoad || null;
+      }
+    } catch (err) {
+      console.error("Error reading factsheet metadata from cache table:", err);
+    }
   }
 
   return {
     profile: {
-      launchDate: launchDateStr || "27 Aug 1998",
-      corpusCr,
-      expenseRatio,
-      exitLoad,
-      benchmarkName,
+      launchDate: dbLaunchDate || launchDateStr || "27 Aug 1998",
+      corpusCr: dbCorpusCr ?? rule.corpusCr ?? 12500,
+      expenseRatio: dbExpenseRatio ?? rule.expenseRatio ?? 1.25,
+      exitLoad:
+        dbExitLoad ?? rule.exitLoad ?? "1% for redemption within 365 days",
+      benchmarkName: rule.benchmarkName,
+      benchmarkCode: rule.benchmarkCode,
+      benchmarkFundName: rule.benchmarkFundName,
     },
-    allocation,
+    allocation: {
+      equity: rule.allocationEquity,
+      debt: rule.allocationDebt,
+      gold: rule.allocationGold,
+      globalEquity: rule.allocationGlobalEquity,
+      other: rule.allocationOther,
+    },
   };
+}
+
+export async function getBenchmarkCodeForCategory(
+  category: string | null,
+  schemeName?: string | null
+): Promise<string> {
+  const rule = await getBenchmarkRule(category, schemeName);
+  return rule.benchmarkCode;
+}
+
+export async function getBenchmarkFundNameForCode(
+  code: string
+): Promise<string> {
+  try {
+    const rule = await db
+      .select()
+      .from(benchmarkRules)
+      .where(eq(benchmarkRules.benchmarkCode, code))
+      .limit(1);
+    if (rule.length > 0) {
+      return rule[0].benchmarkFundName;
+    }
+  } catch (e) {
+    console.error("Error querying benchmarkFundName from DB:", e);
+  }
+  return "NSE - Nifty 500 TRI";
+}
+
+export async function getBenchmarkNameForCode(code: string): Promise<string> {
+  try {
+    const rule = await db
+      .select()
+      .from(benchmarkRules)
+      .where(eq(benchmarkRules.benchmarkCode, code))
+      .limit(1);
+    if (rule.length > 0) {
+      return rule[0].benchmarkName;
+    }
+  } catch (e) {
+    console.error("Error querying benchmarkName from DB:", e);
+  }
+  return "Nifty 500 TRI";
 }
 
 export function calculateVolatilityMeasures(
@@ -591,16 +1074,6 @@ export function calculateVolatilityMeasures(
   };
 }
 
-export interface FactsheetChartPoint {
-  date: string;
-  timestamp: number;
-  fundNav: number;
-  benchNav: number;
-  fundReturn: number;
-  benchReturn: number;
-  txs?: { type: string; amount: number }[];
-}
-
 export function generateFactsheetChartData(
   fundNavHistory: { date: string; nav: string }[],
   benchNavHistory: { date: string; nav: string }[],
@@ -610,11 +1083,78 @@ export function generateFactsheetChartData(
   if (fundNavHistory.length === 0 || benchNavHistory.length === 0) return [];
 
   const targetDate = new Date(asOfDate);
-  const weeksToFetch = 156; // 3 years of weekly data
+
+  // Find earliest date when fund has history data (by comparing parsed date timestamps)
+  let earliestFundDate = new Date(0);
+  if (fundNavHistory.length > 0) {
+    let minTime = Infinity;
+    for (const p of fundNavHistory) {
+      const parts = p.date.split("-");
+      let d: Date;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      } else {
+        d = new Date(p.date);
+      }
+      const t = d.getTime();
+      if (!isNaN(t) && t < minTime) {
+        minTime = t;
+      }
+    }
+    if (minTime !== Infinity) {
+      earliestFundDate = new Date(minTime);
+    }
+  }
+
+  // Find earliest date when benchmark has history data
+  let earliestBenchDate = new Date(0);
+  if (benchNavHistory.length > 0) {
+    let minTime = Infinity;
+    for (const p of benchNavHistory) {
+      const parts = p.date.split("-");
+      let d: Date;
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      } else {
+        d = new Date(p.date);
+      }
+      const t = d.getTime();
+      if (!isNaN(t) && t < minTime) {
+        minTime = t;
+      }
+    }
+    if (minTime !== Infinity) {
+      earliestBenchDate = new Date(minTime);
+    }
+  }
+
+  // Align start date to the latest of fund listing date or benchmark listing date
+  let finalStartDate = earliestFundDate;
+  if (earliestFundDate.getTime() > 0 && earliestBenchDate.getTime() > 0) {
+    finalStartDate = new Date(
+      Math.max(earliestFundDate.getTime(), earliestBenchDate.getTime())
+    );
+  } else if (earliestBenchDate.getTime() > 0) {
+    finalStartDate = earliestBenchDate;
+  }
+
+  const diffTime = targetDate.getTime() - finalStartDate.getTime();
+  const weeksToGenerate = Math.max(
+    0,
+    Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000))
+  );
 
   const tempPoints: { dateObj: Date; fundNav: number; benchNav: number }[] = [];
 
-  for (let i = weeksToFetch; i >= 0; i--) {
+  for (let i = weeksToGenerate; i >= 0; i--) {
     const checkDate = new Date(
       targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
     );

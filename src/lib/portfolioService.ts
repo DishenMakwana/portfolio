@@ -9,30 +9,14 @@ import {
   memberReportCagrs,
   sipTransactions,
 } from "../db/schema";
-import { eq, asc, desc, and, sql } from "drizzle-orm";
+import { eq, asc, desc, sql } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
-
-export interface HoldingDetails {
-  id: number;
-  schemeId: number;
-  memberId: number;
-  schemeName: string;
-  category: string;
-  schemeCodeApi: string | null;
-  folioNo: string;
-  balanceUnits: number;
-  purchaseNav: number;
-  purchaseValue: number;
-  currentNav: number;
-  currentValue: number;
-  gain: number;
-  holdingDays: number;
-  absoluteReturn: number;
-  cagr: number;
-  comments: string | null;
-  memberName: string;
-  memberPan: string | null;
-}
+import {
+  HoldingDetails,
+  ParsedHolding,
+  SipMandateRow,
+} from "@/types/portfolio";
+import { ParsedSipMandate, SaveSipMandatesResult } from "@/types/sips";
 
 /**
  * Subtract days from YYYY-MM-DD date string
@@ -74,7 +58,7 @@ export async function deleteReport(reportId: number): Promise<void> {
 export async function saveReportSnapshot(
   asOfDate: string,
   filename: string,
-  parsedHoldings: any[],
+  parsedHoldings: ParsedHolding[],
   familyCagr?: number,
   memberCagrs?: { memberName: string; cagr: number }[]
 ): Promise<number> {
@@ -136,6 +120,17 @@ export async function saveReportSnapshot(
       scheme = inserted;
     }
 
+    // Try to find a previous snapshot for the same folio and member to inherit details
+    const prevSnapshot = await db.query.holdingsSnapshot.findFirst({
+      where: (table, { eq, and, isNotNull }) =>
+        and(
+          eq(table.memberId, member.id),
+          eq(table.folioNo, item.folioNo),
+          isNotNull(table.modeOfHolding)
+        ),
+      orderBy: (table, { desc }) => [desc(table.id)],
+    });
+
     // 3.3 Insert Holdings Snapshot
     await db.insert(holdingsSnapshot).values({
       reportId: newReport.id,
@@ -153,6 +148,13 @@ export async function saveReportSnapshot(
       absoluteReturn: item.absoluteReturn,
       cagr: item.cagr,
       comments: item.comments || null,
+      modeOfHolding: prevSnapshot?.modeOfHolding || null,
+      kycStatus: prevSnapshot?.kycStatus || null,
+      ucc: prevSnapshot?.ucc || null,
+      email: prevSnapshot?.email || null,
+      mobile: prevSnapshot?.mobile || null,
+      nominee: prevSnapshot?.nominee || null,
+      rta: prevSnapshot?.rta || null,
     });
   }
 
@@ -215,6 +217,7 @@ export async function rebuildAllTransactions(): Promise<void> {
         await db.insert(transactions).values({
           memberId: holding.memberId,
           schemeId: holding.schemeId,
+          folioNo: holding.folioNo,
           date: purchaseDate,
           type: "BUY",
           units: holding.balanceUnits,
@@ -260,6 +263,7 @@ export async function rebuildAllTransactions(): Promise<void> {
             await db.insert(transactions).values({
               memberId: holding.memberId,
               schemeId: holding.schemeId,
+              folioNo: holding.folioNo,
               date: currentReport.asOfDate,
               type: "BUY",
               units: diffUnits,
@@ -275,6 +279,7 @@ export async function rebuildAllTransactions(): Promise<void> {
             await db.insert(transactions).values({
               memberId: holding.memberId,
               schemeId: holding.schemeId,
+              folioNo: holding.folioNo,
               date: currentReport.asOfDate,
               type: "SELL",
               units: unitsSold,
@@ -292,6 +297,7 @@ export async function rebuildAllTransactions(): Promise<void> {
           await db.insert(transactions).values({
             memberId: holding.memberId,
             schemeId: holding.schemeId,
+            folioNo: holding.folioNo,
             date: purchaseDate,
             type: "BUY",
             units: holding.balanceUnits,
@@ -311,6 +317,7 @@ export async function rebuildAllTransactions(): Promise<void> {
           await db.insert(transactions).values({
             memberId: prevHolding.memberId,
             schemeId: prevHolding.schemeId,
+            folioNo: prevHolding.folioNo,
             date: currentReport.asOfDate,
             type: "SELL",
             units: prevHolding.balanceUnits,
@@ -360,6 +367,13 @@ export async function getReportHoldings(
       comments: holdingsSnapshot.comments,
       memberName: familyMembers.name,
       memberPan: familyMembers.pan,
+      modeOfHolding: holdingsSnapshot.modeOfHolding,
+      kycStatus: holdingsSnapshot.kycStatus,
+      ucc: holdingsSnapshot.ucc,
+      email: holdingsSnapshot.email,
+      mobile: holdingsSnapshot.mobile,
+      nominee: holdingsSnapshot.nominee,
+      rta: holdingsSnapshot.rta,
     })
     .from(holdingsSnapshot)
     .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
@@ -367,15 +381,6 @@ export async function getReportHoldings(
     .where(eq(holdingsSnapshot.reportId, reportId));
 
   return snapshots as HoldingDetails[];
-}
-
-/**
- * Get all family members
- */
-export async function getFamilyMembers() {
-  return await db.query.familyMembers.findMany({
-    orderBy: [asc(familyMembers.name)],
-  });
 }
 
 /**
@@ -410,37 +415,14 @@ export async function updateSchemeCode(
 // SIP MANDATE FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface SipMandateRow {
-  id: number;
-  memberId: number;
-  memberName: string;
-  schemeId: number;
-  schemeName: string;
-  folioNo: string;
-  monthlyAmount: number;
-  monthlyHistory: Record<string, number>;
-  startMonth: string | null;
-  isActive: boolean;
-  uploadedAt: string;
-  sourceFile: string | null;
-}
-
 /**
  * Save or replace all SIP mandates from a parsed SIP upload.
  * Strategy: clear all existing records for the same sourceFile, then insert fresh.
  */
 export async function saveSipMandates(
-  sips: {
-    investorName: string;
-    schemeName: string;
-    folioNo: string;
-    monthlyAmount: number;
-    monthlyHistory: Record<string, number>;
-    startMonth: string;
-    isActive: boolean;
-  }[],
+  sips: ParsedSipMandate[],
   sourceFile: string
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<SaveSipMandatesResult> {
   const now = new Date().toISOString();
   let inserted = 0;
   let skipped = 0;

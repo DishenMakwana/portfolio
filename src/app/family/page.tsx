@@ -1,14 +1,12 @@
-import { getDashboardDataAction } from "@/app/actions";
+import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
-import MembersTab from "@/components/MembersTab";
-import HeaderClient from "@/components/HeaderClient";
+import MembersTab from "@/components/mutual-fund/members/MembersTab";
+import HeaderClient from "@/components/shared/HeaderClient";
 import { Suspense } from "react";
+import { PageProps } from "@/types/members";
 
 export const dynamic = "force-dynamic";
-
-interface PageProps {
-  searchParams: Promise<{ reportId?: string }>;
-}
+export const metadata = { title: "Family Portfolio" };
 
 export default async function FamilyPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -42,6 +40,7 @@ export default async function FamilyPage({ searchParams }: PageProps) {
             totals={data.totals}
             metricDeltas={data.metricDeltas}
             holdings={data.holdings}
+            selectedReport={data.selectedReport}
           />
         </Suspense>
       </main>
