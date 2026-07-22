@@ -11,7 +11,7 @@ import {
 import {
   formatInrCompact,
   formatCurrency,
-  formatHoldingDays,
+  formatHoldingYearsAndDays,
   formatPercent,
 } from "@/helpers/formatters";
 import type {
@@ -686,7 +686,7 @@ export default function AllocationAnalysisTab({
                         fill="#f1f5f9"
                         fontWeight="semibold"
                       >
-                        {formatHoldingDays(hoveredPoint.avgHoldingDays)}
+                        {formatHoldingYearsAndDays(hoveredPoint.avgHoldingDays)}
                       </text>
                     </g>
                   );
@@ -989,7 +989,7 @@ export default function AllocationAnalysisTab({
                         fill="#f1f5f9"
                         fontWeight="semibold"
                       >
-                        {formatHoldingDays(amc.avgHoldingDays)}
+                        {formatHoldingYearsAndDays(amc.avgHoldingDays)}
                       </text>
                     </g>
                   );
@@ -1338,7 +1338,7 @@ export default function AllocationAnalysisTab({
                         fill="#f1f5f9"
                         fontWeight="semibold"
                       >
-                        {formatHoldingDays(hoveredPoint.avgHoldingDays)}
+                        {formatHoldingYearsAndDays(hoveredPoint.avgHoldingDays)}
                       </text>
                     </g>
                   );
@@ -1462,7 +1462,7 @@ export default function AllocationAnalysisTab({
                       {amc.xirr.toFixed(2)}%
                     </td>
                     <td className="py-3 pl-4 text-right pr-4 text-slate-400 tabular-nums">
-                      {formatHoldingDays(amc.avgHoldingDays)}
+                      {formatHoldingYearsAndDays(amc.avgHoldingDays)}
                     </td>
                   </tr>
                 );

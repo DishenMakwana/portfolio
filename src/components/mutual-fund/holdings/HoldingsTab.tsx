@@ -321,7 +321,7 @@ export default function HoldingsTab({
                     </td>
                     <td className="p-4 text-slate-200 whitespace-nowrap">
                       <div className="font-bold">{h.holdingDays}</div>
-                      {formatHoldingYearsAndDays(h.holdingDays) && (
+                      {h.holdingDays >= 30 && (
                         <div className="text-[11px] text-slate-500 font-medium">
                           {formatHoldingYearsAndDays(h.holdingDays)}
                         </div>

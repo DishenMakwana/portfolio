@@ -138,20 +138,6 @@ export function formatUploadedAt(dateStr: string): string {
     hour12: true,
   });
 }
-
-/**
- * Formats a holding days value into a readable string showing days and approximate years.
- * Example: 730 → "730 days (~2.0 yrs)"
- */
-export function formatHoldingDays(days: number): string {
-  const yrs = days / 365;
-  if (yrs < 0.1) return `${Math.round(days)} days`;
-  const formattedDays = Math.round(days).toLocaleString("en-IN");
-  const yrText = yrs.toFixed(1);
-  const suffix = Math.abs(yrs - 1) < 0.05 ? "" : "s";
-  return `${formattedDays} days (~${yrText} yr${suffix})`;
-}
-
 /**
  * Formats a number as an Indian Rupee currency string with customizable decimal places.
  */
@@ -164,19 +150,31 @@ export function formatInr(val: number, decimals = 0): string {
 }
 
 /**
- * Formats a holding days count into compact year/day format (e.g., 888 -> "2yr 158d", 395 -> "1yr 30d").
- * Returns "" if holding days is less than 1 year (365 days) to avoid redundant repetition.
+ * Formats a holding days count into compact Xyr Ym Zd or Ym Zd or Zd format.
  */
 export function formatHoldingYearsAndDays(days: number): string {
   const roundedDays = Math.round(days);
   const yrs = Math.floor(roundedDays / 365);
   const remainingDays = roundedDays % 365;
+  const months = Math.floor(remainingDays / 30);
+  const finalDays = remainingDays % 30;
 
   if (yrs === 0) {
-    return "";
+    if (months === 0) {
+      return `${finalDays}d`;
+    }
+    if (finalDays === 0) {
+      return `${months}m`;
+    }
+    return `${months}m ${finalDays}d`;
   }
-  if (remainingDays === 0) {
-    return `${yrs}yr`;
+
+  const parts: string[] = [`${yrs}yr`];
+  if (months > 0) {
+    parts.push(`${months}m`);
   }
-  return `${yrs}yr ${remainingDays}d`;
+  if (finalDays > 0) {
+    parts.push(`${finalDays}d`);
+  }
+  return parts.join(" ");
 }

@@ -528,7 +528,7 @@ export default function FundDetailsClient({
                   {holding.holdingDays.toLocaleString("en-IN")}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-                  {formatHoldingYearsAndDays(holding.holdingDays)
+                  {holding.holdingDays >= 30
                     ? `${formatHoldingYearsAndDays(holding.holdingDays)} • Days held`
                     : "Days held"}
                 </div>
@@ -1339,7 +1339,7 @@ export default function FundDetailsClient({
               </div>
               <div className="text-slate-200 mt-0.5 font-bold">
                 {holding.holdingDays} Days
-                {formatHoldingYearsAndDays(holding.holdingDays)
+                {holding.holdingDays >= 30
                   ? ` (${formatHoldingYearsAndDays(holding.holdingDays)})`
                   : ""}
               </div>

@@ -16,7 +16,7 @@ import {
   formatCurrency,
   formatNullablePercent,
   formatInrCompact,
-  formatHoldingDays,
+  formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
 import type { ZerodhaInsightsTabProps } from "@/types/zerodha";
 import type {
@@ -1001,7 +1001,9 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                                       {formatInrCompact(s.totalValue)}
                                     </td>
                                     <td className="py-3 px-4 text-right text-xs text-slate-400">
-                                      {formatHoldingDays(s.avgHoldingDays)}
+                                      {formatHoldingYearsAndDays(
+                                        s.avgHoldingDays
+                                      )}
                                     </td>
                                     <td
                                       className={`py-3 px-4 text-right font-bold ${

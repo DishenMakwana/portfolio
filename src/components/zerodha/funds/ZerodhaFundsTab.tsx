@@ -173,7 +173,7 @@ export default function ZerodhaFundsTab({
                     {f.holdingDays !== null && f.holdingDays !== undefined ? (
                       <>
                         <div className="font-bold">{f.holdingDays}</div>
-                        {formatHoldingYearsAndDays(f.holdingDays) && (
+                        {f.holdingDays >= 30 && (
                           <div className="text-[11px] text-slate-500 font-medium">
                             {formatHoldingYearsAndDays(f.holdingDays)}
                           </div>

@@ -36,7 +36,11 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatPercent,
+  formatHoldingYearsAndDays,
+} from "@/helpers/formatters";
 import DeltaBadge from "@/components/shared/DeltaBadge";
 import { SortOrder } from "@/types/allocation";
 import {
@@ -1444,7 +1448,9 @@ export default function OverviewTab({
                   {concentrationInsights.avgDays} Days
                 </div>
                 <div className="text-[10px] text-slate-500">
-                  per mutual fund scheme
+                  {formatHoldingYearsAndDays(concentrationInsights.avgDays)
+                    ? `${formatHoldingYearsAndDays(concentrationInsights.avgDays)} • per scheme`
+                    : "per mutual fund scheme"}
                 </div>
               </div>
             </div>

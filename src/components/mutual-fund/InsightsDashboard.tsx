@@ -52,7 +52,11 @@ import {
   FALLBACK_BADGE_CLASS,
   CAT_BADGE_CLASSES,
 } from "@/types/insights";
-import { formatInrCompact, formatPct } from "@/helpers/formatters";
+import {
+  formatInrCompact,
+  formatPct,
+  formatHoldingYearsAndDays,
+} from "@/helpers/formatters";
 
 function getAllocationAnalysisSortKey(
   rawSortKey: string | null
@@ -1619,10 +1623,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                     .toLowerCase()
                                     .includes("regular");
 
-                                const formatHoldingDays = (days: number) => {
-                                  return `${Math.round(days).toLocaleString("en-IN")} days`;
-                                };
-
                                 let recTag = "Consolidate / Switch";
                                 let tagClass =
                                   "bg-slate-800/50 text-slate-400 border-slate-700/50";
@@ -1669,7 +1669,9 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                       {formatInrCompact(s.totalValue)}
                                     </td>
                                     <td className="py-3 px-4 text-right text-xs text-slate-400">
-                                      {formatHoldingDays(s.avgHoldingDays)}
+                                      {formatHoldingYearsAndDays(
+                                        s.avgHoldingDays
+                                      )}
                                     </td>
                                     <td className="py-3 px-4 text-right font-bold text-slate-100">
                                       {s.cagr.toFixed(2)}%
@@ -1722,10 +1724,19 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                         {formatInrCompact(totalValueSum)}
                                       </td>
                                       <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
-                                        {Math.round(
-                                          avgHoldingDays
-                                        ).toLocaleString("en-IN")}{" "}
-                                        days
+                                        <div>
+                                          {Math.round(
+                                            avgHoldingDays
+                                          ).toLocaleString("en-IN")}{" "}
+                                          days
+                                        </div>
+                                        {avgHoldingDays >= 30 && (
+                                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                            {formatHoldingYearsAndDays(
+                                              avgHoldingDays
+                                            )}
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
                                         {avgCagr.toFixed(2)}%

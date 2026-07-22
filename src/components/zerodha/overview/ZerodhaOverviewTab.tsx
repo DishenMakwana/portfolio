@@ -15,7 +15,11 @@ import {
 } from "recharts";
 import { BarChart2, Activity, Target } from "lucide-react";
 import { motion } from "framer-motion";
-import { formatCurrency, formatNullablePercent } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatNullablePercent,
+  formatHoldingYearsAndDays,
+} from "@/helpers/formatters";
 import DeltaBadge from "@/components/shared/DeltaBadge";
 import { useRouter } from "next/navigation";
 import type { PieSectorDataItem } from "recharts";
@@ -608,7 +612,9 @@ export default function ZerodhaOverviewTab({
                 {insights.avgDays} Days
               </div>
               <div className="text-[10px] text-slate-500">
-                per mutual fund scheme
+                {formatHoldingYearsAndDays(insights.avgDays)
+                  ? `${formatHoldingYearsAndDays(insights.avgDays)} • per scheme`
+                  : "per mutual fund scheme"}
               </div>
             </div>
           </div>
