@@ -68,6 +68,8 @@ export interface ZerodhaInsightsData {
     currentValueChange: number;
     gainChange: number;
     returnPctChange: number;
+    fundsInvestedChange: number;
+    fundsCurrentValueChange: number;
   };
 }
 

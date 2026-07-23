@@ -17,6 +17,7 @@ import {
   formatNullablePercent,
   formatInrCompact,
   formatHoldingYearsAndDays,
+  formatMetricDiff,
 } from "@/helpers/formatters";
 import type { ZerodhaInsightsTabProps } from "@/types/zerodha";
 import type {
@@ -369,6 +370,22 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
   const mfGain = totals.fundsGain;
   const mfAbsReturn = mfInvested > 0 ? (mfGain / mfInvested) * 100 : 0;
 
+  const previousSnapshot = insights.previousSnapshot;
+  const fundsInvestedDiff = previousSnapshot?.fundsInvestedChange ?? null;
+  const fundsCurrentValueDiff =
+    previousSnapshot?.fundsCurrentValueChange ?? null;
+
+  const investedDiff = formatMetricDiff(
+    fundsInvestedDiff,
+    "Mutual Fund cost basis",
+    "text-slate-400"
+  );
+  const currentValueDiff = formatMetricDiff(
+    fundsCurrentValueDiff,
+    "Current value of MFs",
+    "text-teal-400"
+  );
+
   const mfHoldingsWithCagr = useMemo(() => {
     return mfHoldings
       .filter((h) => typeof h.cagr === "number" && h.currentValue > 0)
@@ -547,14 +564,16 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
         <MetricCard
           label="MF Total Invested"
           value={formatCurrency(totals.fundsInvested)}
-          sub="Mutual Fund cost basis"
+          sub={investedDiff.sub}
+          subColor={investedDiff.subColor}
           icon={BriefcaseBusiness}
           accentColor="indigo"
         />
         <MetricCard
           label="MF Current Value"
           value={formatCurrency(totals.fundsCurrentValue)}
-          sub="Current value of MFs"
+          sub={currentValueDiff.sub}
+          subColor={currentValueDiff.subColor}
           icon={TrendingUp}
           accentColor="teal"
         />
@@ -991,18 +1010,30 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                                       title={s.schemeName}
                                     >
                                       {s.schemeName}
-                                      {isRegular && (
+                                      {/* {isRegular && (
                                         <span className="text-[10px] ml-2 px-1 py-0.25 bg-amber-500/10 text-amber-400 border border-amber-500/25 rounded uppercase">
                                           Reg
                                         </span>
-                                      )}
+                                      )} */}
                                     </td>
                                     <td className="py-3 px-4 text-right font-medium text-slate-300">
                                       {formatInrCompact(s.totalValue)}
                                     </td>
                                     <td className="py-3 px-4 text-right text-xs text-slate-400">
-                                      {formatHoldingYearsAndDays(
-                                        s.avgHoldingDays
+                                      <div className="font-bold text-slate-200">
+                                        {Math.round(
+                                          s.avgHoldingDays
+                                        ).toLocaleString("en-IN")}{" "}
+                                        {Math.round(s.avgHoldingDays) === 1
+                                          ? "day"
+                                          : "days"}
+                                      </div>
+                                      {s.avgHoldingDays >= 30 && (
+                                        <div className="text-[10px] mt-0.5 text-slate-500">
+                                          {formatHoldingYearsAndDays(
+                                            s.avgHoldingDays
+                                          )}
+                                        </div>
                                       )}
                                     </td>
                                     <td
@@ -1026,6 +1057,72 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                                   </tr>
                                 );
                               })}
+
+                              {/* Total / Average Row */}
+                              {schemes.length > 0 &&
+                                (() => {
+                                  const totalValueSum = schemes.reduce(
+                                    (sum, s) => sum + s.totalValue,
+                                    0
+                                  );
+                                  const avgCagr =
+                                    totalValueSum > 0
+                                      ? schemes.reduce(
+                                          (sum, s) =>
+                                            sum + s.cagr * s.totalValue,
+                                          0
+                                        ) / totalValueSum
+                                      : 0;
+                                  const avgHoldingDays =
+                                    totalValueSum > 0
+                                      ? schemes.reduce(
+                                          (sum, s) =>
+                                            sum +
+                                            (s.avgHoldingDays || 0) *
+                                              s.totalValue,
+                                          0
+                                        ) / totalValueSum
+                                      : 0;
+                                  return (
+                                    <tr className="bg-slate-900/90 border-t-2 border-slate-800 font-bold text-slate-200">
+                                      <td className="py-4 pr-4 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                                        <div>Total / Weighted Avg</div>
+                                        <div className="text-[10px] text-slate-500 font-semibold normal-case mt-0.5">
+                                          {schemes.length}{" "}
+                                          {schemes.length === 1
+                                            ? "Fund"
+                                            : "Funds"}
+                                        </div>
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-teal-400 font-black text-sm">
+                                        {formatInrCompact(totalValueSum)}
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
+                                        <div>
+                                          {Math.round(
+                                            avgHoldingDays
+                                          ).toLocaleString("en-IN")}{" "}
+                                          days
+                                        </div>
+                                        {avgHoldingDays >= 30 && (
+                                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                            {formatHoldingYearsAndDays(
+                                              avgHoldingDays
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
+                                        {avgCagr.toFixed(2)}%
+                                      </td>
+                                      <td className="py-4 pl-4 text-right pr-4">
+                                        <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 font-bold uppercase tracking-wider">
+                                          Summary
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
                             </tbody>
                           </table>
                         </div>

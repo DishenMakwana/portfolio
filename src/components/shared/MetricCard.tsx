@@ -7,6 +7,7 @@ export default function MetricCard({
   label,
   value,
   sub,
+  subColor,
   icon: Icon,
   accentColor = "teal",
 }: MetricCardProps) {
@@ -75,7 +76,9 @@ export default function MetricCard({
         </div>
         {sub && (
           <div
-            className={`text-xs font-semibold mt-2.5 ${currentStyle.subColor}`}
+            className={`text-xs font-semibold mt-2.5 ${
+              subColor || currentStyle.subColor
+            }`}
           >
             {sub}
           </div>

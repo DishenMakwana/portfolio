@@ -124,6 +124,7 @@ export async function getInsightsData(): Promise<InsightsData> {
       absoluteReturn: holdingsSnapshot.absoluteReturn,
       cagr: holdingsSnapshot.cagr,
       holdingDays: holdingsSnapshot.holdingDays,
+      folioNo: holdingsSnapshot.folioNo,
       memberId: holdingsSnapshot.memberId,
       memberName: familyMembers.name,
       schemeName: schemes.name,
@@ -215,12 +216,13 @@ export async function getInsightsData(): Promise<InsightsData> {
       invested: number;
       current: number;
       gain: number;
-      cagrSum: number;
+      weightedCagrSum: number;
       holdingCount: number;
       memberIds: Set<number>;
       holdingsList: Array<{
         holdingId: number;
         memberName: string;
+        folioNo: string;
         invested: number;
         current: number;
         gain: number;
@@ -235,6 +237,7 @@ export async function getInsightsData(): Promise<InsightsData> {
     const holdingItem = {
       holdingId: h.id,
       memberName: h.memberName,
+      folioNo: h.folioNo,
       invested: h.purchaseValue,
       current: h.currentValue,
       gain: h.gain,
@@ -247,7 +250,7 @@ export async function getInsightsData(): Promise<InsightsData> {
         invested: h.purchaseValue,
         current: h.currentValue,
         gain: h.gain,
-        cagrSum: h.cagr,
+        weightedCagrSum: h.cagr * h.currentValue,
         holdingCount: 1,
         memberIds: new Set(h.memberId != null ? [h.memberId as number] : []),
         holdingsList: [holdingItem],
@@ -256,7 +259,7 @@ export async function getInsightsData(): Promise<InsightsData> {
       existing.invested += h.purchaseValue;
       existing.current += h.currentValue;
       existing.gain += h.gain;
-      existing.cagrSum += h.cagr;
+      existing.weightedCagrSum += h.cagr * h.currentValue;
       existing.holdingCount += 1;
       if (h.memberId != null) existing.memberIds.add(h.memberId as number);
       existing.holdingsList.push(holdingItem);
@@ -274,9 +277,11 @@ export async function getInsightsData(): Promise<InsightsData> {
           ? Math.round((vals.gain / vals.invested) * 1000) / 10
           : 0,
       avgCagr:
-        vals.holdingCount > 0
-          ? Math.round((vals.cagrSum / vals.holdingCount) * 100) / 100
-          : 0,
+        vals.current > 0
+          ? Math.round((vals.weightedCagrSum / vals.current) * 100) / 100
+          : vals.holdingCount > 0
+            ? Math.round((vals.weightedCagrSum / vals.holdingCount) * 100) / 100
+            : 0,
       memberCount: vals.memberIds.size,
       holdings: vals.holdingsList,
     }))

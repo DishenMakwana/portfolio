@@ -43,6 +43,7 @@ export interface InsightsData {
     holdings: Array<{
       holdingId: number;
       memberName: string;
+      folioNo: string;
       invested: number;
       current: number;
       gain: number;
@@ -158,6 +159,7 @@ export interface MetricCardProps {
   label: string;
   value: string;
   sub?: string;
+  subColor?: string;
   icon: ElementType;
   accentColor?: MetricAccentColor;
 }

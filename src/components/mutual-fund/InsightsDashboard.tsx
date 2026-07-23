@@ -22,7 +22,6 @@ import {
   LineChart,
 } from "lucide-react";
 import MetricCard from "@/components/shared/MetricCard";
-import CagrBar from "@/components/shared/CagrBar";
 import DonutChart from "@/components/shared/DonutChart";
 import MembersBarChart from "@/components/shared/MembersBarChart";
 import {
@@ -57,6 +56,17 @@ import {
   formatPct,
   formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
+
+const SCHEME_COLUMNS: Array<{ key: SortKey; label: string }> = [
+  { key: "scheme", label: "Fund" },
+  { key: "category", label: "Category" },
+  { key: "invested", label: "Invested" },
+  { key: "current", label: "Current" },
+  { key: "gain", label: "Gain" },
+  { key: "absReturn", label: "Abs %" },
+  { key: "avgCagr", label: "CAGR %" },
+  { key: "memberCount", label: "Members" },
+];
 
 function getAllocationAnalysisSortKey(
   rawSortKey: string | null
@@ -382,7 +392,19 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     const base =
       filterCategory === "All"
         ? data.schemes
-        : data.schemes.filter((s) => s.category === filterCategory);
+        : filterCategory === "MF"
+          ? data.schemes.filter(
+              (s) =>
+                !(
+                  s.scheme.toLowerCase().includes("sif") ||
+                  s.category.toLowerCase().includes("sif")
+                )
+            )
+          : data.schemes.filter(
+              (s) =>
+                s.scheme.toLowerCase().includes("sif") ||
+                s.category.toLowerCase().includes("sif")
+            );
     return [...base].sort((a, b) => {
       const av = a[sort.key as keyof typeof a] as number | string;
       const bv = b[sort.key as keyof typeof b] as number | string;
@@ -394,11 +416,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
         : (bv as number) - (av as number);
     });
   }, [data.schemes, filterCategory, sort]);
-
-  const maxSchemeCagr = useMemo(
-    () => Math.max(...data.schemes.map((s) => s.avgCagr), 0),
-    [data.schemes]
-  );
 
   const top5Schemes = useMemo(
     () =>
@@ -815,24 +832,43 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
             <div className="space-y-4">
               {/* Category Filter */}
               <div className="flex items-center gap-2 flex-wrap">
-                {["All", "Equity", "Hybrid", "Debt"].map((cat) => (
+                {[
+                  { key: "All", label: "All", count: data.schemes.length },
+                  {
+                    key: "MF",
+                    label: "MF",
+                    count: data.schemes.filter(
+                      (s) =>
+                        !(
+                          s.scheme.toLowerCase().includes("sif") ||
+                          s.category.toLowerCase().includes("sif")
+                        )
+                    ).length,
+                  },
+                  {
+                    key: "SIF",
+                    label: "SIF",
+                    count: data.schemes.filter(
+                      (s) =>
+                        s.scheme.toLowerCase().includes("sif") ||
+                        s.category.toLowerCase().includes("sif")
+                    ).length,
+                  },
+                ].map((item) => (
                   <button
-                    key={cat}
+                    key={item.key}
                     type="button"
-                    onClick={() => setFilterCategory(cat)}
+                    onClick={() => setFilterCategory(item.key)}
                     className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-                      filterCategory === cat
+                      filterCategory === item.key
                         ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
                         : "bg-slate-900/50 text-slate-400 border border-slate-800/80 hover:border-slate-700"
                     }`}
                   >
-                    {cat}
-                    {cat !== "All" && (
-                      <span className="ml-1.5 text-xs opacity-60">
-                        ({data.schemes.filter((s) => s.category === cat).length}
-                        )
-                      </span>
-                    )}
+                    {item.label}
+                    <span className="ml-1.5 text-xs opacity-60">
+                      ({item.count})
+                    </span>
                   </button>
                 ))}
                 <span className="ml-auto text-xs text-slate-500">
@@ -846,21 +882,10 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                   <table className="w-full text-sm min-w-[900px]">
                     <thead>
                       <tr className="border-b border-slate-700/50">
-                        {(
-                          [
-                            { key: "scheme", label: "Fund" },
-                            { key: "category", label: "Category" },
-                            { key: "invested", label: "Invested" },
-                            { key: "current", label: "Current" },
-                            { key: "gain", label: "Gain" },
-                            { key: "absReturn", label: "Abs %" },
-                            { key: "avgCagr", label: "CAGR %" },
-                            { key: "memberCount", label: "Members" },
-                          ] as Array<{ key: SortKey; label: string }>
-                        ).map((col) => (
+                        {SCHEME_COLUMNS.map((col) => (
                           <th
                             key={col.key}
-                            className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-300 transition-colors select-none"
+                            className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-300 transition-colors select-none whitespace-nowrap"
                             onClick={() => handleSort(col.key)}
                           >
                             <div className="flex items-center gap-1">
@@ -923,11 +948,14 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                               <td className="px-4 py-3 text-xs font-semibold text-slate-300">
                                 {s.absReturn.toFixed(1)}%
                               </td>
-                              <td className="px-4 py-3 w-44">
-                                <CagrBar
-                                  cagr={s.avgCagr}
-                                  maxCagr={maxSchemeCagr}
-                                />
+                              <td
+                                className={`px-4 py-3 text-xs font-mono font-bold ${
+                                  s.avgCagr >= 0
+                                    ? "text-emerald-400"
+                                    : "text-rose-400"
+                                }`}
+                              >
+                                {s.avgCagr.toFixed(2)}%
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <button
@@ -944,6 +972,14 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                 >
                                   {s.memberCount}{" "}
                                   {s.memberCount === 1 ? "member" : "members"}
+                                  {s.holdings.length > s.memberCount && (
+                                    <span className="text-[10px] opacity-75 font-normal ml-1">
+                                      {s.holdings.length}{" "}
+                                      {s.holdings.length === 1
+                                        ? "folio"
+                                        : "folios"}
+                                    </span>
+                                  )}
                                   <motion.span
                                     animate={{ rotate: isExpanded ? 180 : 0 }}
                                     transition={{ duration: 0.2 }}
@@ -987,12 +1023,12 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                             href={`/fund/${hold.holdingId}`}
                                             className="flex flex-col p-3.5 rounded-xl border border-slate-750 bg-slate-950/40 hover:border-teal-500/50 hover:bg-slate-950/75 transition-all duration-200 group shadow-md"
                                           >
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span className="font-bold text-slate-100 group-hover:text-teal-300 transition-colors truncate max-w-[200px]">
-                                                {hold.memberName}
-                                              </span>
+                                            <div className="font-bold text-slate-100 group-hover:text-teal-300 transition-colors break-words text-sm sm:text-base leading-tight">
+                                              {hold.memberName}
+                                            </div>
+                                            <div className="mt-2.5 flex items-center gap-3">
                                               <span
-                                                className={`text-[10px] px-2 py-0.5 rounded font-black ${
+                                                className={`text-[10px] px-2 py-0.5 rounded font-black shrink-0 ${
                                                   (hold.cagr ?? 0) >=
                                                   niftyBenchmark
                                                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
@@ -1005,9 +1041,12 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                                   : "-"}{" "}
                                                 CAGR
                                               </span>
+                                              <span className="text-[10px] text-slate-400 font-mono">
+                                                Folio: {hold.folioNo}
+                                              </span>
                                             </div>
                                             <div className="grid grid-cols-3 gap-3 mt-2.5 pt-2.5 border-t border-slate-800/50 text-xs text-slate-400">
-                                              <div>
+                                              <div className="text-left">
                                                 <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
                                                   Invested
                                                 </span>
@@ -1017,7 +1056,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                                   )}
                                                 </span>
                                               </div>
-                                              <div>
+                                              <div className="text-center">
                                                 <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
                                                   Current
                                                 </span>
@@ -1027,7 +1066,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                                   )}
                                                 </span>
                                               </div>
-                                              <div>
+                                              <div className="text-right">
                                                 <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
                                                   Gain
                                                 </span>
@@ -1666,11 +1705,11 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                       title={s.schemeName}
                                     >
                                       {s.schemeName}
-                                      {isRegular && (
+                                      {/* {isRegular && (
                                         <span className="text-[10px] ml-2 px-1 py-0.25 bg-amber-500/10 text-amber-400 border border-amber-500/25 rounded uppercase">
                                           Reg
                                         </span>
-                                      )}
+                                      )} */}
                                     </td>
                                     <td className="py-3 px-4 text-slate-400 text-xs">
                                       {s.holders.join(", ")}

@@ -63,6 +63,8 @@ function emptyZerodhaInsightsData(): ZerodhaInsightsData {
       currentValueChange: 0,
       gainChange: 0,
       returnPctChange: 0,
+      fundsInvestedChange: 0,
+      fundsCurrentValueChange: 0,
     },
   };
 }
@@ -345,16 +347,47 @@ function calculateBenchmarkReturns(
 
 async function getZerodhaSnapshotTotals(reportId: number) {
   const rows = await db
-    .select()
+    .select({
+      investedValue: zerodhaHoldings.investedValue,
+      currentValue: zerodhaHoldings.currentValue,
+      holdingType: zerodhaSchemes.holdingType,
+    })
     .from(zerodhaHoldings)
+    .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
     .where(eq(zerodhaHoldings.reportId, reportId));
 
-  const invested = rows.reduce((sum, row) => sum + row.investedValue, 0);
-  const currentValue = rows.reduce((sum, row) => sum + row.currentValue, 0);
+  let invested = 0;
+  let currentValue = 0;
+  let stocksInvested = 0;
+  let stocksCurrentValue = 0;
+  let fundsInvested = 0;
+  let fundsCurrentValue = 0;
+
+  for (const row of rows) {
+    invested += row.investedValue;
+    currentValue += row.currentValue;
+    if (row.holdingType === "equity") {
+      stocksInvested += row.investedValue;
+      stocksCurrentValue += row.currentValue;
+    } else {
+      fundsInvested += row.investedValue;
+      fundsCurrentValue += row.currentValue;
+    }
+  }
+
   const gain = currentValue - invested;
   const absoluteReturn = invested > 0 ? (gain / invested) * 100 : 0;
 
-  return { invested, currentValue, gain, absoluteReturn };
+  return {
+    invested,
+    currentValue,
+    gain,
+    absoluteReturn,
+    stocksInvested,
+    stocksCurrentValue,
+    fundsInvested,
+    fundsCurrentValue,
+  };
 }
 
 async function getZerodhaReportWeightedMetrics(
@@ -896,6 +929,12 @@ export async function getZerodhaDashboardData(
         : 0,
       returnPctChange: previousTotals
         ? round2(totalAbsoluteReturn - previousTotals.absoluteReturn)
+        : 0,
+      fundsInvestedChange: previousTotals
+        ? Math.round(fundsInvested - previousTotals.fundsInvested)
+        : 0,
+      fundsCurrentValueChange: previousTotals
+        ? Math.round(fundsCurrentValue - previousTotals.fundsCurrentValue)
         : 0,
     },
   };
