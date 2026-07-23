@@ -47,6 +47,8 @@ export interface OverviewTabProps {
     benchmarkXirr: number | null;
     alpha: number | null;
     cagr: number | null;
+    currentValueDiff: number | null;
+    investedDiff: number | null;
   };
   timelineData: {
     date: string;

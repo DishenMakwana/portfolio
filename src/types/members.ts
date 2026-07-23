@@ -12,6 +12,8 @@ export interface MemberSummary {
   cagrDelta: number | null;
   xirrDelta: number | null;
   alphaDelta: number | null;
+  currentValueDelta: number | null;
+  investedDelta: number | null;
   address?: string | null;
   email?: string | null;
   mobile?: string | null;
@@ -47,6 +49,8 @@ export interface MembersTabProps {
     benchmarkXirr: number | null;
     alpha: number | null;
     cagr: number | null;
+    currentValueDiff: number | null;
+    investedDiff: number | null;
   };
   holdings: OverviewHolding[];
   selectedReport?: ReportSummary | null;

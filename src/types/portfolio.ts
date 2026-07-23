@@ -136,6 +136,8 @@ export interface DashboardData {
     cagrDelta: number | null;
     xirrDelta: number | null;
     alphaDelta: number | null;
+    currentValueDelta: number | null;
+    investedDelta: number | null;
     address?: string | null;
     email?: string | null;
     mobile?: string | null;
@@ -160,6 +162,8 @@ export interface DashboardData {
     benchmarkXirr: number | null;
     alpha: number | null;
     cagr: number | null;
+    currentValueDiff: number | null;
+    investedDiff: number | null;
   };
   timelineData: {
     date: string;

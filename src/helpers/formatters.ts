@@ -178,3 +178,33 @@ export function formatHoldingYearsAndDays(days: number): string {
   }
   return parts.join(" ");
 }
+
+/**
+ * Formats a metric delta/difference value with a fallback label and color.
+ * Displays "vs last" suffix for non-null differences.
+ */
+export function formatMetricDiff(
+  diff: number | null | undefined,
+  fallbackLabel: string,
+  fallbackColor: string
+): { sub: string; subColor: string } {
+  const hasDiff = diff !== null && diff !== undefined;
+  if (!hasDiff) {
+    return {
+      sub: fallbackLabel,
+      subColor: fallbackColor,
+    };
+  }
+
+  const isDiffPositive = diff >= 0;
+  const sub =
+    diff > 0
+      ? `+${formatCurrency(diff)} vs last`
+      : diff < 0
+        ? `${formatCurrency(diff)} vs last`
+        : "No change";
+
+  const subColor = isDiffPositive ? "text-emerald-400" : "text-red-400";
+
+  return { sub, subColor };
+}

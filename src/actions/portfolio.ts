@@ -301,6 +301,8 @@ export async function getDashboardDataAction(
         benchmarkXirr: null,
         alpha: null,
         cagr: null,
+        currentValueDiff: null,
+        investedDiff: null,
       },
       timelineData: [],
     };
@@ -383,10 +385,18 @@ export async function getDashboardDataAction(
     benchmarkXirr: null,
     alpha: null,
     cagr: null,
+    currentValueDiff: null,
+    investedDiff: null,
   };
   const previousMemberMetrics = new Map<
     string,
-    { xirr: number; cagr: number; alpha: number }
+    {
+      xirr: number;
+      cagr: number;
+      alpha: number;
+      invested: number;
+      currentValue: number;
+    }
   >();
 
   if (previousReport) {
@@ -423,6 +433,8 @@ export async function getDashboardDataAction(
       benchmarkXirr: benchmarkXirr - previousAlphaMetrics.benchmarkXirr,
       alpha: alpha - previousAlphaMetrics.alpha,
       cagr: currentCagr - previousCagr,
+      currentValueDiff: overallValuation - previousValuation,
+      investedDiff: overallInvested - previousInvested,
     };
 
     const previousMembers = Array.from(
@@ -476,7 +488,13 @@ export async function getDashboardDataAction(
           alpha = metrics.alpha;
         }
 
-        previousMemberMetrics.set(name, { xirr, cagr, alpha });
+        previousMemberMetrics.set(name, {
+          xirr,
+          cagr,
+          alpha,
+          invested,
+          currentValue,
+        });
       })
     );
   }
@@ -553,6 +571,12 @@ export async function getDashboardDataAction(
         cagrDelta: previousMember ? cagr - previousMember.cagr : null,
         xirrDelta: previousMember ? mXirr - previousMember.xirr : null,
         alphaDelta: previousMember ? mAlpha - previousMember.alpha : null,
+        currentValueDelta: previousMember
+          ? currentValue - previousMember.currentValue
+          : null,
+        investedDelta: previousMember
+          ? invested - previousMember.invested
+          : null,
         address: profile?.address || null,
         email: profile?.email || null,
         mobile: profile?.mobile || null,

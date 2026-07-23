@@ -40,6 +40,7 @@ import {
   formatCurrency,
   formatPercent,
   formatHoldingYearsAndDays,
+  formatMetricDiff,
 } from "@/helpers/formatters";
 import DeltaBadge from "@/components/shared/DeltaBadge";
 import { SortOrder } from "@/types/allocation";
@@ -321,25 +322,24 @@ export default function OverviewTab({
           ) / (totals.invested || 1)
         : 0;
 
+  const cvDiff = formatMetricDiff(
+    metricDeltas.currentValueDiff,
+    isProfit ? "In Profit ↑" : "In Loss ↓",
+    isProfit ? "text-emerald-400" : "text-red-400"
+  );
+
+  const ivDiffRes = formatMetricDiff(
+    metricDeltas.investedDiff,
+    "Principal Cost",
+    "text-slate-400"
+  );
+
   const row1Cards = [
-    {
-      label: "Current Value",
-      value: formatCurrency(totals.currentValue),
-      sub: isProfit ? "In Profit ↑" : "In Loss ↓",
-      subColor: isProfit ? "text-emerald-400" : "text-red-400",
-      icon: IndianRupee,
-      iconBg: "bg-teal-500/10",
-      iconColor: "text-teal-400",
-      gradFrom: "from-teal-500/10",
-      border: "border-teal-500/20",
-      href: "/holdings",
-      hoverBorder: "hover:border-teal-500/40",
-    },
     {
       label: "Invested Value",
       value: formatCurrency(totals.invested),
-      sub: "Principal Cost",
-      subColor: "text-slate-400",
+      sub: ivDiffRes.sub,
+      subColor: ivDiffRes.subColor,
       icon: Shield,
       iconBg: "bg-indigo-500/10",
       iconColor: "text-indigo-400",
@@ -347,6 +347,19 @@ export default function OverviewTab({
       border: "border-indigo-500/20",
       href: "/allocation",
       hoverBorder: "hover:border-indigo-500/40",
+    },
+    {
+      label: "Current Value",
+      value: formatCurrency(totals.currentValue),
+      sub: cvDiff.sub,
+      subColor: cvDiff.subColor,
+      icon: IndianRupee,
+      iconBg: "bg-teal-500/10",
+      iconColor: "text-teal-400",
+      gradFrom: "from-teal-500/10",
+      border: "border-teal-500/20",
+      href: "/holdings",
+      hoverBorder: "hover:border-teal-500/40",
     },
     {
       label: "Unrealised Gain",
