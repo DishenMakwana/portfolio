@@ -783,8 +783,9 @@ export async function getZerodhaDashboardData(
         : 0;
 
     const formattedDate = new Date(r.asOfDate).toLocaleDateString("en-IN", {
+      day: "2-digit",
       month: "short",
-      year: "2-digit",
+      year: "numeric",
     });
 
     timelineData.push({
