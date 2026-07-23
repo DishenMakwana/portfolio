@@ -597,6 +597,16 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                   <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4">
                     Category Allocation
                   </h2>
+                  <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-500 tracking-wider pb-2 mb-2 border-b border-slate-800/40">
+                    <span className="pl-4">Category / Fund Name</span>
+                    <div className="flex items-center gap-3 ml-3 shrink-0">
+                      <span className="hidden sm:inline w-20 text-right">
+                        Amount
+                      </span>
+                      <span className="w-24 text-right">Absolute Return</span>
+                      <span className="w-16 text-right">Allocation</span>
+                    </div>
+                  </div>
                   <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1 custom-scrollbar [scrollbar-gutter:stable]">
                     {data.categoryAllocation.map((cat) => (
                       <div key={cat.category} className="space-y-1.5">
@@ -613,11 +623,11 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                             </span>
                           </div>
                           <div className="flex items-center gap-3 ml-3 shrink-0">
-                            <span className="text-slate-500 hidden sm:inline">
+                            <span className="text-slate-500 hidden sm:inline w-20 text-right">
                               {formatInrCompact(cat.current)}
                             </span>
                             <span
-                              className={`font-semibold text-xs ${
+                              className={`font-semibold text-xs w-24 text-right ${
                                 cat.gain >= 0
                                   ? "text-emerald-400"
                                   : "text-rose-400"
@@ -625,7 +635,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                             >
                               {cat.absReturn}%
                             </span>
-                            <span className="font-bold text-slate-300 w-12 text-right tabular-nums">
+                            <span className="font-bold text-slate-300 w-16 text-right tabular-nums">
                               {cat.allocation}%
                             </span>
                           </div>
