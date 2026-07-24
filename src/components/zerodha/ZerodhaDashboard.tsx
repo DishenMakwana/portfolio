@@ -486,7 +486,7 @@ export default function ZerodhaDashboard({
             activeTab === "files" ? "text-teal-400" : ""
           }`}
         >
-          Upload Tracker ({reportsList.length})
+          Upload Tracker
           {activeTab === "files" && (
             <motion.div
               layoutId="zerodhaActiveTab"

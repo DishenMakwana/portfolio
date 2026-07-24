@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -61,32 +61,86 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   };
 
   // ── Derived data
-  const members = Array.from(new Set(mandates.map((m) => m.memberName)));
-  const filteredMandates =
-    filterMember === "all"
-      ? mandates
-      : mandates.filter((m) => m.memberName === filterMember);
+  const {
+    members,
+    totalMonthly,
+    activeSips,
+    pausedSips,
+    byMember,
+    monthCols,
+  } = useMemo(() => {
+    const mems = Array.from(new Set(mandates.map((m) => m.memberName)));
+    const filtered =
+      filterMember === "all"
+        ? mandates
+        : mandates.filter((m) => m.memberName === filterMember);
 
-  const totalMonthly = mandates
-    .filter((m) => m.isActive)
-    .reduce((a, m) => a + m.monthlyAmount, 0);
-  const activeSips = mandates.filter((m) => m.isActive).length;
-  const pausedSips = mandates.filter((m) => !m.isActive).length;
+    const totalMon = mandates
+      .filter((m) => m.isActive)
+      .reduce((a, m) => a + m.monthlyAmount, 0);
 
-  // Group by member for the card view
-  const byMember: Record<string, SipMandateRow[]> = {};
-  filteredMandates.forEach((m) => {
-    if (!byMember[m.memberName]) byMember[m.memberName] = [];
-    byMember[m.memberName].push(m);
-  });
+    const act = mandates.filter((m) => m.isActive).length;
+    const psd = mandates.filter((m) => !m.isActive).length;
 
-  // Month columns from first mandate's history (consistent across all)
-  const unsortedMonthCols =
-    mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
+    const grouped: Record<string, SipMandateRow[]> = {};
+    filtered.forEach((m) => {
+      if (!grouped[m.memberName]) grouped[m.memberName] = [];
+      grouped[m.memberName].push(m);
+    });
 
-  const monthCols = [...unsortedMonthCols].sort((a, b) => {
-    return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
-  });
+    const unsortedMonthCols =
+      mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
+
+    const sortedCols = [...unsortedMonthCols].sort((a, b) => {
+      return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
+    });
+
+    return {
+      members: mems,
+      totalMonthly: totalMon,
+      activeSips: act,
+      pausedSips: psd,
+      byMember: grouped,
+      monthCols: sortedCols,
+    };
+  }, [mandates, filterMember]);
+
+  const memberTotals = useMemo(() => {
+    const totals: Record<
+      string,
+      {
+        memberTotal: number;
+        monthlyTotals: Record<string, number>;
+      }
+    > = {};
+
+    for (const [memberName, sips] of Object.entries(byMember)) {
+      const memberTotal = sips.reduce((a, s) => a + s.monthlyAmount, 0);
+      const monthlyTotals: Record<string, number> = {};
+      for (const col of monthCols) {
+        monthlyTotals[col] = sips.reduce(
+          (a, s) => a + (s.monthlyHistory[col] ?? 0),
+          0
+        );
+      }
+      totals[memberName] = {
+        memberTotal,
+        monthlyTotals,
+      };
+    }
+    return totals;
+  }, [byMember, monthCols]);
+
+  const grandMonthlyTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const col of monthCols) {
+      totals[col] = mandates.reduce(
+        (a, m) => a + (m.monthlyHistory[col] ?? 0),
+        0
+      );
+    }
+    return totals;
+  }, [mandates, monthCols]);
 
   const rawCards = [
     {
@@ -234,7 +288,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
           {/* ── PER-MEMBER TABLES ── */}
           <div className="space-y-4">
             {Object.entries(byMember).map(([memberName, sips]) => {
-              const memberTotal = sips.reduce((a, s) => a + s.monthlyAmount, 0);
+              const stats = memberTotals[memberName];
               const isExpanded =
                 expandedMember === null || expandedMember === memberName;
 
@@ -274,7 +328,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                           Monthly SIP
                         </div>
                         <div className="text-base font-extrabold text-teal-400">
-                          {formatCurrency(memberTotal)}
+                          {formatCurrency(stats?.memberTotal ?? 0)}
                         </div>
                       </div>
                       <ChevronDown
@@ -384,17 +438,19 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                   {memberName.split(" ")[0]}&apos;s Total
                                 </td>
                                 <td className="px-5 py-3 text-right font-extrabold text-teal-400">
-                                  {formatCurrency(memberTotal)}
+                                  {formatCurrency(stats?.memberTotal ?? 0)}
                                 </td>
                                 {monthCols.map((col) => {
-                                  const colTotal = sips.reduce(
-                                    (a, s) => a + (s.monthlyHistory[col] ?? 0),
-                                    0
-                                  );
+                                  const colTotal =
+                                    stats?.monthlyTotals[col] ?? 0;
                                   return (
                                     <td
                                       key={col}
-                                      className={`px-3 py-3 text-right text-xs font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
+                                      className={`px-3 py-3 text-right text-xs font-bold ${
+                                        colTotal > 0
+                                          ? "text-teal-400"
+                                          : "text-slate-600"
+                                      }`}
                                     >
                                       {colTotal > 0
                                         ? `₹${colTotal.toLocaleString("en-IN")}`
@@ -424,17 +480,16 @@ export default function SipsClient({ mandates }: SipsClientProps) {
               </div>
               <div className="flex items-center gap-6">
                 {monthCols.map((col) => {
-                  const colTotal = mandates.reduce(
-                    (a, m) => a + (m.monthlyHistory[col] ?? 0),
-                    0
-                  );
+                  const colTotal = grandMonthlyTotals[col] ?? 0;
                   return (
                     <div key={col} className="text-center">
                       <div className="text-[11px] text-slate-500 font-medium">
                         {col}
                       </div>
                       <div
-                        className={`text-sm font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
+                        className={`text-sm font-bold ${
+                          colTotal > 0 ? "text-teal-400" : "text-slate-600"
+                        }`}
                       >
                         {colTotal > 0 ? formatCurrency(colTotal) : "—"}
                       </div>

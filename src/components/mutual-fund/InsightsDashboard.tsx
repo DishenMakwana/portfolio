@@ -249,6 +249,61 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     return groups;
   }, [data]);
 
+  const subCategoryTotals = useMemo(() => {
+    const totals: Record<
+      string,
+      {
+        totalValueSum: number;
+        avgCagr: number;
+        avgHoldingDays: number;
+      }
+    > = {};
+
+    for (const [categoryName, schemes] of Object.entries(subCategoryGroups)) {
+      if (schemes.length === 0) continue;
+      const totalValueSum = schemes.reduce((sum, s) => sum + s.totalValue, 0);
+      const avgCagr =
+        totalValueSum > 0
+          ? schemes.reduce((sum, s) => sum + s.cagr * s.totalValue, 0) /
+            totalValueSum
+          : 0;
+      const avgHoldingDays =
+        totalValueSum > 0
+          ? schemes.reduce(
+              (sum, s) => sum + (s.avgHoldingDays || 0) * s.totalValue,
+              0
+            ) / totalValueSum
+          : 0;
+
+      totals[categoryName] = {
+        totalValueSum,
+        avgCagr,
+        avgHoldingDays,
+      };
+    }
+
+    return totals;
+  }, [subCategoryGroups]);
+
+  const memberSipTotals = useMemo(() => {
+    const totals: Record<
+      string,
+      {
+        sipsCount: number;
+        totalAmount: number;
+      }
+    > = {};
+
+    for (const sip of data.sips || []) {
+      if (!totals[sip.member]) {
+        totals[sip.member] = { sipsCount: 0, totalAmount: 0 };
+      }
+      totals[sip.member].sipsCount++;
+      totals[sip.member].totalAmount += sip.monthlyAmount;
+    }
+    return totals;
+  }, [data.sips]);
+
   const amcData = useMemo<AmcPoint[]>(() => {
     const amcMap = new Map<string, AllocationAnalysisGroup>();
 
@@ -795,13 +850,10 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                   <div className="space-y-2 mt-2">
                     {Array.from(new Set(data.sips.map((s) => s.member))).map(
                       (member) => {
-                        const memberSips = data.sips.filter(
-                          (s) => s.member === member
-                        );
-                        const total = memberSips.reduce(
-                          (s, m) => s + m.monthlyAmount,
-                          0
-                        );
+                        const stats = memberSipTotals[member] || {
+                          sipsCount: 0,
+                          totalAmount: 0,
+                        };
                         const shortName = member.split(" ")[0];
                         return (
                           <div
@@ -811,10 +863,10 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                             <span className="text-slate-400">{shortName}</span>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-slate-500">
-                                {memberSips.length} SIPs
+                                {stats.sipsCount} SIPs
                               </span>
                               <span className="font-semibold text-teal-300">
-                                {formatInrCompact(total)}
+                                {formatInrCompact(stats.totalAmount)}
                               </span>
                             </div>
                           </div>
@@ -1705,11 +1757,11 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                                       title={s.schemeName}
                                     >
                                       {s.schemeName}
-                                      {/* {isRegular && (
+                                      {isRegular && (
                                         <span className="text-[10px] ml-2 px-1 py-0.25 bg-amber-500/10 text-amber-400 border border-amber-500/25 rounded uppercase">
                                           Reg
                                         </span>
-                                      )} */}
+                                      )}
                                     </td>
                                     <td className="py-3 px-4 text-slate-400 text-xs">
                                       {s.holders.join(", ")}
@@ -1737,67 +1789,46 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                               })}
 
                               {/* Total / Average Row */}
-                              {schemes.length > 0 &&
-                                (() => {
-                                  const totalValueSum = schemes.reduce(
-                                    (sum, s) => sum + s.totalValue,
-                                    0
-                                  );
-                                  const avgCagr =
-                                    totalValueSum > 0
-                                      ? schemes.reduce(
-                                          (sum, s) =>
-                                            sum + s.cagr * s.totalValue,
-                                          0
-                                        ) / totalValueSum
-                                      : 0;
-                                  const avgHoldingDays =
-                                    totalValueSum > 0
-                                      ? schemes.reduce(
-                                          (sum, s) =>
-                                            sum +
-                                            (s.avgHoldingDays || 0) *
-                                              s.totalValue,
-                                          0
-                                        ) / totalValueSum
-                                      : 0;
-                                  return (
-                                    <tr className="bg-slate-900/90 border-t-2 border-slate-800 font-bold text-slate-200">
-                                      <td className="py-4 pr-4 text-[10px] uppercase tracking-wider text-slate-400 font-bold pl-4">
-                                        Total / Weighted Avg
-                                      </td>
-                                      <td className="py-4 px-4 text-xs text-slate-500 font-semibold">
-                                        {schemes.length} Funds
-                                      </td>
-                                      <td className="py-4 px-4 text-right text-teal-400 font-black text-sm">
-                                        {formatInrCompact(totalValueSum)}
-                                      </td>
-                                      <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
-                                        <div>
-                                          {Math.round(
-                                            avgHoldingDays
-                                          ).toLocaleString("en-IN")}{" "}
-                                          days
+                              {(() => {
+                                const totals = subCategoryTotals[categoryName];
+                                if (!totals) return null;
+                                return (
+                                  <tr className="bg-slate-900/90 border-t-2 border-slate-800 font-bold text-slate-200">
+                                    <td className="py-4 pr-4 text-[10px] uppercase tracking-wider text-slate-400 font-bold pl-4">
+                                      Total / Weighted Avg
+                                    </td>
+                                    <td className="py-4 px-4 text-xs text-slate-500 font-semibold">
+                                      {schemes.length} Funds
+                                    </td>
+                                    <td className="py-4 px-4 text-right text-teal-400 font-black text-sm">
+                                      {formatInrCompact(totals.totalValueSum)}
+                                    </td>
+                                    <td className="py-4 px-4 text-right text-xs text-slate-300 font-bold">
+                                      <div>
+                                        {Math.round(
+                                          totals.avgHoldingDays
+                                        ).toLocaleString("en-IN")}{" "}
+                                        days
+                                      </div>
+                                      {totals.avgHoldingDays >= 30 && (
+                                        <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                          {formatHoldingYearsAndDays(
+                                            totals.avgHoldingDays
+                                          )}
                                         </div>
-                                        {avgHoldingDays >= 30 && (
-                                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
-                                            {formatHoldingYearsAndDays(
-                                              avgHoldingDays
-                                            )}
-                                          </div>
-                                        )}
-                                      </td>
-                                      <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
-                                        {avgCagr.toFixed(2)}%
-                                      </td>
-                                      <td className="py-4 pl-4 text-right pr-4">
-                                        <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 font-bold uppercase tracking-wider">
-                                          Summary
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                })()}
+                                      )}
+                                    </td>
+                                    <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
+                                      {totals.avgCagr.toFixed(2)}%
+                                    </td>
+                                    <td className="py-4 pl-4 text-right pr-4">
+                                      <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 font-bold uppercase tracking-wider">
+                                        Summary
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })()}
                             </tbody>
                           </table>
                         </div>
