@@ -70,6 +70,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         absoluteReturn: msflHoldings.unrealizedPnlPct,
         asOfDate: msflReports.asOfDate,
         reportId: msflReports.id,
+        isin: msflSchemes.isin,
       })
       .from(msflHoldings)
       .leftJoin(msflReports, eq(msflHoldings.reportId, msflReports.id))

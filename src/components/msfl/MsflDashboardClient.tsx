@@ -591,17 +591,45 @@ export default function MsflDashboardClient({
                         className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                       >
                         <td className="p-4">
-                          <div className="font-bold text-slate-100 flex items-center gap-2">
-                            <span>{h.symbol}</span>
-                            {isUnlistedStock(h.symbol) && (
-                              <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse leading-none">
-                                Unlisted
+                          <div className="flex flex-col gap-0.5">
+                            <div className="font-bold text-slate-100 flex items-center gap-2">
+                              <span>{h.symbol}</span>
+                              {isUnlistedStock(h.symbol) && (
+                                <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse leading-none">
+                                  Unlisted
+                                </span>
+                              )}
+                              {h.tradingStatus &&
+                                h.tradingStatus !== "Active" && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase leading-none border ${
+                                      h.tradingStatus.includes("SUSPENDED") ||
+                                      h.tradingStatus.includes("DELETED")
+                                        ? "bg-rose-950/80 text-rose-400 border-rose-800/40"
+                                        : "bg-amber-950/80 text-amber-400 border-amber-800/40"
+                                    }`}
+                                  >
+                                    {h.tradingStatus}
+                                  </span>
+                                )}
+                            </div>
+                            {h.isin && (
+                              <span className="text-[10px] font-mono text-slate-500 tracking-wider">
+                                {h.isin}
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="p-4 text-right font-semibold text-slate-200">
-                          {h.quantity}
+                        <td className="p-4 text-right">
+                          <div className="font-semibold text-slate-200">
+                            {h.quantity}
+                          </div>
+                          {h.faceValue !== null &&
+                            h.faceValue !== undefined && (
+                              <div className="text-[10px] text-slate-500 font-medium">
+                                FV: ₹{h.faceValue}
+                              </div>
+                            )}
                         </td>
                         <td className="p-4 text-right font-medium text-slate-400">
                           {formatCurrency(h.averagePrice)}

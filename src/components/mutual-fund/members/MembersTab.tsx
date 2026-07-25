@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   User,
   ExternalLink,
+  Landmark,
 } from "lucide-react";
 import DeltaBadge from "@/components/shared/DeltaBadge";
 import {
@@ -219,6 +220,7 @@ export default function MembersTab({
             (h) => h.memberName === member.name
           );
           const schemesCount = memberHoldings.length;
+          const isNsdl = !!(member.dpId && member.dpId.startsWith("IN"));
 
           return (
             <div
@@ -365,7 +367,8 @@ export default function MembersTab({
                     </button>
 
                     <div className="flex items-center gap-1 text-[10px] text-teal-300 font-bold bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
-                      <ShieldCheck size={12} className="text-teal-400" /> CDSL
+                      <ShieldCheck size={12} className="text-teal-400" />{" "}
+                      {isNsdl ? "NSDL" : "CDSL"}
                       DEMAT • {member.accountStatus}
                     </div>
                   </div>
@@ -385,6 +388,14 @@ export default function MembersTab({
                             Account Specs
                           </div>
                           <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-slate-300">
+                            {member.nsdlId && (
+                              <>
+                                <span className="text-slate-500">NSDL ID:</span>
+                                <span className="font-mono">
+                                  {member.nsdlId}
+                                </span>
+                              </>
+                            )}
                             <span className="text-slate-500">Broker:</span>
                             <span className="font-semibold">
                               {member.dpName}
@@ -393,6 +404,12 @@ export default function MembersTab({
                             <span className="font-mono">{member.dpId}</span>
                             <span className="text-slate-500">Client ID:</span>
                             <span className="font-mono">{member.clientId}</span>
+                            {member.dob && (
+                              <>
+                                <span className="text-slate-500">DOB:</span>
+                                <span>{member.dob}</span>
+                              </>
+                            )}
                             <span className="text-slate-500">BO Status:</span>
                             <span>{member.boStatus}</span>
                             <span className="text-slate-500">Sub-Status:</span>
@@ -424,6 +441,20 @@ export default function MembersTab({
                                 {member.dematNominee}
                               </span>
                             </div>
+                            {member.aadhaarStatus && (
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck
+                                  size={13}
+                                  className="text-teal-400 shrink-0"
+                                />
+                                <span className="text-slate-500 min-w-16">
+                                  Aadhaar:
+                                </span>
+                                <span className="text-slate-200">
+                                  {member.aadhaarStatus}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2">
                               <Mail
                                 size={13}
@@ -464,6 +495,44 @@ export default function MembersTab({
                           </div>
                         </div>
                       </div>
+
+                      {/* Linked Bank Details */}
+                      {(member.linkedBankName ||
+                        member.linkedBankIfsc ||
+                        member.linkedBankAccountNo) && (
+                        <div className="pt-3 border-t border-slate-900 space-y-2">
+                          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1">
+                            <Landmark size={11} className="text-teal-400" />{" "}
+                            Linked Bank Details
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-slate-300 bg-slate-900/20 p-2.5 rounded border border-slate-900/50">
+                            {member.linkedBankName && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">Bank:</span>
+                                <span className="font-semibold text-slate-200">
+                                  {member.linkedBankName}
+                                </span>
+                              </div>
+                            )}
+                            {member.linkedBankIfsc && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">IFSC:</span>
+                                <span className="font-mono text-slate-200">
+                                  {member.linkedBankIfsc}
+                                </span>
+                              </div>
+                            )}
+                            {member.linkedBankAccountNo && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">Acc No:</span>
+                                <span className="font-mono text-slate-200">
+                                  {member.linkedBankAccountNo}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Address */}
                       {member.address && (

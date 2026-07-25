@@ -15,6 +15,8 @@ export interface HoldingParsed {
   category: string;
   memberName: string;
   memberPan: string;
+  isin?: string | null;
+  annualisedReturn?: number | null;
 }
 
 export interface ParseResult {

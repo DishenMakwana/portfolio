@@ -590,6 +590,12 @@ export async function getDashboardDataAction(
         accountStatus: profile?.accountStatus || null,
         frozenStatus: profile?.frozenStatus || null,
         boStatus: profile?.boStatus || null,
+        nsdlId: profile?.nsdlId || null,
+        dob: profile?.dob || null,
+        aadhaarStatus: profile?.aadhaarStatus || null,
+        linkedBankName: profile?.linkedBankName || null,
+        linkedBankIfsc: profile?.linkedBankIfsc || null,
+        linkedBankAccountNo: profile?.linkedBankAccountNo || null,
       };
     })
   );

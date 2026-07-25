@@ -90,6 +90,7 @@ export interface HoldingDetails {
   lockinQuantity?: number | null;
   lockinDate?: string | null;
   balanceDescription?: string | null;
+  annualisedReturn?: number | null;
 }
 
 export interface EntryPointMarker {

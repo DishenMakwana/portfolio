@@ -229,6 +229,8 @@ export async function saveMsflHoldingsReport(
       currentValue: h.currentValue,
       unrealizedPnl: h.unrealizedPnl,
       unrealizedPnlPct: h.unrealizedPnlPct,
+      faceValue: h.faceValue || null,
+      tradingStatus: h.tradingStatus || null,
     };
   });
 
@@ -475,6 +477,9 @@ async function getMsflReportWeightedMetrics(
       unrealizedPnl: msflHoldings.unrealizedPnl,
       unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
       symbol: msflSchemes.name,
+      faceValue: msflHoldings.faceValue,
+      tradingStatus: msflHoldings.tradingStatus,
+      isin: msflSchemes.isin,
     })
     .from(msflHoldings)
     .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
@@ -582,6 +587,9 @@ export async function getMsflDashboardData(
       unrealizedPnl: msflHoldings.unrealizedPnl,
       unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
       symbol: msflSchemes.name,
+      faceValue: msflHoldings.faceValue,
+      tradingStatus: msflHoldings.tradingStatus,
+      isin: msflSchemes.isin,
     })
     .from(msflHoldings)
     .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))

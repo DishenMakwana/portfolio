@@ -58,6 +58,9 @@ export interface MsflHoldingData {
   xirr?: number | null;
   cagr?: number | null;
   alpha?: number | null;
+  faceValue?: number | null;
+  tradingStatus?: string | null;
+  isin?: string | null;
 }
 
 export interface MsflDashboardData {

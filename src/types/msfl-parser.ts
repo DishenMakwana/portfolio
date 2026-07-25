@@ -7,6 +7,8 @@ export interface MsflHoldingParsed {
   currentValue: number;
   unrealizedPnl: number;
   unrealizedPnlPct: number;
+  faceValue?: number | null;
+  tradingStatus?: string | null;
 }
 
 export interface MsflParseResult {

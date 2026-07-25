@@ -38,6 +38,12 @@ export const familyMembers = mySchema.table("family_members", {
   accountStatus: text("account_status"),
   frozenStatus: text("frozen_status"),
   boStatus: text("bo_status"),
+  nsdlId: text("nsdl_id"),
+  dob: text("dob"),
+  aadhaarStatus: text("aadhaar_status"),
+  linkedBankName: text("linked_bank_name"),
+  linkedBankIfsc: text("linked_bank_ifsc"),
+  linkedBankAccountNo: text("linked_bank_account_no"),
 });
 
 export const memberReportCagrs = mySchema.table(
@@ -98,6 +104,8 @@ export const holdingsSnapshot = mySchema.table(
     mobile: text("mobile"),
     nominee: text("nominee"),
     rta: text("rta"),
+    isin: text("isin"),
+    annualisedReturn: doublePrecision("annualised_return"),
   },
   (table) => [
     index("holdings_snapshot_report_id_idx").on(table.reportId),
@@ -345,6 +353,8 @@ export const msflHoldings = mySchema.table(
     currentValue: doublePrecision("current_value").notNull(),
     unrealizedPnl: doublePrecision("unrealized_pnl").notNull(),
     unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
+    faceValue: doublePrecision("face_value"),
+    tradingStatus: text("trading_status"),
   },
   (table) => [
     index("msfl_holdings_report_id_idx").on(table.reportId),
@@ -358,6 +368,10 @@ export const msflSchemes = mySchema.table(
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
     category: text("category").notNull(),
+    isin: text("isin"),
+    holdingType: text("holding_type"),
+    sector: text("sector"),
+    instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
   },

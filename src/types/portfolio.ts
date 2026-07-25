@@ -27,6 +27,8 @@ export interface HoldingDetails {
   mobile: string | null;
   nominee: string | null;
   rta: string | null;
+  isin?: string | null;
+  annualisedReturn?: number | null;
 }
 
 export interface PortfolioTransaction {
@@ -151,6 +153,12 @@ export interface DashboardData {
     accountStatus?: string | null;
     frozenStatus?: string | null;
     boStatus?: string | null;
+    nsdlId?: string | null;
+    dob?: string | null;
+    aadhaarStatus?: string | null;
+    linkedBankName?: string | null;
+    linkedBankIfsc?: string | null;
+    linkedBankAccountNo?: string | null;
   }[];
   holdings: (HoldingDetails & { xirr: number; alpha: number })[];
   categoryAllocation: { name: string; value: number }[];
@@ -221,6 +229,8 @@ export interface ParsedHolding {
   absoluteReturn: number;
   cagr: number;
   comments?: string | null;
+  isin?: string | null;
+  annualisedReturn?: number | null;
 }
 
 export interface SipMandateRow {

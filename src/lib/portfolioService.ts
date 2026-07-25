@@ -155,6 +155,9 @@ export async function saveReportSnapshot(
       mobile: prevSnapshot?.mobile || null,
       nominee: prevSnapshot?.nominee || null,
       rta: prevSnapshot?.rta || null,
+      isin: item.isin || prevSnapshot?.isin || null,
+      annualisedReturn:
+        item.annualisedReturn || prevSnapshot?.annualisedReturn || null,
     });
   }
 
@@ -374,6 +377,8 @@ export async function getReportHoldings(
       mobile: holdingsSnapshot.mobile,
       nominee: holdingsSnapshot.nominee,
       rta: holdingsSnapshot.rta,
+      isin: holdingsSnapshot.isin,
+      annualisedReturn: holdingsSnapshot.annualisedReturn,
     })
     .from(holdingsSnapshot)
     .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))

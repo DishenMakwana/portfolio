@@ -27,6 +27,12 @@ export interface MemberSummary {
   accountStatus?: string | null;
   frozenStatus?: string | null;
   boStatus?: string | null;
+  nsdlId?: string | null;
+  dob?: string | null;
+  aadhaarStatus?: string | null;
+  linkedBankName?: string | null;
+  linkedBankIfsc?: string | null;
+  linkedBankAccountNo?: string | null;
 }
 
 export interface Totals {

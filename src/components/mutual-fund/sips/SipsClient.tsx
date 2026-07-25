@@ -61,49 +61,43 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   };
 
   // ── Derived data
-  const {
-    members,
-    totalMonthly,
-    activeSips,
-    pausedSips,
-    byMember,
-    monthCols,
-  } = useMemo(() => {
-    const mems = Array.from(new Set(mandates.map((m) => m.memberName)));
-    const filtered =
-      filterMember === "all"
-        ? mandates
-        : mandates.filter((m) => m.memberName === filterMember);
+  const { members, totalMonthly, activeSips, pausedSips, byMember, monthCols } =
+    useMemo(() => {
+      const mems = Array.from(new Set(mandates.map((m) => m.memberName)));
+      const filtered =
+        filterMember === "all"
+          ? mandates
+          : mandates.filter((m) => m.memberName === filterMember);
 
-    const totalMon = mandates
-      .filter((m) => m.isActive)
-      .reduce((a, m) => a + m.monthlyAmount, 0);
+      const totalMon = mandates
+        .filter((m) => m.isActive)
+        .reduce((a, m) => a + m.monthlyAmount, 0);
 
-    const act = mandates.filter((m) => m.isActive).length;
-    const psd = mandates.filter((m) => !m.isActive).length;
+      const act = mandates.filter((m) => m.isActive).length;
+      const psd = mandates.filter((m) => !m.isActive).length;
 
-    const grouped: Record<string, SipMandateRow[]> = {};
-    filtered.forEach((m) => {
-      if (!grouped[m.memberName]) grouped[m.memberName] = [];
-      grouped[m.memberName].push(m);
-    });
+      const grouped: Record<string, SipMandateRow[]> = {};
+      filtered.forEach((m) => {
+        if (!grouped[m.memberName]) grouped[m.memberName] = [];
+        grouped[m.memberName].push(m);
+      });
 
-    const unsortedMonthCols =
-      mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
+      const unsortedMonthCols =
+        mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
 
-    const sortedCols = [...unsortedMonthCols].sort((a, b) => {
-      return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
-    });
+      const sortedCols = [...unsortedMonthCols].sort((a, b) => {
+        return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
+      });
 
-    return {
-      members: mems,
-      totalMonthly: totalMon,
-      activeSips: act,
-      pausedSips: psd,
-      byMember: grouped,
-      monthCols: sortedCols,
-    };
-  }, [mandates, filterMember]);
+      return {
+        members: mems,
+        totalMonthly: totalMon,
+        activeSips: act,
+        pausedSips: psd,
+        byMember: grouped,
+        monthCols: sortedCols,
+      };
+    }, [mandates, filterMember]);
 
   const memberTotals = useMemo(() => {
     const totals: Record<
