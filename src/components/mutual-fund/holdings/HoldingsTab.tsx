@@ -30,7 +30,7 @@ export default function HoldingsTab({
   const initialSort = (
     (HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawSort || "")
       ? rawSort
-      : "cagr"
+      : "xirr"
   ) as HoldingsSortField;
   const rawOrder = searchParams.get("order");
   const initialOrder = (
@@ -70,7 +70,7 @@ export default function HoldingsTab({
     setSortField(
       ((HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawS || "")
         ? rawS
-        : "cagr") as HoldingsSortField
+        : "xirr") as HoldingsSortField
     );
     const rawO = searchParams.get("order");
     setSortOrder(

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronDown,
@@ -46,6 +46,14 @@ export default function MembersTab({
       [name]: !prev[name],
     }));
   };
+
+  const sortedMemberSummaries = useMemo(() => {
+    return [...memberSummaries].sort((a, b) => {
+      const xirrA = a.xirr ?? -Infinity;
+      const xirrB = b.xirr ?? -Infinity;
+      return xirrB - xirrA;
+    });
+  }, [memberSummaries]);
 
   const overallCagr =
     totals.cagr !== undefined && totals.cagr !== null
@@ -213,7 +221,7 @@ export default function MembersTab({
         transition={{ duration: 0.25 }}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        {memberSummaries.map((member) => {
+        {sortedMemberSummaries.map((member) => {
           const mInvDiff = formatMetricDiff(member.investedDelta, "", "");
           const mCvDiff = formatMetricDiff(member.currentValueDelta, "", "");
           const memberHoldings = holdings.filter(

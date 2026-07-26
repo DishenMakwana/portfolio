@@ -21,6 +21,8 @@ export interface InsightsData {
     totalMonthlySip: number;
     uniqueSchemes: number;
     memberCount: number;
+    portfolioXirr: number;
+    benchmarkXirr: number;
   };
   memberCagrs: Array<{ memberName: string; cagr: number }>;
   categoryAllocation: Array<{
@@ -296,3 +298,27 @@ export const ALLOCATION_ANALYSIS_SORT_KEYS: AllocationAnalysisSortKey[] = [
   "avgHoldingDays",
   "xirr",
 ];
+
+export interface SubMetricItem {
+  label: string;
+  score: string;
+  ok: boolean;
+}
+
+export interface PortfolioScoreCardProps {
+  title: string;
+  grade: string;
+  statusText: string;
+  primaryValueText: string;
+  progressValue: number;
+  subMetrics: SubMetricItem[];
+}
+
+export interface SummaryMetricCardsProps {
+  invested: number;
+  current: number;
+  gain: number;
+  absReturn: number;
+  weightedCagr: number;
+  benchmarkDelta: number;
+}

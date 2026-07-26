@@ -7,7 +7,6 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Lightbulb,
   TrendingUp,
-  IndianRupee,
   BarChart3,
   Users,
   CalendarRange,
@@ -21,9 +20,10 @@ import {
   Layers,
   LineChart,
 } from "lucide-react";
-import MetricCard from "@/components/shared/MetricCard";
+import SummaryMetricCards from "@/components/shared/SummaryMetricCards";
 import DonutChart from "@/components/shared/DonutChart";
 import MembersBarChart from "@/components/shared/MembersBarChart";
+import PortfolioScoreCard from "@/components/shared/PortfolioScoreCard";
 import {
   getAmcName,
   mapAllocationAnalysisGroups,
@@ -42,6 +42,7 @@ import {
   type AmcPoint,
   type AllocationAnalysisGroup,
   type AllocationAnalysisSortKey,
+  type SubMetricItem,
   ALLOCATION_ANALYSIS_SORT_KEYS,
   CAT_PALETTE,
   FALLBACK_DOT_CLASS,
@@ -53,7 +54,6 @@ import {
 } from "@/types/insights";
 import {
   formatInrCompact,
-  formatPct,
   formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
 
@@ -568,6 +568,54 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     : "Fallback target 12.00%";
   const benchmarkDelta = weightedCagr - niftyBenchmark;
 
+  const portfolioXirr = data.totals.portfolioXirr ?? 0;
+  const benchmarkXirr = data.totals.benchmarkXirr ?? 0;
+  const xirrAlpha = portfolioXirr - benchmarkXirr;
+
+  const getXirrGrade = (val: number) => {
+    if (val >= 15) return { grade: "A", text: "Excellent" };
+    if (val >= 12) return { grade: "B+", text: "Good" };
+    if (val >= 8) return { grade: "B", text: "Average" };
+    return { grade: "C", text: "Below Average" };
+  };
+  const xirrRating = getXirrGrade(portfolioXirr);
+
+  const cagrSubMetrics: SubMetricItem[] = [
+    {
+      label: "Diversification",
+      score: data.totals.uniqueSchemes >= 20 ? "Good" : "OK",
+      ok: true,
+    },
+    {
+      label: "Outperformance",
+      score: `${benchmarkDelta >= 0 ? "+" : ""}${benchmarkDelta.toFixed(1)}%`,
+      ok: benchmarkDelta >= 0,
+    },
+    {
+      label: "Watchlist Items",
+      score: `${watchlistSchemes.size} funds`,
+      ok: watchlistSchemes.size <= 3,
+    },
+  ];
+
+  const xirrSubMetrics: SubMetricItem[] = [
+    {
+      label: "Outperformance",
+      score: `${xirrAlpha >= 0 ? "+" : ""}${xirrAlpha.toFixed(1)}%`,
+      ok: xirrAlpha >= 0,
+    },
+    {
+      label: "Benchmark",
+      score: "UTI Nifty 50",
+      ok: true,
+    },
+    {
+      label: "XIRR Status",
+      score: portfolioXirr >= 12 ? "Healthy" : "Weak",
+      ok: portfolioXirr >= 12,
+    },
+  ];
+
   // Action items
   const scaleUpFunds = data.schemes.filter((s) => s.avgCagr >= 15).slice(0, 5);
   const watchlistFunds = data.schemes.filter((s) => s.avgCagr < 8);
@@ -633,35 +681,14 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Hero Metrics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard
-                  label="Total Invested"
-                  value={formatInrCompact(data.totals.invested)}
-                  icon={IndianRupee}
-                  accentColor="indigo"
-                />
-                <MetricCard
-                  label="Current Value"
-                  value={formatInrCompact(data.totals.current)}
-                  sub={`+${formatInrCompact(data.totals.gain)} gain`}
-                  icon={TrendingUp}
-                  accentColor="teal"
-                />
-                <MetricCard
-                  label="Total Gain"
-                  value={formatInrCompact(data.totals.gain)}
-                  sub={`${formatPct(data.totals.absReturn)} absolute`}
-                  icon={TrendingUp}
-                  accentColor={data.totals.gain >= 0 ? "emerald" : "rose"}
-                />
-                <MetricCard
-                  label="Weighted CAGR"
-                  value={`${weightedCagr.toFixed(2)}%`}
-                  sub={`${benchmarkDelta >= 0 ? "+" : ""}${benchmarkDelta.toFixed(2)}% vs benchmark`}
-                  icon={BarChart3}
-                  accentColor="amber"
-                />
-              </div>
+              <SummaryMetricCards
+                invested={data.totals.invested}
+                current={data.totals.current}
+                gain={data.totals.gain}
+                absReturn={data.totals.absReturn}
+                weightedCagr={weightedCagr}
+                benchmarkDelta={benchmarkDelta}
+              />
 
               {/* Category Allocation + Donut */}
               <div className="grid lg:grid-cols-3 gap-4">
@@ -764,76 +791,28 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
 
               {/* Portfolio Health + SIP Summary */}
               <div className="grid lg:grid-cols-2 gap-4">
-                {/* Health Score */}
-                <div className="rounded-2xl border border-teal-500/20 bg-slate-900/70 backdrop-blur-md p-5 space-y-3 shadow-xl">
-                  <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-                    Portfolio Health Score
-                  </h2>
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-teal-400 flex items-center justify-center bg-teal-500/10">
-                      <span className="text-xl font-extrabold text-teal-300">
-                        B+
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-slate-100">Good</p>
-                      <p className="text-xs text-slate-400">
-                        {weightedCagr.toFixed(1)}% avg CAGR vs {benchmarkLabel}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{
-                          width: `${Math.min((weightedCagr / 20) * 100, 100)}%`,
-                        }}
-                        transition={{ duration: 1 }}
-                        className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full"
-                      />
-                    </div>
-                    <span className="text-xs text-teal-400 font-bold">
-                      {weightedCagr.toFixed(1)}% / 20%
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 mt-2">
-                    {[
-                      {
-                        label: "Diversification",
-                        score: data.totals.uniqueSchemes >= 20 ? "Good" : "OK",
-                        ok: true,
-                      },
-                      {
-                        label: "SIP Discipline",
-                        score: "Active",
-                        ok: true,
-                      },
-                      {
-                        label: "Watchlist Items",
-                        score: `${watchlistSchemes.size} funds`,
-                        ok: watchlistSchemes.size <= 3,
-                      },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="text-center p-2 rounded-xl bg-slate-900/50 border border-slate-800/60"
-                      >
-                        <p className="text-xs text-slate-500 mb-1">
-                          {item.label}
-                        </p>
-                        <p
-                          className={`text-xs font-bold ${item.ok ? "text-emerald-400" : "text-amber-400"}`}
-                        >
-                          {item.score}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex flex-col gap-4">
+                  <PortfolioScoreCard
+                    title="Portfolio CAGR Score"
+                    grade={getXirrGrade(weightedCagr).grade}
+                    statusText={getXirrGrade(weightedCagr).text}
+                    primaryValueText={`${weightedCagr.toFixed(1)}% avg CAGR vs ${benchmarkLabel}`}
+                    progressValue={weightedCagr}
+                    subMetrics={cagrSubMetrics}
+                  />
+
+                  <PortfolioScoreCard
+                    title="Portfolio XIRR Score"
+                    grade={xirrRating.grade}
+                    statusText={xirrRating.text}
+                    primaryValueText={`${portfolioXirr.toFixed(1)}% portfolio XIRR vs Benchmark XIRR ${benchmarkXirr.toFixed(1)}%`}
+                    progressValue={portfolioXirr}
+                    subMetrics={xirrSubMetrics}
+                  />
                 </div>
 
                 {/* SIP Summary */}
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 space-y-3 shadow-xl">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 space-y-3 shadow-xl h-fit">
                   <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
                     SIP Summary
                   </h2>

@@ -10,9 +10,10 @@ import {
   zerodhaSchemes,
   msflHoldings,
   msflSchemes,
+  transactions,
 } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { getBenchmarkHistory } from "@/lib/alpha";
+import { eq, desc, lte } from "drizzle-orm";
+import { getBenchmarkHistory, calculateAlpha } from "@/lib/alpha";
 import type { BenchmarkReturns, InsightsData } from "@/types/insights";
 
 // ─── Benchmark helper ──────────────────────────────────────────────────────────
@@ -173,6 +174,35 @@ export async function getInsightsData(): Promise<InsightsData> {
     holdings.map((h) => h.memberId).filter(Boolean)
   );
 
+  // 5.1 Fetch transactions history up to the latest report date and calculate portfolio XIRR
+  const rawTxs = await db
+    .select({
+      id: transactions.id,
+      memberId: transactions.memberId,
+      schemeId: transactions.schemeId,
+      date: transactions.date,
+      type: transactions.type,
+      units: transactions.units,
+      nav: transactions.nav,
+      amount: transactions.amount,
+      sourceReportId: transactions.sourceReportId,
+    })
+    .from(transactions)
+    .where(lte(transactions.date, reportDate));
+
+  const overallTxs = rawTxs.map((tx) => ({
+    date: tx.date,
+    type: tx.type as "BUY" | "SELL",
+    amount: tx.amount,
+    units: tx.units,
+  }));
+
+  const { portfolioXirr, benchmarkXirr } = await calculateAlpha(
+    overallTxs,
+    reportDate,
+    totalCurrent
+  );
+
   // Category allocation
   const categoryMap = new Map<
     string,
@@ -329,6 +359,8 @@ export async function getInsightsData(): Promise<InsightsData> {
       totalMonthlySip: Math.round(totalMonthlySip),
       uniqueSchemes: uniqueSchemeNames.size,
       memberCount: uniqueMemberIds.size,
+      portfolioXirr,
+      benchmarkXirr,
     },
     memberCagrs: memberCagrRows.map((r) => ({
       memberName: r.memberName,
