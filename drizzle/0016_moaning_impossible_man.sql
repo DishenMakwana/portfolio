@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio"."zerodha_transactions" ADD COLUMN "asset_type" text DEFAULT 'mutual_fund';

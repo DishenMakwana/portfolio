@@ -538,9 +538,7 @@ export default function FundDetailsClient({
         </div>
 
         {/* Row 2: Annualized returns */}
-        <div
-          className={`grid grid-cols-2 ${isStock ? "md:grid-cols-3" : "md:grid-cols-4"} gap-4`}
-        >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Card 4: Scheme XIRR */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
             <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
@@ -581,26 +579,24 @@ export default function FundDetailsClient({
           </div>
 
           {/* Card 6: CAGR */}
-          {!isStock && (
-            <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
-              <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
-                Report CAGR
-                <span title="Compounded Annualized Growth Rate">
-                  <Info size={12} className="text-slate-500 cursor-pointer" />
-                </span>
+          <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">
+            <span className="text-slate-400 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+              {isStock ? "Stock CAGR" : "Report CAGR"}
+              <span title="Compounded Annualized Growth Rate">
+                <Info size={12} className="text-slate-500 cursor-pointer" />
               </span>
-              <div className="mt-2">
-                <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-                  {holding.cagr !== null && holding.cagr !== undefined
-                    ? `${holding.cagr.toFixed(2)}%`
-                    : "-"}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-                  Compounded Annual
-                </div>
+            </span>
+            <div className="mt-2">
+              <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                {holding.cagr !== null && holding.cagr !== undefined
+                  ? `${holding.cagr.toFixed(2)}%`
+                  : "-"}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                Compounded Annual
               </div>
             </div>
-          )}
+          </div>
 
           {/* Card 7: Alpha */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950/90 border border-slate-800/80 rounded-xl p-4.5 shadow-xl flex flex-col justify-between hover:border-slate-700 transition duration-300 min-h-[125px]">

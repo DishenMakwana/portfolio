@@ -10,12 +10,13 @@ import {
   zerodhaHoldings,
   zerodhaReports,
   zerodhaSchemes,
+  zerodhaTransactions,
   msflHoldings,
   msflReports,
   msflSchemes,
   schemeNavCacheMeta,
 } from "@/db/schema";
-import { eq, and, lte, asc } from "drizzle-orm";
+import { eq, and, lte, asc, inArray } from "drizzle-orm";
 import {
   calculateAlpha,
   getSchemeHistoryForDbCode,
@@ -233,21 +234,50 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   const benchmarkName = await getBenchmarkNameForCode(benchmarkCode);
 
   // 2. Fetch transaction history and NAV histories in parallel
-  const [fundTxs, fundDetails, benchDetails] = await Promise.all([
-    isMsfl || isZerodha || !holding.schemeId || !holding.memberId
-      ? Promise.resolve([])
-      : db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.schemeId, holding.schemeId),
-              eq(transactions.memberId, holding.memberId),
-              eq(transactions.folioNo, holding.folioNo || ""),
-              lte(transactions.date, holding.asOfDate)
-            )
+  let zTxsPromise = Promise.resolve<any[]>([]);
+  if (isZerodha && holding.schemeId) {
+    zTxsPromise = (async () => {
+      const matchingSchemeIds = holding.isin
+        ? (
+            await db
+              .select({ id: zerodhaSchemes.id })
+              .from(zerodhaSchemes)
+              .where(eq(zerodhaSchemes.isin, holding.isin))
+          ).map((s) => s.id)
+        : [holding.schemeId!];
+
+      return db
+        .select()
+        .from(zerodhaTransactions)
+        .where(
+          and(
+            inArray(zerodhaTransactions.schemeId, matchingSchemeIds),
+            lte(zerodhaTransactions.date, holding.asOfDate!)
           )
-          .orderBy(asc(transactions.date)),
+        )
+        .orderBy(asc(zerodhaTransactions.date));
+    })();
+  }
+
+  const [fundTxs, fundDetails, benchDetails] = await Promise.all([
+    isMsfl
+      ? Promise.resolve([])
+      : isZerodha
+        ? zTxsPromise
+        : !holding.schemeId || !holding.memberId
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.schemeId, holding.schemeId),
+                  eq(transactions.memberId, holding.memberId),
+                  eq(transactions.folioNo, holding.folioNo || ""),
+                  lte(transactions.date, holding.asOfDate)
+                )
+              )
+              .orderBy(asc(transactions.date)),
     holding.schemeCodeApi
       ? isMsfl
         ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
@@ -308,7 +338,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   // 4. Calculate dynamic XIRR and Alpha
   let metrics = { portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 };
-  if (!isMsfl && !isZerodha && mappedTxs.length > 0) {
+  if (!isMsfl && mappedTxs.length > 0) {
     metrics = await calculateAlpha(
       mappedTxs,
       holding.asOfDate,
@@ -316,7 +346,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       benchmarkCode
     );
   } else if ((isMsfl || isZerodha) && fundDetails?.data && benchDetails?.data) {
-    // For MSFL/Zerodha: compute NAV-based XIRR using purchase/current NAV
+    // For MSFL/Zerodha: compute NAV-based XIRR using purchase/current NAV as fallback
     metrics = calculateXirrFromNav(
       holding.purchaseNav,
       holding.currentNav,
@@ -328,6 +358,16 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   if (isMsfl || isZerodha) {
     holding.cagr = metrics.portfolioXirr;
+    if (mappedTxs.length > 0) {
+      const oldestTxTime = new Date(mappedTxs[0].date).getTime();
+      const asOfTime = new Date(holding.asOfDate).getTime();
+      const diffDays = Math.round(
+        (asOfTime - oldestTxTime) / (24 * 60 * 60 * 1000)
+      );
+      if (diffDays > 0) {
+        holding.holdingDays = diffDays;
+      }
+    }
   }
 
   // 6. Calculate Volatility Stats

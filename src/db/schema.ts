@@ -294,6 +294,34 @@ export const zerodhaSchemeNavHistory = mySchema.table(
   ]
 );
 
+export const zerodhaTransactions = mySchema.table(
+  "zerodha_transactions",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id").references(() => familyMembers.id, {
+      onDelete: "cascade",
+    }),
+    schemeId: integer("scheme_id").references(() => zerodhaSchemes.id, {
+      onDelete: "cascade",
+    }),
+    folioNo: text("folio_no"),
+    date: text("date").notNull(),
+    type: text("type").notNull(),
+    rawTransactionType: text("raw_transaction_type"),
+    units: doublePrecision("units").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    broker: text("broker"),
+    assetType: text("asset_type").default("mutual_fund"),
+    uploadedAt: text("uploaded_at").notNull(),
+  },
+  (table) => [
+    index("zerodha_transactions_member_id_idx").on(table.memberId),
+    index("zerodha_transactions_scheme_id_idx").on(table.schemeId),
+    index("zerodha_transactions_date_idx").on(table.date),
+  ]
+);
+
 export const benchmarkNavCacheMeta = mySchema.table(
   "benchmark_nav_cache_meta",
   {

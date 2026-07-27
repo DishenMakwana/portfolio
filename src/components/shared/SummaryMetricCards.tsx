@@ -2,7 +2,7 @@
 
 import { IndianRupee, TrendingUp, BarChart3 } from "lucide-react";
 import MetricCard from "./MetricCard";
-import { formatInrCompact, formatPct } from "@/helpers/formatters";
+import { formatCurrency, formatPct } from "@/helpers/formatters";
 import type { SummaryMetricCardsProps } from "@/types/insights";
 
 export default function SummaryMetricCards({
@@ -19,20 +19,20 @@ export default function SummaryMetricCards({
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <MetricCard
         label="Total Invested"
-        value={formatInrCompact(invested)}
+        value={formatCurrency(invested)}
         icon={IndianRupee}
         accentColor="indigo"
       />
       <MetricCard
         label="Current Value"
-        value={formatInrCompact(current)}
-        sub={`+${formatInrCompact(gain)} gain`}
+        value={formatCurrency(current)}
+        sub={`${gain >= 0 ? "+" : ""}${formatCurrency(gain)} gain`}
         icon={TrendingUp}
         accentColor="teal"
       />
       <MetricCard
         label="Total Gain"
-        value={formatInrCompact(gain)}
+        value={formatCurrency(gain)}
         sub={`${formatPct(absReturn)} absolute`}
         icon={TrendingUp}
         accentColor={isProfit ? "emerald" : "rose"}
