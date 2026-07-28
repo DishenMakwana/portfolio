@@ -5,9 +5,10 @@ import {
   zerodhaSchemes,
   zerodhaSchemeNavCacheMeta,
   zerodhaSchemeNavHistory,
+  zerodhaTransactions,
   reports,
 } from "../db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, and, inArray, lte } from "drizzle-orm";
 import {
   ZerodhaDashboardData,
   ZerodhaBenchmarkReturns,
@@ -20,6 +21,7 @@ import {
   findSyntheticInvestmentEntry,
   calculateCagr,
   calculateXirrFromNav,
+  calculateAlpha,
   getBenchmarkCodeForCategory,
   getBenchmarkFundNameForCode,
 } from "./alpha";
@@ -610,68 +612,127 @@ export async function getZerodhaDashboardData(
       const benchmarkCode = await getBenchmarkCodeForCategory(category);
       const benchmarkName = await getBenchmarkFundNameForCode(benchmarkCode);
 
-      if (holdingType === "mutual_fund") {
-        if (scheme && scheme.schemeCodeApi) {
-          const [fundDetails, benchDetails] = await Promise.all([
-            getZerodhaSchemeHistoryForDbCode(scheme.schemeCodeApi),
-            getBenchmarkHistory(benchmarkCode),
-          ]);
-          if (fundDetails && fundDetails.data && fundDetails.data.length > 0) {
-            const metrics = calculateFundMetrics(
-              h.averagePrice,
-              h.currentPrice,
-              selectedReport.asOfDate,
-              fundDetails.data,
-              benchDetails?.data || []
-            );
-            return {
-              ...h,
-              symbol,
-              holdingType,
-              isin,
-              sector,
-              instrumentType: category,
-              xirr: metrics.xirr,
-              cagr: metrics.cagr,
-              holdingDays: metrics.holdingDays,
-              benchmarkXirr: metrics.benchmarkXirr,
-              alpha: metrics.alpha,
-              benchmarkCode,
-              benchmarkName,
-            };
-          }
-        }
-      } else if (holdingType === "equity") {
-        const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
-        const [stockDetails, benchDetails] = await Promise.all([
-          getZerodhaStockHistoryForSymbol(ticker),
-          getBenchmarkHistory(benchmarkCode),
-        ]);
-        if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
-          const metrics = calculateFundMetrics(
-            h.averagePrice,
-            h.currentPrice,
-            selectedReport.asOfDate,
-            stockDetails.data,
-            benchDetails?.data || []
-          );
-          return {
-            ...h,
-            symbol,
-            holdingType,
-            isin,
-            sector,
-            instrumentType: category,
-            xirr: metrics.xirr,
-            cagr: metrics.cagr,
-            holdingDays: metrics.holdingDays,
-            benchmarkXirr: metrics.benchmarkXirr,
-            alpha: metrics.alpha,
-            benchmarkCode,
-            benchmarkName,
+      // Query transactions matching schemeId or ISIN
+      const matchingSchemeIds = isin
+        ? (
+            await db
+              .select({ id: zerodhaSchemes.id })
+              .from(zerodhaSchemes)
+              .where(eq(zerodhaSchemes.isin, isin))
+          ).map((s) => s.id)
+        : scheme?.id
+          ? [scheme.id]
+          : [];
+
+      const zTxs =
+        matchingSchemeIds.length > 0
+          ? await db
+              .select()
+              .from(zerodhaTransactions)
+              .where(
+                and(
+                  inArray(zerodhaTransactions.schemeId, matchingSchemeIds),
+                  lte(zerodhaTransactions.date, selectedReport.asOfDate)
+                )
+              )
+              .orderBy(asc(zerodhaTransactions.date))
+          : [];
+
+      const ticker =
+        scheme?.schemeCodeApi ||
+        (holdingType === "equity" ? `${symbol}.NS` : null);
+      const [historyDetails, benchDetails] = await Promise.all([
+        ticker
+          ? holdingType === "equity"
+            ? getZerodhaStockHistoryForSymbol(ticker)
+            : getZerodhaSchemeHistoryForDbCode(ticker)
+          : Promise.resolve(null),
+        getBenchmarkHistory(benchmarkCode),
+      ]);
+
+      const fundNavHistory = historyDetails?.data || [];
+      const benchNavHistory = benchDetails?.data || [];
+
+      const fundTxs = [...zTxs];
+      const hasBuyTx = fundTxs.some((tx: any) => tx.type === "BUY");
+
+      if (!hasBuyTx && h.averagePrice > 0) {
+        let ipoDate = selectedReport.asOfDate;
+        if (fundNavHistory.length > 0) {
+          const parseApiDate = (s: string) => {
+            const [dd, mm, yyyy] = s.split("-");
+            return new Date(`${yyyy}-${mm}-${dd}`);
           };
+          const sorted = [...fundNavHistory].sort(
+            (a, b) =>
+              parseApiDate(a.date).getTime() - parseApiDate(b.date).getTime()
+          );
+          const oldest = sorted[0];
+          const [dd, mm, yyyy] = oldest.date.split("-");
+          ipoDate = `${yyyy}-${mm}-${dd}`;
         }
+
+        const totalSoldUnits = fundTxs
+          .filter((t: any) => t.type === "SELL")
+          .reduce((s: number, t: any) => s + (t.units || 0), 0);
+        const ipoUnits = h.quantity + totalSoldUnits;
+        const ipoAmount = Math.round(ipoUnits * h.averagePrice * 100) / 100;
+
+        fundTxs.unshift({
+          id: -1,
+          memberId: null,
+          schemeId: scheme?.id || null,
+          folioNo: null,
+          date: ipoDate,
+          type: "BUY",
+          rawTransactionType: "ipo_allotment",
+          units: ipoUnits,
+          nav: h.averagePrice,
+          amount: ipoAmount,
+          broker: "Zerodha (IPO Allotment)",
+          assetType: holdingType || "equity",
+          uploadedAt: new Date().toISOString(),
+        });
       }
+
+      const mappedTxs = fundTxs.map((tx) => ({
+        date: tx.date,
+        type: tx.type as "BUY" | "SELL",
+        amount: tx.amount,
+        units: tx.units ?? undefined,
+      }));
+
+      let metrics = await calculateAlpha(
+        mappedTxs,
+        selectedReport.asOfDate,
+        h.currentValue,
+        benchmarkCode
+      );
+
+      if (
+        (metrics.portfolioXirr === 0 || isNaN(metrics.portfolioXirr)) &&
+        fundNavHistory.length > 0 &&
+        benchNavHistory.length > 0
+      ) {
+        metrics = calculateXirrFromNav(
+          h.averagePrice,
+          h.currentPrice,
+          selectedReport.asOfDate,
+          fundNavHistory,
+          benchNavHistory
+        );
+      }
+
+      let holdingDays = 0;
+      if (mappedTxs.length > 0) {
+        const oldestTxTime = new Date(mappedTxs[0].date).getTime();
+        const asOfTime = new Date(selectedReport.asOfDate).getTime();
+        holdingDays = Math.max(
+          1,
+          Math.round((asOfTime - oldestTxTime) / (24 * 60 * 60 * 1000))
+        );
+      }
+
       return {
         ...h,
         symbol,
@@ -679,11 +740,11 @@ export async function getZerodhaDashboardData(
         isin,
         sector,
         instrumentType: category,
-        xirr: null,
-        cagr: null,
-        holdingDays: 0,
-        benchmarkXirr: null,
-        alpha: null,
+        xirr: metrics.portfolioXirr,
+        cagr: metrics.portfolioXirr,
+        holdingDays,
+        benchmarkXirr: metrics.benchmarkXirr,
+        alpha: metrics.alpha,
         benchmarkCode,
         benchmarkName,
       };

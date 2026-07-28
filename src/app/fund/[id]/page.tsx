@@ -291,6 +291,48 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   ]);
 
   // 3. Format transactions for XIRR/Alpha calculation
+  // For Zerodha or MSFL holdings where no BUY transaction exists (e.g., IPO Allotments),
+  // generate a synthetic BUY transaction from average purchase price and quantity.
+  const hasBuyTx = fundTxs.some((tx: any) => tx.type === "BUY");
+  if ((isZerodha || isMsfl) && !hasBuyTx && holding.purchaseNav > 0) {
+    let ipoDate = holding.asOfDate;
+    if (fundDetails?.data && fundDetails.data.length > 0) {
+      const parseApiDate = (s: string) => {
+        const [dd, mm, yyyy] = s.split("-");
+        return new Date(`${yyyy}-${mm}-${dd}`);
+      };
+      const sorted = [...fundDetails.data].sort(
+        (a, b) =>
+          parseApiDate(a.date).getTime() - parseApiDate(b.date).getTime()
+      );
+      const oldest = sorted[0];
+      const [dd, mm, yyyy] = oldest.date.split("-");
+      ipoDate = `${yyyy}-${mm}-${dd}`;
+    }
+
+    const totalSoldUnits = fundTxs
+      .filter((t: any) => t.type === "SELL")
+      .reduce((s: number, t: any) => s + (t.units || 0), 0);
+    const ipoUnits = holding.balanceUnits + totalSoldUnits;
+    const ipoAmount = Math.round(ipoUnits * holding.purchaseNav * 100) / 100;
+
+    fundTxs.unshift({
+      id: -1,
+      memberId: holding.memberId || null,
+      schemeId: holding.schemeId || null,
+      folioNo: holding.folioNo || null,
+      date: ipoDate,
+      type: "BUY",
+      rawTransactionType: "ipo_allotment",
+      units: ipoUnits,
+      nav: holding.purchaseNav,
+      amount: ipoAmount,
+      broker: isZerodha ? "Zerodha (IPO Allotment)" : "MSFL (IPO Allotment)",
+      assetType: holding.holdingType || "equity",
+      uploadedAt: new Date().toISOString(),
+    });
+  }
+
   const mappedTxs = fundTxs.map(
     (tx: {
       date: string;
@@ -345,7 +387,14 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       holding.currentValue,
       benchmarkCode
     );
-  } else if ((isMsfl || isZerodha) && fundDetails?.data && benchDetails?.data) {
+  }
+
+  if (
+    (isMsfl || isZerodha) &&
+    (metrics.portfolioXirr === 0 || isNaN(metrics.portfolioXirr)) &&
+    fundDetails?.data &&
+    benchDetails?.data
+  ) {
     // For MSFL/Zerodha: compute NAV-based XIRR using purchase/current NAV as fallback
     metrics = calculateXirrFromNav(
       holding.purchaseNav,

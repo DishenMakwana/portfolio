@@ -1309,16 +1309,13 @@ export default function OverviewTab({
                   >
                     Share {renderSortIcon(subCatSort, "value")}
                   </th>
-                  <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Bar
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {sortedSubCats.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={3}
                       className="px-5 py-6 text-center text-slate-500 text-xs"
                     >
                       No data
@@ -1355,20 +1352,6 @@ export default function OverviewTab({
                             {share.toFixed(1)}%
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-right w-24">
-                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <motion.div
-                              className={`h-full rounded-full ${OVERVIEW_BG_CLASSES[i % OVERVIEW_BG_CLASSES.length]}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${share}%` }}
-                              transition={{
-                                delay: 0.6 + i * 0.07,
-                                duration: 0.5,
-                                ease: "easeOut",
-                              }}
-                            />
-                          </div>
-                        </td>
                       </tr>
                     );
                   })
@@ -1386,7 +1369,6 @@ export default function OverviewTab({
                     <td className="px-5 py-3 text-right font-bold text-violet-400">
                       100%
                     </td>
-                    <td className="px-5 py-3" />
                   </tr>
                 </tfoot>
               )}
