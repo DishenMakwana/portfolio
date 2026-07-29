@@ -67,6 +67,7 @@ export async function uploadReportAction(
 
     // Check if snapshot with this date already exists to prevent duplicate uploads
     const existing = await db.query.reports.findFirst({
+      columns: { id: true },
       where: eq(reports.asOfDate, parsed.asOfDate),
     });
 
@@ -333,7 +334,11 @@ export async function getDashboardDataAction(
     reportIdsToCheck.push(previousReport.id);
   }
   const allMemberCagrs = await db
-    .select()
+    .select({
+      reportId: memberReportCagrs.reportId,
+      memberId: memberReportCagrs.memberId,
+      cagr: memberReportCagrs.cagr,
+    })
     .from(memberReportCagrs)
     .where(inArray(memberReportCagrs.reportId, reportIdsToCheck));
   const memberCagrMap = new Map<string, number>();
@@ -343,7 +348,18 @@ export async function getDashboardDataAction(
 
   // 1. Fetch transactions up to report date
   const txHistory = await db
-    .select()
+    .select({
+      id: txTable.id,
+      memberId: txTable.memberId,
+      schemeId: txTable.schemeId,
+      folioNo: txTable.folioNo,
+      date: txTable.date,
+      type: txTable.type,
+      units: txTable.units,
+      nav: txTable.nav,
+      amount: txTable.amount,
+      sourceReportId: txTable.sourceReportId,
+    })
     .from(txTable)
     .where(lte(txTable.date, selectedReport.asOfDate));
 
@@ -500,8 +516,33 @@ export async function getDashboardDataAction(
   }
 
   // 2. Calculate Family Member Summaries in parallel
-  const dbMembers = await db.select().from(familyMembers);
-  const dbMembersMap = new Map<string, typeof familyMembers.$inferSelect>();
+  const dbMembers = await db
+    .select({
+      id: familyMembers.id,
+      name: familyMembers.name,
+      pan: familyMembers.pan,
+      address: familyMembers.address,
+      email: familyMembers.email,
+      mobile: familyMembers.mobile,
+      dematNominee: familyMembers.dematNominee,
+      dpId: familyMembers.dpId,
+      clientId: familyMembers.clientId,
+      dpName: familyMembers.dpName,
+      boSubStatus: familyMembers.boSubStatus,
+      bsda: familyMembers.bsda,
+      rgess: familyMembers.rgess,
+      accountStatus: familyMembers.accountStatus,
+      frozenStatus: familyMembers.frozenStatus,
+      boStatus: familyMembers.boStatus,
+      nsdlId: familyMembers.nsdlId,
+      dob: familyMembers.dob,
+      aadhaarStatus: familyMembers.aadhaarStatus,
+      linkedBankName: familyMembers.linkedBankName,
+      linkedBankIfsc: familyMembers.linkedBankIfsc,
+      linkedBankAccountNo: familyMembers.linkedBankAccountNo,
+    })
+    .from(familyMembers);
+  const dbMembersMap = new Map<string, (typeof dbMembers)[number]>();
   dbMembers.forEach((m) => {
     dbMembersMap.set(m.name, m);
   });
@@ -675,7 +716,18 @@ export async function getDashboardDataAction(
     chronologicalReports[chronologicalReports.length - 1]?.asOfDate ||
     selectedReport.asOfDate;
   const timelineTxHistory = await db
-    .select()
+    .select({
+      id: txTable.id,
+      memberId: txTable.memberId,
+      schemeId: txTable.schemeId,
+      folioNo: txTable.folioNo,
+      date: txTable.date,
+      type: txTable.type,
+      units: txTable.units,
+      nav: txTable.nav,
+      amount: txTable.amount,
+      sourceReportId: txTable.sourceReportId,
+    })
     .from(txTable)
     .where(lte(txTable.date, latestTimelineDate));
 

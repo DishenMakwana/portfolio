@@ -88,9 +88,9 @@ export interface FactsheetChartPoint {
   date: string;
   timestamp: number;
   fundNav: number;
-  benchNav: number;
+  benchNav: number | null;
   fundReturn: number;
-  benchReturn: number;
+  benchReturn: number | null;
   txs?: { type: string; amount: number }[];
 }
 

@@ -104,7 +104,14 @@ export async function autoMapAllZerodhaSchemesAction(
   onlyUnmapped = true
 ): Promise<ZerodhaAutoMapResult[]> {
   try {
-    const allSchemes = await db.query.zerodhaSchemes.findMany();
+    const allSchemes = await db.query.zerodhaSchemes.findMany({
+      columns: {
+        id: true,
+        name: true,
+        isin: true,
+        schemeCodeApi: true,
+      },
+    });
     const results: ZerodhaAutoMapResult[] = [];
 
     for (const s of allSchemes) {

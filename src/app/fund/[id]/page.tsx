@@ -81,6 +81,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
     if (mHolding) {
       const scheme = await db.query.msflSchemes.findFirst({
+        columns: {
+          id: true,
+          schemeCodeApi: true,
+        },
         where: eq(msflSchemes.name, mHolding.schemeName || ""),
       });
 
@@ -139,6 +143,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     if (zHolding) {
       if (zHolding.holdingType === "equity") {
         const scheme = await db.query.zerodhaSchemes.findFirst({
+          columns: {
+            id: true,
+            schemeCodeApi: true,
+            category: true,
+          },
           where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
 
@@ -161,6 +170,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       } else {
         // Find matching scheme in DB to fetch API mapping code
         const scheme = await db.query.zerodhaSchemes.findFirst({
+          columns: {
+            id: true,
+            schemeCodeApi: true,
+            category: true,
+          },
           where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
 
@@ -247,7 +261,20 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         : [holding.schemeId!];
 
       return db
-        .select()
+        .select({
+          id: zerodhaTransactions.id,
+          memberId: zerodhaTransactions.memberId,
+          schemeId: zerodhaTransactions.schemeId,
+          folioNo: zerodhaTransactions.folioNo,
+          date: zerodhaTransactions.date,
+          type: zerodhaTransactions.type,
+          rawTransactionType: zerodhaTransactions.rawTransactionType,
+          units: zerodhaTransactions.units,
+          nav: zerodhaTransactions.nav,
+          amount: zerodhaTransactions.amount,
+          assetType: zerodhaTransactions.assetType,
+          broker: zerodhaTransactions.broker,
+        })
         .from(zerodhaTransactions)
         .where(
           and(
@@ -267,7 +294,17 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         : !holding.schemeId || !holding.memberId
           ? Promise.resolve([])
           : db
-              .select()
+              .select({
+                id: transactions.id,
+                memberId: transactions.memberId,
+                schemeId: transactions.schemeId,
+                folioNo: transactions.folioNo,
+                date: transactions.date,
+                type: transactions.type,
+                units: transactions.units,
+                nav: transactions.nav,
+                amount: transactions.amount,
+              })
               .from(transactions)
               .where(
                 and(
@@ -503,7 +540,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
 
   // 7. Generate comparison chart data
   const chartData =
-    fundNavHistory.length > 0 && benchNavHistory.length > 0
+    fundNavHistory.length > 0
       ? generateFactsheetChartData(
           fundNavHistory,
           benchNavHistory,

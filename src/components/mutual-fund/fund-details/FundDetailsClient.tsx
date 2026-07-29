@@ -50,8 +50,6 @@ const CustomTooltip = ({
   benchmarkName,
 }: CustomTooltipProps): React.JSX.Element | null => {
   if (active && payload && payload.length) {
-    const fundVal = payload[0].value;
-    const benchVal = payload[1].value;
     const dataPoint = payload[0].payload;
     return (
       <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-xl shadow-2xl backdrop-blur-md">
@@ -74,23 +72,25 @@ const CustomTooltip = ({
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
-              ({formatPercent(fundVal)})
+              ({formatPercent(dataPoint.fundReturn)})
             </span>
           </div>
-          <div className="flex justify-between items-center gap-6">
-            <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
-              {benchmarkName} Return:
-            </span>
-            <span className="font-mono text-indigo-300 font-bold">
-              ₹
-              {dataPoint.benchNav.toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}{" "}
-              ({formatPercent(benchVal)})
-            </span>
-          </div>
+          {dataPoint.benchNav !== null && dataPoint.benchReturn !== null && (
+            <div className="flex justify-between items-center gap-6">
+              <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+                {benchmarkName} Return:
+              </span>
+              <span className="font-mono text-indigo-300 font-bold">
+                ₹
+                {dataPoint.benchNav.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{" "}
+                ({formatPercent(dataPoint.benchReturn)})
+              </span>
+            </div>
+          )}
         </div>
         {dataPoint.txs && dataPoint.txs.length > 0 && (
           <div className="mt-3 pt-2 border-t border-slate-800 space-y-1">
@@ -187,11 +187,15 @@ export default function FundDetailsClient({
 
     // Recalculate returns based on the first point in the selected timeframe
     const baseFundNav = points[0].fundNav || 1;
-    const baseBenchNav = points[0].benchNav || 1;
+    const baseBenchNav =
+      points.find((pt) => pt.benchNav !== null)?.benchNav || 1;
 
     return points.map((pt) => {
       const fundReturn = ((pt.fundNav - baseFundNav) / baseFundNav) * 100;
-      const benchReturn = ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
+      const benchReturn =
+        pt.benchNav === null
+          ? null
+          : ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
       return {
         ...pt,
         fundReturn,

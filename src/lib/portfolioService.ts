@@ -64,6 +64,7 @@ export async function saveReportSnapshot(
 ): Promise<number> {
   // 1. Delete existing report for the same date if it exists (for overwrite)
   const existingReport = await db.query.reports.findFirst({
+    columns: { id: true },
     where: eq(reports.asOfDate, asOfDate),
   });
 
@@ -433,18 +434,44 @@ export async function saveSipMandates(
   let skipped = 0;
 
   // Pre-fetch all family members, schemes, and mandates to avoid repeated queries in loop
-  const allMembers = await db.select().from(familyMembers);
-  const allSchemes = await db.select().from(schemes);
-  const allMandates = await db.select().from(sipMandates);
+  const allMembers = await db
+    .select({
+      id: familyMembers.id,
+      name: familyMembers.name,
+      pan: familyMembers.pan,
+    })
+    .from(familyMembers);
+  const allSchemes = await db
+    .select({
+      id: schemes.id,
+      name: schemes.name,
+      category: schemes.category,
+      schemeCodeApi: schemes.schemeCodeApi,
+      mappedAt: schemes.mappedAt,
+    })
+    .from(schemes);
+  const allMandates = await db
+    .select({
+      id: sipMandates.id,
+      memberId: sipMandates.memberId,
+      schemeId: sipMandates.schemeId,
+      folioNo: sipMandates.folioNo,
+      monthlyAmount: sipMandates.monthlyAmount,
+      startMonth: sipMandates.startMonth,
+      isActive: sipMandates.isActive,
+      uploadedAt: sipMandates.uploadedAt,
+      sourceFile: sipMandates.sourceFile,
+    })
+    .from(sipMandates);
 
   // Cache in Maps for fast, in-memory lookups
-  const membersMap = new Map<string, typeof familyMembers.$inferSelect>(
+  const membersMap = new Map<string, (typeof allMembers)[number]>(
     allMembers.map((m) => [m.name.trim().toLowerCase(), m])
   );
-  const schemesMap = new Map<string, typeof schemes.$inferSelect>(
+  const schemesMap = new Map<string, (typeof allSchemes)[number]>(
     allSchemes.map((s) => [s.name.trim().toLowerCase(), s])
   );
-  const mandatesMap = new Map<string, typeof sipMandates.$inferSelect>(
+  const mandatesMap = new Map<string, (typeof allMandates)[number]>(
     allMandates.map((m) => [
       `${m.memberId}_${m.schemeId}_${m.folioNo.trim().toLowerCase()}`,
       m,
@@ -584,7 +611,14 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
     .orderBy(asc(familyMembers.name), asc(schemes.name));
 
   // Fetch all monthly transaction payment records
-  const txs = await db.select().from(sipTransactions);
+  const txs = await db
+    .select({
+      id: sipTransactions.id,
+      sipMandateId: sipTransactions.sipMandateId,
+      month: sipTransactions.month,
+      amount: sipTransactions.amount,
+    })
+    .from(sipTransactions);
 
   // Group transactions by mandateId
   const txsMap: Record<number, Record<string, number>> = {};

@@ -151,7 +151,10 @@ function calculateBenchmarkReturns(
 
 async function getMsflSnapshotTotals(reportId: number) {
   const rows = await db
-    .select()
+    .select({
+      investedValue: msflHoldings.investedValue,
+      currentValue: msflHoldings.currentValue,
+    })
     .from(msflHoldings)
     .where(eq(msflHoldings.reportId, reportId));
 
@@ -189,7 +192,12 @@ export async function saveMsflHoldingsReport(
 
   const reportId = reportResult[0].id;
 
-  const schemesList = await db.select().from(msflSchemes);
+  const schemesList = await db
+    .select({
+      id: msflSchemes.id,
+      name: msflSchemes.name,
+    })
+    .from(msflSchemes);
   const existingNames = new Set(schemesList.map((s) => s.name));
 
   // Insert novel schemes with standard Yahoo Finance suffix (.NS)
@@ -208,7 +216,12 @@ export async function saveMsflHoldingsReport(
     }
   }
 
-  const updatedSchemesList = await db.select().from(msflSchemes);
+  const updatedSchemesList = await db
+    .select({
+      id: msflSchemes.id,
+      name: msflSchemes.name,
+    })
+    .from(msflSchemes);
   const schemeMap = new Map<string, number>();
   for (const s of updatedSchemesList) {
     schemeMap.set(s.name, s.id);
@@ -541,7 +554,12 @@ export async function getMsflDashboardData(
   reportId?: number
 ): Promise<MsflDashboardData> {
   const reportsList = await db
-    .select()
+    .select({
+      id: msflReports.id,
+      asOfDate: msflReports.asOfDate,
+      filename: msflReports.filename,
+      uploadedAt: msflReports.uploadedAt,
+    })
     .from(msflReports)
     .orderBy(desc(msflReports.asOfDate), desc(msflReports.id));
 
@@ -595,7 +613,14 @@ export async function getMsflDashboardData(
     .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
     .where(eq(msflHoldings.reportId, selectedReport.id));
 
-  const schemesList = await db.select().from(msflSchemes);
+  const schemesList = await db
+    .select({
+      id: msflSchemes.id,
+      name: msflSchemes.name,
+      category: msflSchemes.category,
+      schemeCodeApi: msflSchemes.schemeCodeApi,
+    })
+    .from(msflSchemes);
 
   const niftyHistory = await getBenchmarkHistory("120716");
   const niftyData = niftyHistory?.data || [];

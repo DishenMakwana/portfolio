@@ -788,7 +788,23 @@ export async function getBenchmarkRule(
 ): Promise<BenchmarkRuleDetails> {
   try {
     const rules = await db
-      .select()
+      .select({
+        id: benchmarkRules.id,
+        categoryPattern: benchmarkRules.categoryPattern,
+        schemeNamePattern: benchmarkRules.schemeNamePattern,
+        benchmarkCode: benchmarkRules.benchmarkCode,
+        benchmarkName: benchmarkRules.benchmarkName,
+        benchmarkFundName: benchmarkRules.benchmarkFundName,
+        corpusCr: benchmarkRules.corpusCr,
+        expenseRatio: benchmarkRules.expenseRatio,
+        exitLoad: benchmarkRules.exitLoad,
+        allocationEquity: benchmarkRules.allocationEquity,
+        allocationDebt: benchmarkRules.allocationDebt,
+        allocationGold: benchmarkRules.allocationGold,
+        allocationGlobalEquity: benchmarkRules.allocationGlobalEquity,
+        allocationOther: benchmarkRules.allocationOther,
+        priority: benchmarkRules.priority,
+      })
       .from(benchmarkRules)
       .orderBy(desc(benchmarkRules.priority));
 
@@ -922,7 +938,7 @@ export async function getBenchmarkFundNameForCode(
 ): Promise<string> {
   try {
     const rule = await db
-      .select()
+      .select({ benchmarkFundName: benchmarkRules.benchmarkFundName })
       .from(benchmarkRules)
       .where(eq(benchmarkRules.benchmarkCode, code))
       .limit(1);
@@ -938,7 +954,7 @@ export async function getBenchmarkFundNameForCode(
 export async function getBenchmarkNameForCode(code: string): Promise<string> {
   try {
     const rule = await db
-      .select()
+      .select({ benchmarkName: benchmarkRules.benchmarkName })
       .from(benchmarkRules)
       .where(eq(benchmarkRules.benchmarkCode, code))
       .limit(1);
@@ -1080,7 +1096,7 @@ export function generateFactsheetChartData(
   asOfDate: string,
   transactions: { date: string; type: "BUY" | "SELL"; amount: number }[]
 ): FactsheetChartPoint[] {
-  if (fundNavHistory.length === 0 || benchNavHistory.length === 0) return [];
+  if (fundNavHistory.length === 0) return [];
 
   const targetDate = new Date(asOfDate);
 
@@ -1136,15 +1152,9 @@ export function generateFactsheetChartData(
     }
   }
 
-  // Align start date to the latest of fund listing date or benchmark listing date
-  let finalStartDate = earliestFundDate;
-  if (earliestFundDate.getTime() > 0 && earliestBenchDate.getTime() > 0) {
-    finalStartDate = new Date(
-      Math.max(earliestFundDate.getTime(), earliestBenchDate.getTime())
-    );
-  } else if (earliestBenchDate.getTime() > 0) {
-    finalStartDate = earliestBenchDate;
-  }
+  // Keep the fund graph from fund inception. Benchmark starts only when its
+  // first NAV exists; no pre-inception benchmark value is fabricated.
+  const finalStartDate = earliestFundDate;
 
   const diffTime = targetDate.getTime() - finalStartDate.getTime();
   const weeksToGenerate = Math.max(
@@ -1152,30 +1162,44 @@ export function generateFactsheetChartData(
     Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000))
   );
 
-  const tempPoints: { dateObj: Date; fundNav: number; benchNav: number }[] = [];
+  const pointDates = new Set<number>();
 
   for (let i = weeksToGenerate; i >= 0; i--) {
     const checkDate = new Date(
       targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
     );
-    const checkDateStr = checkDate.toISOString().split("T")[0];
-
-    const fundNav = findClosestNav(fundNavHistory, checkDateStr);
-    const benchNav = findClosestNav(benchNavHistory, checkDateStr);
-
-    tempPoints.push({
-      dateObj: checkDate,
-      fundNav,
-      benchNav,
-    });
+    pointDates.add(checkDate.getTime());
   }
 
+  // Preserve exact inception points, including a benchmark that began later.
+  pointDates.add(earliestFundDate.getTime());
+  if (earliestBenchDate.getTime() > 0)
+    pointDates.add(earliestBenchDate.getTime());
+
+  const tempPoints = [...pointDates]
+    .sort((a, b) => a - b)
+    .map((timestamp) => {
+      const dateObj = new Date(timestamp);
+      const checkDateStr = dateObj.toISOString().split("T")[0];
+      const fundNav = findClosestNav(fundNavHistory, checkDateStr);
+      const benchNav =
+        earliestBenchDate.getTime() > 0 &&
+        timestamp >= earliestBenchDate.getTime()
+          ? findClosestNav(benchNavHistory, checkDateStr)
+          : null;
+      return { dateObj, fundNav, benchNav };
+    });
+
   const baseFundNav = tempPoints[0]?.fundNav || 1;
-  const baseBenchNav = tempPoints[0]?.benchNav || 1;
+  const baseBenchNav =
+    tempPoints.find((pt) => pt.benchNav !== null)?.benchNav || 1;
 
   const chartData: FactsheetChartPoint[] = tempPoints.map((pt) => {
     const fundReturn = ((pt.fundNav - baseFundNav) / baseFundNav) * 100;
-    const benchReturn = ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
+    const benchReturn =
+      pt.benchNav === null
+        ? null
+        : ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
 
     return {
       date: pt.dateObj.toLocaleDateString("en-IN", {

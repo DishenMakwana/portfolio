@@ -15,6 +15,8 @@ import {
   Activity,
   Target,
   ChevronUp,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import {
   uploadZerodhaHoldingsAction,
@@ -217,6 +219,41 @@ export default function ZerodhaDashboard({
     );
   }
 
+  const previousSnapshot = data.insights.previousSnapshot;
+  const hasPreviousReport = !!previousSnapshot?.date;
+
+  const renderVsLast = (diff: number | undefined | null) => {
+    if (!hasPreviousReport || diff === undefined || diff === null) return null;
+    const rounded = Math.round(diff);
+
+    if (rounded === 0) {
+      return (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1 rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-0.5 text-[10px] font-bold text-slate-400">
+            No change vs last
+          </span>
+        </div>
+      );
+    }
+
+    const isUp = rounded > 0;
+    return (
+      <div className="mt-2">
+        <span
+          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+            isUp
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              : "border-red-500/20 bg-red-500/10 text-red-400"
+          }`}
+        >
+          {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+          {isUp ? "" : "-"}
+          {formatCurrency(Math.abs(rounded))} vs last
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* HEADER SECTION */}
@@ -294,6 +331,7 @@ export default function ZerodhaDashboard({
             <div className="text-xs font-semibold mt-2 text-slate-400">
               Invested: {formatCurrency(totals.invested)}
             </div>
+            {renderVsLast(previousSnapshot?.currentValueChange)}
           </div>
         </motion.div>
 
@@ -344,6 +382,7 @@ export default function ZerodhaDashboard({
             >
               {formatPercent(totals.absoluteReturn)} absolute return
             </div>
+            {renderVsLast(previousSnapshot?.gainChange)}
           </div>
         </motion.div>
 
@@ -381,6 +420,7 @@ export default function ZerodhaDashboard({
                 : 0}
               %)
             </div>
+            {renderVsLast(previousSnapshot?.stocksCurrentValueChange)}
           </div>
         </motion.div>
 
@@ -418,6 +458,7 @@ export default function ZerodhaDashboard({
                 : 0}
               %)
             </div>
+            {renderVsLast(previousSnapshot?.fundsCurrentValueChange)}
           </div>
         </motion.div>
       </div>

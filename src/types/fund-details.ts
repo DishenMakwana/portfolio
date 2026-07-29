@@ -37,16 +37,16 @@ export interface CustomTooltipPoint {
   date: string;
   timestamp: number;
   fundNav: number;
-  benchNav: number;
+  benchNav: number | null;
   fundReturn: number;
-  benchReturn: number;
+  benchReturn: number | null;
   txs?: Array<{ type: string; amount: number }>;
 }
 
 export interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{
-    value: number;
+    value: number | null;
     name: string;
     payload: CustomTooltipPoint;
   }>;

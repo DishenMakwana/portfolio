@@ -105,7 +105,14 @@ export async function autoMapAllMsflSchemesAction(
   onlyUnmapped = true
 ): Promise<AutoMapMsflSchemeResult[]> {
   try {
-    const allSchemes = await db.query.msflSchemes.findMany();
+    const allSchemes = await db.query.msflSchemes.findMany({
+      columns: {
+        id: true,
+        name: true,
+        isin: true,
+        schemeCodeApi: true,
+      },
+    });
     const results = [];
 
     for (const s of allSchemes) {

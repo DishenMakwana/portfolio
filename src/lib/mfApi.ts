@@ -9,6 +9,8 @@ export function isSpecializedFundSchemeCode(
 }
 
 let lastRequestTime = 0;
+const MF_API_DETAILS_TIMEOUT_MS = 60000;
+const MF_API_SEARCH_TIMEOUT_MS = 10000;
 
 async function throttleRequest(): Promise<void> {
   const minInterval = 500; // 500ms delay between API calls
@@ -66,7 +68,12 @@ export async function searchMutualFund(
   const url = `https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`;
   try {
     await throttleRequest();
-    const data = await axiosGetWithRetry<MfSearchResult[]>(url, 4000, 1, 500);
+    const data = await axiosGetWithRetry<MfSearchResult[]>(
+      url,
+      MF_API_SEARCH_TIMEOUT_MS,
+      2,
+      1000
+    );
     return { success: true, data: Array.isArray(data) ? data : [] };
   } catch (e: unknown) {
     const errorMsg = e instanceof Error ? e.message : String(e);
@@ -106,9 +113,9 @@ export async function fetchMfDetails(
     await throttleRequest();
     const data = await axiosGetWithRetry<MfDetailsResponse>(
       url,
-      15000,
-      2,
-      1000
+      MF_API_DETAILS_TIMEOUT_MS,
+      3,
+      2000
     );
     return { success: true, data };
   } catch (e: unknown) {

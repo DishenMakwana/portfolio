@@ -65,8 +65,12 @@ function emptyZerodhaInsightsData(): ZerodhaInsightsData {
       currentValueChange: 0,
       gainChange: 0,
       returnPctChange: 0,
+      stocksInvestedChange: 0,
+      stocksCurrentValueChange: 0,
+      stocksGainChange: 0,
       fundsInvestedChange: 0,
       fundsCurrentValueChange: 0,
+      fundsGainChange: 0,
     },
   };
 }
@@ -78,6 +82,7 @@ export async function saveZerodhaHoldingsReport(
 ): Promise<number> {
   // 1. Check if report for this date already exists. If yes, overwrite (delete old one)
   const existing = await db.query.zerodhaReports.findFirst({
+    columns: { id: true },
     where: eq(zerodhaReports.asOfDate, asOfDate),
   });
 
@@ -102,6 +107,14 @@ export async function saveZerodhaHoldingsReport(
     for (const h of holdings) {
       const schemeName = h.symbol;
       let scheme = await db.query.zerodhaSchemes.findFirst({
+        columns: {
+          id: true,
+          name: true,
+          isin: true,
+          holdingType: true,
+          sector: true,
+          instrumentType: true,
+        },
         where: eq(zerodhaSchemes.name, schemeName),
       });
 
@@ -595,7 +608,15 @@ export async function getZerodhaDashboardData(
     .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id))
     .where(eq(zerodhaHoldings.reportId, selectedReport.id));
 
-  const schemesList = await db.select().from(zerodhaSchemes);
+  const schemesList = await db
+    .select({
+      id: zerodhaSchemes.id,
+      name: zerodhaSchemes.name,
+      category: zerodhaSchemes.category,
+      schemeCodeApi: zerodhaSchemes.schemeCodeApi,
+      isin: zerodhaSchemes.isin,
+    })
+    .from(zerodhaSchemes);
 
   const enrichedHoldings = await Promise.all(
     rawHoldings.map(async (h) => {
@@ -627,7 +648,21 @@ export async function getZerodhaDashboardData(
       const zTxs =
         matchingSchemeIds.length > 0
           ? await db
-              .select()
+              .select({
+                id: zerodhaTransactions.id,
+                memberId: zerodhaTransactions.memberId,
+                schemeId: zerodhaTransactions.schemeId,
+                folioNo: zerodhaTransactions.folioNo,
+                date: zerodhaTransactions.date,
+                type: zerodhaTransactions.type,
+                rawTransactionType: zerodhaTransactions.rawTransactionType,
+                units: zerodhaTransactions.units,
+                nav: zerodhaTransactions.nav,
+                amount: zerodhaTransactions.amount,
+                assetType: zerodhaTransactions.assetType,
+                broker: zerodhaTransactions.broker,
+                uploadedAt: zerodhaTransactions.uploadedAt,
+              })
               .from(zerodhaTransactions)
               .where(
                 and(
@@ -991,11 +1026,30 @@ export async function getZerodhaDashboardData(
       returnPctChange: previousTotals
         ? round2(totalAbsoluteReturn - previousTotals.absoluteReturn)
         : 0,
+      stocksInvestedChange: previousTotals
+        ? Math.round(stocksInvested - previousTotals.stocksInvested)
+        : 0,
+      stocksCurrentValueChange: previousTotals
+        ? Math.round(stocksCurrentValue - previousTotals.stocksCurrentValue)
+        : 0,
+      stocksGainChange: previousTotals
+        ? Math.round(
+            stocksGain -
+              (previousTotals.stocksCurrentValue -
+                previousTotals.stocksInvested)
+          )
+        : 0,
       fundsInvestedChange: previousTotals
         ? Math.round(fundsInvested - previousTotals.fundsInvested)
         : 0,
       fundsCurrentValueChange: previousTotals
         ? Math.round(fundsCurrentValue - previousTotals.fundsCurrentValue)
+        : 0,
+      fundsGainChange: previousTotals
+        ? Math.round(
+            fundsGain -
+              (previousTotals.fundsCurrentValue - previousTotals.fundsInvested)
+          )
         : 0,
     },
   };

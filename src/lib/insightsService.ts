@@ -102,7 +102,13 @@ async function getBenchmarkReturns(
 export async function getInsightsData(): Promise<InsightsData> {
   // 1. Get the latest report
   const latestReport = await db
-    .select()
+    .select({
+      id: reports.id,
+      asOfDate: reports.asOfDate,
+      filename: reports.filename,
+      uploadedAt: reports.uploadedAt,
+      cagr: reports.cagr,
+    })
     .from(reports)
     .orderBy(desc(reports.id))
     .limit(1)
