@@ -8,6 +8,10 @@ function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
+function formatSvgCoordinate(value: number): string {
+  return value.toFixed(6);
+}
+
 export default function DonutChart({ slices }: DonutChartProps) {
   const [hoveredSlice, setHoveredSlice] = useState<DonutSlice | null>(null);
 
@@ -32,7 +36,7 @@ export default function DonutChart({ slices }: DonutChartProps) {
     const end = polarToCartesian(cx, cy, r, endAngle);
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
     return {
-      d: `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`,
+      d: `M ${formatSvgCoordinate(start.x)} ${formatSvgCoordinate(start.y)} A ${r} ${r} 0 ${largeArc} 1 ${formatSvgCoordinate(end.x)} ${formatSvgCoordinate(end.y)}`,
       color: slice.color,
       label: slice.label,
       value: slice.value,
