@@ -2,6 +2,7 @@
  * Centralized formatting utilities for the portfolio app.
  * Import from here instead of defining local helpers in component files.
  */
+import { parseHistoryDate } from "./dates";
 
 // ─── Currency Formatters ──────────────────────────────────────────────────────
 
@@ -110,10 +111,13 @@ export function formatLocalDateStr(dateStr: string): string {
 
 /**
  * Formats a standard date string or Date object to a human-readable format.
- * Example: "2026-07-13" → "13 Jul 2026"
+ * Example: "2026-07-13" or "13-07-2026" → "13 Jul 2026"
  */
 export function formatDate(date: string | Date): string {
-  const d = typeof date === "string" ? new Date(date) : date;
+  const d = typeof date === "string" ? parseHistoryDate(date) : date;
+  if (!d || isNaN(d.getTime())) {
+    return typeof date === "string" ? date : "N/A";
+  }
   return d.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",

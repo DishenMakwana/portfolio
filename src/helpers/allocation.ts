@@ -46,6 +46,7 @@ export function mapAllocationAnalysisGroups(
   groups: AllocationAnalysisGroup[],
   totalCurrent: number
 ): AmcPoint[] {
+  if (!Array.isArray(groups)) return [];
   return groups
     .map((group) => {
       const cagr =

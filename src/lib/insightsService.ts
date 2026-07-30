@@ -5,16 +5,31 @@ import {
   schemes,
   holdingsSnapshot,
   sipMandates,
+  sipTransactions,
   memberReportCagrs,
   zerodhaHoldings,
   zerodhaSchemes,
   msflHoldings,
   msflSchemes,
   transactions,
+  schemeNavHistory,
 } from "@/db/schema";
-import { eq, desc, lte } from "drizzle-orm";
+import { eq, desc, lte, lt } from "drizzle-orm";
 import { getBenchmarkHistory, calculateAlpha } from "@/lib/alpha";
-import type { BenchmarkReturns, InsightsData } from "@/types/insights";
+import {
+  calculateFinancialYearSnapshot,
+  createEmptyFinancialYearBalances,
+  getFinancialYearAssetClass,
+  findNavAtOrBefore,
+  getMonthStartFromLabel,
+  isIncludedInMutualFundSnapshot,
+  getFinancialYearStart,
+} from "@/helpers/financial-year";
+import type {
+  BenchmarkReturns,
+  FinancialYearTransaction,
+  InsightsData,
+} from "@/types/insights";
 
 // ─── Benchmark helper ──────────────────────────────────────────────────────────
 async function getBenchmarkReturns(
@@ -99,6 +114,14 @@ async function getBenchmarkReturns(
   };
 }
 
+function getHoldingKey(
+  memberId: number | null,
+  schemeId: number | null,
+  folioNo: string | null
+): string {
+  return `${memberId ?? ""}|${schemeId ?? ""}|${folioNo ?? ""}`;
+}
+
 export async function getInsightsData(): Promise<InsightsData> {
   // 1. Get the latest report
   const latestReport = await db
@@ -125,6 +148,10 @@ export async function getInsightsData(): Promise<InsightsData> {
   const holdings = await db
     .select({
       id: holdingsSnapshot.id,
+      balanceUnits: holdingsSnapshot.balanceUnits,
+      purchaseNav: holdingsSnapshot.purchaseNav,
+      schemeId: holdingsSnapshot.schemeId,
+      schemeCodeApi: schemes.schemeCodeApi,
       purchaseValue: holdingsSnapshot.purchaseValue,
       currentValue: holdingsSnapshot.currentValue,
       gain: holdingsSnapshot.gain,
@@ -186,14 +213,18 @@ export async function getInsightsData(): Promise<InsightsData> {
       id: transactions.id,
       memberId: transactions.memberId,
       schemeId: transactions.schemeId,
+      folioNo: transactions.folioNo,
       date: transactions.date,
       type: transactions.type,
       units: transactions.units,
       nav: transactions.nav,
       amount: transactions.amount,
       sourceReportId: transactions.sourceReportId,
+      schemeCategory: schemes.category,
+      schemeName: schemes.name,
     })
     .from(transactions)
+    .leftJoin(schemes, eq(transactions.schemeId, schemes.id))
     .where(lte(transactions.date, reportDate));
 
   const overallTxs = rawTxs.map((tx) => ({
@@ -202,6 +233,189 @@ export async function getInsightsData(): Promise<InsightsData> {
     amount: tx.amount,
     units: tx.units,
   }));
+
+  const financialYearStart = getFinancialYearStart(reportDate);
+  const openingReport = await db
+    .select({ id: reports.id })
+    .from(reports)
+    .where(lt(reports.asOfDate, financialYearStart))
+    .orderBy(desc(reports.asOfDate))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  const openingHoldings = openingReport
+    ? await db
+        .select({
+          currentValue: holdingsSnapshot.currentValue,
+          category: schemes.category,
+          schemeName: schemes.name,
+        })
+        .from(holdingsSnapshot)
+        .innerJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
+        .where(eq(holdingsSnapshot.reportId, openingReport.id))
+    : [];
+
+  const openingBalances = createEmptyFinancialYearBalances();
+  const closingBalances = createEmptyFinancialYearBalances();
+  for (const holding of holdings) {
+    if (
+      isIncludedInMutualFundSnapshot(holding.schemeCategory, holding.schemeName)
+    ) {
+      closingBalances[
+        getFinancialYearAssetClass(holding.schemeCategory, holding.schemeName)
+      ] += holding.currentValue;
+    }
+  }
+
+  const financialYearTransactions: FinancialYearTransaction[] = rawTxs
+    .filter((tx) => tx.date >= financialYearStart && tx.date <= reportDate)
+    .map((tx) => ({
+      date: tx.date,
+      type: tx.type === "SELL" ? "SELL" : "BUY",
+      amount: tx.amount,
+      category: tx.schemeCategory || "",
+      schemeName: tx.schemeName || "",
+    }));
+
+  const sipPayments = await db
+    .select({
+      month: sipTransactions.month,
+      amount: sipTransactions.amount,
+      memberId: sipMandates.memberId,
+      schemeId: sipMandates.schemeId,
+      folioNo: sipMandates.folioNo,
+      category: schemes.category,
+      schemeName: schemes.name,
+      schemeCodeApi: schemes.schemeCodeApi,
+    })
+    .from(sipTransactions)
+    .innerJoin(sipMandates, eq(sipTransactions.sipMandateId, sipMandates.id))
+    .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id));
+
+  for (const payment of sipPayments) {
+    const paymentDate = getMonthStartFromLabel(payment.month);
+    if (
+      paymentDate &&
+      paymentDate >= financialYearStart &&
+      paymentDate <= reportDate &&
+      payment.amount > 0
+    ) {
+      financialYearTransactions.push({
+        date: paymentDate,
+        type: "BUY",
+        amount: payment.amount,
+        category: payment.category || "Equity",
+        schemeName: payment.schemeName || "",
+      });
+    }
+  }
+
+  if (openingReport) {
+    for (const holding of openingHoldings) {
+      if (
+        isIncludedInMutualFundSnapshot(holding.category, holding.schemeName)
+      ) {
+        openingBalances[
+          getFinancialYearAssetClass(holding.category, holding.schemeName)
+        ] += holding.currentValue;
+      }
+    }
+  } else {
+    const transactionUnits = new Map<string, number>();
+    for (const transaction of rawTxs) {
+      if (transaction.date < financialYearStart) continue;
+      const key = getHoldingKey(
+        transaction.memberId,
+        transaction.schemeId,
+        transaction.folioNo
+      );
+      const signedUnits =
+        transaction.type === "SELL" ? -transaction.units : transaction.units;
+      transactionUnits.set(key, (transactionUnits.get(key) || 0) + signedUnits);
+    }
+
+    const schemeCodes = Array.from(
+      new Set(
+        holdings
+          .map((holding) => holding.schemeCodeApi)
+          .filter((code): code is string => Boolean(code))
+      )
+    );
+    const navHistoryByCode = new Map<
+      string,
+      Array<{ date: string; nav: number }>
+    >();
+    await Promise.all(
+      schemeCodes.map(async (schemeCode) => {
+        const rows = await db
+          .select({ date: schemeNavHistory.date, nav: schemeNavHistory.nav })
+          .from(schemeNavHistory)
+          .where(eq(schemeNavHistory.schemeCode, schemeCode));
+        navHistoryByCode.set(schemeCode, rows);
+      })
+    );
+
+    const sipUnits = new Map<string, number>();
+    for (const payment of sipPayments) {
+      const paymentDate = getMonthStartFromLabel(payment.month);
+      if (
+        !paymentDate ||
+        paymentDate < financialYearStart ||
+        payment.amount <= 0
+      ) {
+        continue;
+      }
+      const navHistory = payment.schemeCodeApi
+        ? navHistoryByCode.get(payment.schemeCodeApi) || []
+        : [];
+      const nav = findNavAtOrBefore(navHistory, paymentDate);
+      if (!nav || nav <= 0) continue;
+      const key = getHoldingKey(
+        payment.memberId,
+        payment.schemeId,
+        payment.folioNo
+      );
+      sipUnits.set(key, (sipUnits.get(key) || 0) + payment.amount / nav);
+    }
+
+    for (const holding of holdings) {
+      if (
+        !isIncludedInMutualFundSnapshot(
+          holding.schemeCategory,
+          holding.schemeName
+        )
+      ) {
+        continue;
+      }
+      const key = getHoldingKey(
+        holding.memberId,
+        holding.schemeId,
+        holding.folioNo
+      );
+      const unitsAtStart =
+        holding.balanceUnits -
+        (transactionUnits.get(key) || 0) -
+        (sipUnits.get(key) || 0);
+      const navHistory = holding.schemeCodeApi
+        ? navHistoryByCode.get(holding.schemeCodeApi) || []
+        : [];
+      const openingNav =
+        findNavAtOrBefore(navHistory, financialYearStart) ||
+        holding.purchaseNav;
+      if (unitsAtStart > 0 && openingNav > 0) {
+        openingBalances[
+          getFinancialYearAssetClass(holding.schemeCategory, holding.schemeName)
+        ] += unitsAtStart * openingNav;
+      }
+    }
+  }
+
+  const currentFinancialYearSnapshot = calculateFinancialYearSnapshot(
+    reportDate,
+    openingBalances,
+    closingBalances,
+    financialYearTransactions
+  );
 
   const { portfolioXirr, benchmarkXirr } = await calculateAlpha(
     overallTxs,
@@ -376,6 +590,7 @@ export async function getInsightsData(): Promise<InsightsData> {
     schemes: schemesAgg,
     sips: sipsOut,
     benchmarkReturns,
+    currentFinancialYearSnapshot,
     zerodhaHoldings: zHolds.map((h) => ({
       symbol: h.symbol || "",
       quantity: h.quantity,

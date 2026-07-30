@@ -61,6 +61,7 @@ export interface InsightsData {
     startMonth: string;
   }>;
   benchmarkReturns: BenchmarkReturns;
+  currentFinancialYearSnapshot: FinancialYearSnapshot;
   zerodhaHoldings: Array<{
     symbol: string;
     quantity: number;
@@ -76,8 +77,38 @@ export interface InsightsData {
   }>;
 }
 
+export type FinancialYearAssetClass = "equity" | "hybrid" | "debtOthers";
+
+export interface FinancialYearSnapshotRow {
+  label: string;
+  equity: number;
+  hybrid: number;
+  debtOthers: number;
+  total: number;
+  equityXirr?: number;
+  hybridXirr?: number;
+  debtOthersXirr?: number;
+  totalXirr?: number;
+}
+
+export interface FinancialYearSnapshot {
+  label: string;
+  startDate: string;
+  endDate: string;
+  rows: FinancialYearSnapshotRow[];
+}
+
+export interface FinancialYearTransaction {
+  date: string;
+  type: "BUY" | "SELL";
+  amount: number;
+  category: string;
+  schemeName: string;
+}
+
 export type Tab =
   | "overview"
+  | "fy-snapshot"
   | "funds"
   | "members"
   | "sip"
@@ -152,6 +183,119 @@ export interface SortState {
 
 export interface InsightsDashboardProps {
   data: InsightsData;
+}
+
+export interface OverviewScoreGrade {
+  grade: string;
+  text: string;
+}
+
+export interface OverviewTabProps {
+  data: InsightsData;
+  weightedCagr: number;
+  benchmarkDelta: number;
+  benchmarkLabel: string;
+  portfolioXirr: number;
+  benchmarkXirr: number;
+  xirrRating: OverviewScoreGrade;
+  cagrSubMetrics: SubMetricItem[];
+  xirrSubMetrics: SubMetricItem[];
+  memberSipTotals: Record<string, { sipsCount: number; totalAmount: number }>;
+  getCategoryDotClass: (category: string) => string;
+  getCategoryGradientClass: (category: string) => string;
+  getCategoryColor: (category: string) => string;
+  getXirrGrade: (value: number) => OverviewScoreGrade;
+}
+
+export interface FinancialYearSnapshotTabProps {
+  snapshot: FinancialYearSnapshot;
+}
+
+export interface AnalysisTabProps {
+  analysisData: AmcPoint[];
+  niftyBenchmark: number;
+  sortKey: AllocationAnalysisSortKey;
+  sortDir: "asc" | "desc";
+  onSort: (key: AllocationAnalysisSortKey) => void;
+}
+
+export interface SipProjectionRow {
+  year: number;
+  monthlySip: number;
+  corpus: number;
+}
+
+export interface SipPlannerTabProps {
+  baseSip: number;
+  projectionRows: SipProjectionRow[];
+  stepUpPct: number;
+  onStepUpChange: (value: number) => void;
+}
+
+export interface MembersTabProps {
+  memberCagrs: MemberCagrPoint[];
+  niftyBenchmark: number;
+}
+
+export interface SchemeItem {
+  scheme: string;
+  category: string;
+  invested: number;
+  current: number;
+  gain: number;
+  absReturn: number;
+  avgCagr: number;
+  memberCount: number;
+  holdings: Array<{
+    holdingId: number;
+    memberName: string;
+    folioNo: string;
+    invested: number;
+    current: number;
+    gain: number;
+    cagr: number;
+    holdingDays: number;
+  }>;
+}
+
+export interface FundsTabProps {
+  schemes: SchemeItem[];
+  filterCategory: string;
+  onFilterChange: (category: string) => void;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+  top5Schemes: Set<string>;
+  watchlistSchemes: Set<string>;
+  expandedSchemes: Set<string>;
+  onToggleExpand: (schemeName: string) => void;
+  getCategoryBadgeClass: (category: string) => string;
+}
+
+export interface ReverseInsightsData {
+  ashokPct: number;
+  top3MsflPct: number;
+  totalRegularVal: number;
+  annualDrag: number;
+  overlaps: Array<{ category: string; count: number; funds: string[] }>;
+  sonalbenPct: number;
+}
+
+export interface ActionsTabProps {
+  scaleUpFunds: SchemeItem[];
+  watchlistFunds: SchemeItem[];
+  actionMonths: string[];
+  reverseInsights: ReverseInsightsData;
+}
+
+export interface SubCategoryTotalsItem {
+  totalValueSum: number;
+  avgHoldingDays: number;
+  avgCagr: number;
+}
+
+export interface OverlapsTabProps {
+  subCategoryGroups: Record<string, SubCategoryGroupItem[]>;
+  subCategoryTotals: Record<string, SubCategoryTotalsItem>;
 }
 
 export type MetricAccentColor =
