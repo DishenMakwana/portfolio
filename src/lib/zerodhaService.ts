@@ -8,7 +8,7 @@ import {
   zerodhaTransactions,
   reports,
 } from "../db/schema";
-import { eq, desc, asc, and, inArray, lte } from "drizzle-orm";
+import { eq, desc, asc, and, inArray, lte, sql } from "drizzle-orm";
 import {
   ZerodhaDashboardData,
   ZerodhaBenchmarkReturns,
@@ -1221,13 +1221,15 @@ async function triggerZerodhaNavCacheUpdate(
 }
 
 export function getZerodhaSchemeHistoryForDbCode(
-  dbSchemeCode: string
+  dbSchemeCode: string,
+  startDate?: string
 ): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
   if (!schemeCode || isSpecializedFundSchemeCode(schemeCode))
     return Promise.resolve(null);
 
-  let cachedPromise = zerodhaSchemeHistoryCache.get(schemeCode);
+  const cacheKey = `${schemeCode}:${startDate ?? "all"}`;
+  let cachedPromise = zerodhaSchemeHistoryCache.get(cacheKey);
   if (!cachedPromise) {
     cachedPromise = (async () => {
       // 1. Check if we have cached metadata in PostgreSQL starting with zerodha_
@@ -1244,7 +1246,12 @@ export function getZerodhaSchemeHistoryForDbCode(
 
       if (cachedMeta) {
         const history = await db.query.zerodhaSchemeNavHistory.findMany({
-          where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+          where: startDate
+            ? and(
+                eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+                sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+              )
+            : eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
         });
 
         // Find latest date in cache to fetch from that date onwards
@@ -1267,7 +1274,12 @@ export function getZerodhaSchemeHistoryForDbCode(
             await triggerZerodhaNavCacheUpdate(schemeCode, latestDateStr);
             const updatedHistory =
               await db.query.zerodhaSchemeNavHistory.findMany({
-                where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+                where: startDate
+                  ? and(
+                      eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+                      sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+                    )
+                  : eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
               });
             if (updatedHistory.length > 0) {
               return {
@@ -1374,7 +1386,7 @@ export function getZerodhaSchemeHistoryForDbCode(
       return null;
     })();
 
-    zerodhaSchemeHistoryCache.set(schemeCode, cachedPromise);
+    zerodhaSchemeHistoryCache.set(cacheKey, cachedPromise);
   }
 
   return cachedPromise;
@@ -1498,7 +1510,8 @@ async function triggerZerodhaStockNavCacheUpdate(
 
 export async function getZerodhaStockHistoryForSymbol(
   ticker: string,
-  range = "10y"
+  range = "10y",
+  startDate?: string
 ): Promise<MfDetailsResponse | null> {
   if (!ticker) return null;
 
@@ -1524,7 +1537,12 @@ export async function getZerodhaStockHistoryForSymbol(
     }
 
     const history = await db.query.zerodhaSchemeNavHistory.findMany({
-      where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
+      where: startDate
+        ? and(
+            eq(zerodhaSchemeNavHistory.schemeCode, ticker),
+            sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+          )
+        : eq(zerodhaSchemeNavHistory.schemeCode, ticker),
     });
 
     if (history.length > 0) {

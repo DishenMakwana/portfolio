@@ -260,3 +260,61 @@ export const ZERODHA_COLOR_CLASSES = [
   "bg-teal-500",
   "bg-red-500",
 ];
+
+export type ZerodhaCagrAssetType = "mutual_fund" | "equity";
+
+export interface ZerodhaHoldingWithCagr {
+  symbol: string;
+  cagr: number;
+  currentValue: number;
+  investedValue: number;
+  unrealizedPnl: number;
+  holdingDays: number;
+  xirr: number;
+  benchmarkXirr: number;
+}
+
+export interface ZerodhaCagrLeaderboardChartProps {
+  holdings: ZerodhaHoldingWithCagr[];
+  niftyBenchmark: number;
+  cagrAssetType?: ZerodhaCagrAssetType;
+}
+
+export interface ZerodhaInsightsHeroCardsProps {
+  cagrAssetType: ZerodhaCagrAssetType;
+  setCagrAssetType: (type: ZerodhaCagrAssetType) => void;
+  mfCount: number;
+  stockCount: number;
+  activeTotalInvested: number;
+  activeCurrentValue: number;
+  activeTotalGain: number;
+  activeAbsReturn: number;
+  activeWeightedCagr: number | null;
+  activeCagrDelta: number | null;
+  activeInvestedDiff: { sub: string; subColor: string };
+  activeCurrentValueDiff: { sub: string; subColor: string };
+  benchmarkLabel: string;
+  assetTypeLabel: string;
+}
+
+export interface ZerodhaInsightsBenchmarkCardProps {
+  activeBeatsBenchmark: boolean;
+  assetTypeFullLabel: string;
+  assetTypeLabel: string;
+  activeWeightedCagr: number | null;
+  benchmark: number;
+}
+
+export interface ZerodhaInsightsSummaryCardProps {
+  assetTypeFullLabel: string;
+  cagrAssetType: ZerodhaCagrAssetType;
+  activeHoldingsCount: number;
+  activeCurrentValue: number;
+  activeTopPerformer: ZerodhaHoldingWithCagr | null;
+}
+
+export interface ZerodhaInsightsOutperformersGridProps {
+  activeBeatingList: ZerodhaHoldingWithCagr[];
+  activeLaggingList: ZerodhaHoldingWithCagr[];
+  assetTypePlural: string;
+}
