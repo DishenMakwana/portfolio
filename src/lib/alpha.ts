@@ -9,7 +9,7 @@ import {
   zerodhaSchemeNavCacheMeta,
   msflSchemeNavCacheMeta,
 } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   PortfolioTransaction,
   VolatilityMeasures,
@@ -222,13 +222,15 @@ async function triggerBenchmarkCacheUpdate(
 }
 
 export function getBenchmarkHistory(
-  dbBenchmarkCode: string
+  dbBenchmarkCode: string,
+  startDate?: string
 ): Promise<MfDetailsResponse | null> {
   const benchmarkCode = normaliseSchemeCode(dbBenchmarkCode);
   if (!benchmarkCode || isSpecializedFundSchemeCode(benchmarkCode))
     return Promise.resolve(null);
 
-  let cachedPromise = benchmarkHistoryCache.get(benchmarkCode);
+  const cacheKey = `${benchmarkCode}:${startDate ?? "all"}`;
+  let cachedPromise = benchmarkHistoryCache.get(cacheKey);
   if (!cachedPromise) {
     cachedPromise = (async () => {
       const cachedMeta = await db.query.benchmarkNavCacheMeta.findFirst({
@@ -244,7 +246,12 @@ export function getBenchmarkHistory(
 
       if (cachedMeta) {
         const history = await db.query.benchmarkNavHistory.findMany({
-          where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+          where: startDate
+            ? and(
+                eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+                sql`to_date(${benchmarkNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+              )
+            : eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
         });
 
         // Find latest date in cache to fetch from that date onwards
@@ -265,7 +272,12 @@ export function getBenchmarkHistory(
           try {
             await triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr);
             const updatedHistory = await db.query.benchmarkNavHistory.findMany({
-              where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+              where: startDate
+                ? and(
+                    eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+                    sql`to_date(${benchmarkNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+                  )
+                : eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
             });
             if (updatedHistory.length > 0) {
               return {
@@ -323,18 +335,20 @@ export function getBenchmarkHistory(
       }
       return null;
     })();
-    benchmarkHistoryCache.set(benchmarkCode, cachedPromise);
+    benchmarkHistoryCache.set(cacheKey, cachedPromise);
   }
   return cachedPromise;
 }
 
 export function getSchemeHistoryForDbCode(
-  dbSchemeCode: string
+  dbSchemeCode: string,
+  startDate?: string
 ): Promise<MfDetailsResponse | null> {
   const schemeCode = normaliseSchemeCode(dbSchemeCode);
   if (!schemeCode) return Promise.resolve(null);
 
-  let cachedPromise = schemeHistoryCache.get(schemeCode);
+  const cacheKey = `${schemeCode}:${startDate ?? "all"}`;
+  let cachedPromise = schemeHistoryCache.get(cacheKey);
   if (!cachedPromise) {
     cachedPromise = (async () => {
       // 1. Check if we have cached metadata in PostgreSQL
@@ -351,7 +365,12 @@ export function getSchemeHistoryForDbCode(
 
       if (cachedMeta) {
         const history = await db.query.schemeNavHistory.findMany({
-          where: eq(schemeNavHistory.schemeCode, schemeCode),
+          where: startDate
+            ? and(
+                eq(schemeNavHistory.schemeCode, schemeCode),
+                sql`to_date(${schemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+              )
+            : eq(schemeNavHistory.schemeCode, schemeCode),
         });
 
         // Find latest date in cache to fetch from that date onwards
@@ -373,7 +392,12 @@ export function getSchemeHistoryForDbCode(
           try {
             await triggerNavCacheUpdate(schemeCode, latestDateStr);
             const updatedHistory = await db.query.schemeNavHistory.findMany({
-              where: eq(schemeNavHistory.schemeCode, schemeCode),
+              where: startDate
+                ? and(
+                    eq(schemeNavHistory.schemeCode, schemeCode),
+                    sql`to_date(${schemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
+                  )
+                : eq(schemeNavHistory.schemeCode, schemeCode),
             });
             if (updatedHistory.length > 0) {
               return {
@@ -477,7 +501,7 @@ export function getSchemeHistoryForDbCode(
 
       return null;
     })();
-    schemeHistoryCache.set(schemeCode, cachedPromise);
+    schemeHistoryCache.set(cacheKey, cachedPromise);
   }
   return cachedPromise;
 }
@@ -1094,7 +1118,8 @@ export function generateFactsheetChartData(
   fundNavHistory: { date: string; nav: string }[],
   benchNavHistory: { date: string; nav: string }[],
   asOfDate: string,
-  transactions: { date: string; type: "BUY" | "SELL"; amount: number }[]
+  transactions: { date: string; type: "BUY" | "SELL"; amount: number }[],
+  startDateOverride?: Date
 ): FactsheetChartPoint[] {
   if (fundNavHistory.length === 0) return [];
 
@@ -1152,29 +1177,35 @@ export function generateFactsheetChartData(
     }
   }
 
-  // Keep the fund graph from fund inception. Benchmark starts only when its
-  // first NAV exists; no pre-inception benchmark value is fabricated.
-  const finalStartDate = earliestFundDate;
+  // When startDateOverride is provided (e.g. 1Y/3Y/5Y slice), use the later
+  // of the override and the fund's inception so we don't go before inception.
+  // When no override (full history / "all"), use fund inception as before.
+  const finalStartDate = startDateOverride
+    ? new Date(
+        Math.max(startDateOverride.getTime(), earliestFundDate.getTime())
+      )
+    : earliestFundDate;
 
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const diffTime = targetDate.getTime() - finalStartDate.getTime();
-  const weeksToGenerate = Math.max(
-    0,
-    Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000))
-  );
+  const daysToGenerate = Math.max(0, Math.floor(diffTime / ONE_DAY_MS));
 
   const pointDates = new Set<number>();
 
-  for (let i = weeksToGenerate; i >= 0; i--) {
-    const checkDate = new Date(
-      targetDate.getTime() - i * 7 * 24 * 60 * 60 * 1000
-    );
+  for (let i = daysToGenerate; i >= 0; i--) {
+    const checkDate = new Date(targetDate.getTime() - i * ONE_DAY_MS);
     pointDates.add(checkDate.getTime());
   }
 
-  // Preserve exact inception points, including a benchmark that began later.
-  pointDates.add(earliestFundDate.getTime());
-  if (earliestBenchDate.getTime() > 0)
-    pointDates.add(earliestBenchDate.getTime());
+  // Preserve inception points only for the full-history view. Adding these to
+  // a selected range (such as 1Y) incorrectly stretches the x-axis back to
+  // the fund or benchmark inception date.
+  if (!startDateOverride) {
+    pointDates.add(earliestFundDate.getTime());
+    if (earliestBenchDate.getTime() > 0) {
+      pointDates.add(earliestBenchDate.getTime());
+    }
+  }
 
   const tempPoints = [...pointDates]
     .sort((a, b) => a - b)
@@ -1182,9 +1213,15 @@ export function generateFactsheetChartData(
       const dateObj = new Date(timestamp);
       const checkDateStr = dateObj.toISOString().split("T")[0];
       const fundNav = findClosestNav(fundNavHistory, checkDateStr);
+
+      // Only plot benchmark from its actual first NAV within the displayed
+      // period. This avoids fabricating benchmark values before inception.
+      const benchStartTime = Math.max(
+        earliestBenchDate.getTime(),
+        finalStartDate.getTime()
+      );
       const benchNav =
-        earliestBenchDate.getTime() > 0 &&
-        timestamp >= earliestBenchDate.getTime()
+        earliestBenchDate.getTime() > 0 && timestamp >= benchStartTime
           ? findClosestNav(benchNavHistory, checkDateStr)
           : null;
       return { dateObj, fundNav, benchNav };
@@ -1228,7 +1265,7 @@ export function generateFactsheetChartData(
       }
     }
 
-    if (minDiff < 7 * 24 * 60 * 60 * 1000) {
+    if (minDiff < 3 * ONE_DAY_MS) {
       if (!chartData[closestIdx].txs) {
         chartData[closestIdx].txs = [];
       }

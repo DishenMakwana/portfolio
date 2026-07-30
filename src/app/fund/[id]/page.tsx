@@ -538,14 +538,18 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           avgMaturity: 0,
         };
 
-  // 7. Generate comparison chart data
+  // 7. Generate comparison chart data (only 1Y for initial load; wider ranges fetched lazily)
+  const oneYearAgo = new Date(holding.asOfDate);
+  oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+
   const chartData =
     fundNavHistory.length > 0
       ? generateFactsheetChartData(
           fundNavHistory,
           benchNavHistory,
           holding.asOfDate,
-          mappedTxs
+          mappedTxs,
+          oneYearAgo
         )
       : [];
 
@@ -567,6 +571,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     earliestBenchDateStr = sorted[0].date;
   }
 
+  // Determine the data source for the Server Action
+  const source = isMsfl ? "msfl" : isZerodha ? "zerodha" : "standard";
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 selection:bg-teal-500/30 selection:text-teal-200">
       <FundDetailsClient
@@ -578,6 +585,10 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         chartData={chartData}
         earliestFundDateStr={earliestFundDateStr}
         earliestBenchDateStr={earliestBenchDateStr}
+        schemeCodeApi={holding.schemeCodeApi || ""}
+        benchmarkCode={benchmarkCode}
+        holdingType={holding.holdingType}
+        source={source}
       />
     </main>
   );

@@ -31,6 +31,10 @@ export interface FundDetailsClientProps {
   chartData: FactsheetChartPoint[];
   earliestFundDateStr?: string | null;
   earliestBenchDateStr?: string | null;
+  schemeCodeApi: string;
+  benchmarkCode: string;
+  holdingType?: string;
+  source?: string;
 }
 
 export interface CustomTooltipPoint {
@@ -101,4 +105,49 @@ export interface EntryPointMarker {
   txType: "BUY" | "SELL";
 }
 
-export type FundTimeframe = "3m" | "6m" | "1y" | "3y" | "5y" | "max";
+export type FundTimeframe = "3m" | "6m" | "1y" | "3y" | "5y" | "all";
+
+export interface FundDetailsHeaderProps {
+  holding: HoldingDetails;
+  isStock: boolean;
+  cleanCategory: string;
+  isRefreshingGlobal: boolean;
+  onGlobalRefresh: () => Promise<void>;
+  onBack: () => void;
+}
+
+export interface FundDetailsMetricCardsProps {
+  holding: HoldingDetails;
+  metrics: {
+    portfolioXirr: number;
+    benchmarkXirr: number;
+    alpha: number;
+  };
+  hasHoldingDays: boolean;
+  isStock: boolean;
+}
+
+export interface HistoricalReturnsChartCardProps {
+  holding: HoldingDetails;
+  transactions: FundDetailsClientProps["transactions"];
+  factsheetMeta: FundDetailsClientProps["factsheetMeta"];
+  currentChartData: FactsheetChartPoint[];
+  earliestFundDateStr?: string | null;
+  earliestBenchDateStr?: string | null;
+  isStock: boolean;
+  isApproximateProxy: boolean;
+  schemeCodeApi: string;
+  benchmarkCode: string;
+  holdingType?: string;
+  source?: string;
+}
+
+export interface FactsheetPanelsProps {
+  holding: HoldingDetails;
+  transactions: FundDetailsClientProps["transactions"];
+  factsheetMeta: FundDetailsClientProps["factsheetMeta"];
+  currentVolatilityStats: VolatilityMeasures;
+  cleanCategory: string;
+  isStock: boolean;
+  isDebt: boolean;
+}
