@@ -8,11 +8,13 @@ import {
   zerodhaTransactions,
   reports,
 } from "../db/schema";
-import { eq, desc, asc, and, inArray, lte, sql } from "drizzle-orm";
+import { eq, desc, asc, and, inArray, lte } from "drizzle-orm";
 import {
   ZerodhaDashboardData,
   ZerodhaBenchmarkReturns,
   ZerodhaInsightsData,
+  ZerodhaSectorBreakdownItem,
+  ZerodhaMarketCapBreakdownItem,
 } from "@/types/zerodha";
 import {
   getBenchmarkHistory,
@@ -569,6 +571,8 @@ export async function getZerodhaDashboardData(
       },
       sectorAllocation: [],
       categoryAllocation: [],
+      sectorBreakdown: [],
+      marketCapBreakdown: [],
       assetSplit: [],
       timelineData: [],
       insights: emptyZerodhaInsightsData(),
@@ -595,6 +599,7 @@ export async function getZerodhaDashboardData(
       holdingType: zerodhaSchemes.holdingType,
       isin: zerodhaSchemes.isin,
       sector: zerodhaSchemes.sector,
+      marketCapCategory: zerodhaSchemes.marketCapCategory,
       instrumentType: zerodhaSchemes.instrumentType,
       frozenQuantity: zerodhaHoldings.frozenQuantity,
       pledgedQuantity: zerodhaHoldings.pledgedQuantity,
@@ -835,6 +840,93 @@ export async function getZerodhaDashboardData(
     { name: "Stocks", value: stocksCurrentValue },
     { name: "Mutual Funds", value: fundsCurrentValue },
   ].filter((item) => item.value > 0);
+
+  // Detailed Sector Breakdown for Equity Stocks
+  const stockHoldings = holdings.filter((h) => h.holdingType === "equity");
+  const sectorGroupMap = new Map<
+    string,
+    { invested: number; current: number; count: number }
+  >();
+
+  for (const h of stockHoldings) {
+    const sec = h.sector || "General";
+    const existing = sectorGroupMap.get(sec) || {
+      invested: 0,
+      current: 0,
+      count: 0,
+    };
+    existing.invested += h.investedValue;
+    existing.current += h.currentValue;
+    existing.count += 1;
+    sectorGroupMap.set(sec, existing);
+  }
+
+  const totalStockCurrentValuation = stocksCurrentValue || 1;
+  const sectorBreakdown: ZerodhaSectorBreakdownItem[] = Array.from(
+    sectorGroupMap.entries()
+  )
+    .map(([secName, data]) => {
+      const gain = data.current - data.invested;
+      const gainPct = data.invested > 0 ? (gain / data.invested) * 100 : 0;
+      const allocationPct = (data.current / totalStockCurrentValuation) * 100;
+      return {
+        sector: secName,
+        investedValue: data.invested,
+        currentValue: data.current,
+        gain,
+        gainPct,
+        allocationPct,
+        stockCount: data.count,
+      };
+    })
+    .sort((a, b) => b.currentValue - a.currentValue);
+
+  // Market Cap Risk Breakdown for Equity Stocks
+  const capCategories: Array<
+    "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap"
+  > = ["Large Cap", "Mid Cap", "Small Cap", "Micro Cap"];
+
+  const capGroupMap = new Map<
+    string,
+    { invested: number; current: number; count: number }
+  >();
+
+  for (const cat of capCategories) {
+    capGroupMap.set(cat, { invested: 0, current: 0, count: 0 });
+  }
+
+  for (const h of stockHoldings) {
+    const cat =
+      (h.marketCapCategory as
+        "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap") || "Large Cap";
+    const existing = capGroupMap.get(cat) || {
+      invested: 0,
+      current: 0,
+      count: 0,
+    };
+    existing.invested += h.investedValue;
+    existing.current += h.currentValue;
+    existing.count += 1;
+    capGroupMap.set(cat, existing);
+  }
+
+  const marketCapBreakdown: ZerodhaMarketCapBreakdownItem[] = capCategories.map(
+    (cat) => {
+      const data = capGroupMap.get(cat) || {
+        invested: 0,
+        current: 0,
+        count: 0,
+      };
+      const allocationPct = (data.current / totalStockCurrentValuation) * 100;
+      return {
+        category: cat,
+        investedValue: data.invested,
+        currentValue: data.current,
+        allocationPct,
+        stockCount: data.count,
+      };
+    }
+  );
 
   // Compute timeline data
   const timelineData = [];
@@ -1123,6 +1215,8 @@ export async function getZerodhaDashboardData(
     metricDeltas,
     sectorAllocation,
     categoryAllocation,
+    sectorBreakdown,
+    marketCapBreakdown,
     assetSplit,
     timelineData,
     insights,
@@ -1245,14 +1339,15 @@ export function getZerodhaSchemeHistoryForDbCode(
           cacheAgeLimit;
 
       if (cachedMeta) {
-        const history = await db.query.zerodhaSchemeNavHistory.findMany({
-          where: startDate
-            ? and(
-                eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
-                sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-              )
-            : eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+        const rawHistory = await db.query.zerodhaSchemeNavHistory.findMany({
+          where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
         });
+        const history = startDate
+          ? rawHistory.filter((h) => {
+              const [d, m, y] = h.date.split("-");
+              return `${y}-${m}-${d}` >= startDate;
+            })
+          : rawHistory;
 
         // Find latest date in cache to fetch from that date onwards
         let latestDateStr: string | undefined = undefined;
@@ -1272,15 +1367,15 @@ export function getZerodhaSchemeHistoryForDbCode(
         if (!isFresh) {
           try {
             await triggerZerodhaNavCacheUpdate(schemeCode, latestDateStr);
-            const updatedHistory =
-              await db.query.zerodhaSchemeNavHistory.findMany({
-                where: startDate
-                  ? and(
-                      eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
-                      sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-                    )
-                  : eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
-              });
+            const rawUpdated = await db.query.zerodhaSchemeNavHistory.findMany({
+              where: eq(zerodhaSchemeNavHistory.schemeCode, schemeCode),
+            });
+            const updatedHistory = startDate
+              ? rawUpdated.filter((h) => {
+                  const [d, m, y] = h.date.split("-");
+                  return `${y}-${m}-${d}` >= startDate;
+                })
+              : rawUpdated;
             if (updatedHistory.length > 0) {
               return {
                 meta: {
@@ -1536,14 +1631,15 @@ export async function getZerodhaStockHistoryForSymbol(
       }
     }
 
-    const history = await db.query.zerodhaSchemeNavHistory.findMany({
-      where: startDate
-        ? and(
-            eq(zerodhaSchemeNavHistory.schemeCode, ticker),
-            sql`to_date(${zerodhaSchemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-          )
-        : eq(zerodhaSchemeNavHistory.schemeCode, ticker),
+    const rawHistory = await db.query.zerodhaSchemeNavHistory.findMany({
+      where: eq(zerodhaSchemeNavHistory.schemeCode, ticker),
     });
+    const history = startDate
+      ? rawHistory.filter((h) => {
+          const [d, m, y] = h.date.split("-");
+          return `${y}-${m}-${d}` >= startDate;
+        })
+      : rawHistory;
 
     if (history.length > 0) {
       return {

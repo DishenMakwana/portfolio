@@ -9,7 +9,7 @@ import {
   zerodhaSchemeNavCacheMeta,
   msflSchemeNavCacheMeta,
 } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import {
   PortfolioTransaction,
   VolatilityMeasures,
@@ -28,6 +28,7 @@ import {
 } from "@/types/constants";
 import { NavPoint, ParsedNavPoint } from "@/types/alpha";
 import { CashFlow } from "@/types/xirr";
+import { parseToLocalMidnight } from "@/helpers/dates";
 import { MfDetailsResponse } from "@/types/mf-api";
 import { BenchmarkRuleDetails } from "@/types/benchmark";
 import {
@@ -44,10 +45,15 @@ function normaliseSchemeCode(
 
 // Cache for scheme histories to avoid duplicate DB queries within the same request lifecycle
 const schemeHistoryCache = new Map<string, Promise<MfDetailsResponse | null>>();
+const benchmarkNavRAMCache = new Map<
+  string,
+  Array<{ date: string; nav: number }>
+>();
 
 export function clearAllAlphaCaches() {
   schemeHistoryCache.clear();
   benchmarkHistoryCache.clear();
+  benchmarkNavRAMCache.clear();
 }
 
 /**
@@ -245,14 +251,15 @@ export function getBenchmarkHistory(
           cacheAgeLimit;
 
       if (cachedMeta) {
-        const history = await db.query.benchmarkNavHistory.findMany({
-          where: startDate
-            ? and(
-                eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
-                sql`to_date(${benchmarkNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-              )
-            : eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+        const rawHistory = await db.query.benchmarkNavHistory.findMany({
+          where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
         });
+        const history = startDate
+          ? rawHistory.filter((h) => {
+              const [d, m, y] = h.date.split("-");
+              return `${y}-${m}-${d}` >= startDate;
+            })
+          : rawHistory;
 
         // Find latest date in cache to fetch from that date onwards
         let latestDateStr: string | undefined = undefined;
@@ -271,14 +278,15 @@ export function getBenchmarkHistory(
         if (!isFresh) {
           try {
             await triggerBenchmarkCacheUpdate(benchmarkCode, latestDateStr);
-            const updatedHistory = await db.query.benchmarkNavHistory.findMany({
-              where: startDate
-                ? and(
-                    eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
-                    sql`to_date(${benchmarkNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-                  )
-                : eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
+            const rawUpdated = await db.query.benchmarkNavHistory.findMany({
+              where: eq(benchmarkNavHistory.benchmarkCode, benchmarkCode),
             });
+            const updatedHistory = startDate
+              ? rawUpdated.filter((h) => {
+                  const [d, m, y] = h.date.split("-");
+                  return `${y}-${m}-${d}` >= startDate;
+                })
+              : rawUpdated;
             if (updatedHistory.length > 0) {
               return {
                 meta: {
@@ -364,14 +372,15 @@ export function getSchemeHistoryForDbCode(
           cacheAgeLimit;
 
       if (cachedMeta) {
-        const history = await db.query.schemeNavHistory.findMany({
-          where: startDate
-            ? and(
-                eq(schemeNavHistory.schemeCode, schemeCode),
-                sql`to_date(${schemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-              )
-            : eq(schemeNavHistory.schemeCode, schemeCode),
+        const rawHistory = await db.query.schemeNavHistory.findMany({
+          where: eq(schemeNavHistory.schemeCode, schemeCode),
         });
+        const history = startDate
+          ? rawHistory.filter((h) => {
+              const [d, m, y] = h.date.split("-");
+              return `${y}-${m}-${d}` >= startDate;
+            })
+          : rawHistory;
 
         // Find latest date in cache to fetch from that date onwards
         let latestDateStr: string | undefined = undefined;
@@ -391,14 +400,15 @@ export function getSchemeHistoryForDbCode(
         if (!isFresh && !isSpecializedFundSchemeCode(schemeCode)) {
           try {
             await triggerNavCacheUpdate(schemeCode, latestDateStr);
-            const updatedHistory = await db.query.schemeNavHistory.findMany({
-              where: startDate
-                ? and(
-                    eq(schemeNavHistory.schemeCode, schemeCode),
-                    sql`to_date(${schemeNavHistory.date}, 'DD-MM-YYYY') >= ${startDate}::date`
-                  )
-                : eq(schemeNavHistory.schemeCode, schemeCode),
+            const rawUpdated = await db.query.schemeNavHistory.findMany({
+              where: eq(schemeNavHistory.schemeCode, schemeCode),
             });
+            const updatedHistory = startDate
+              ? rawUpdated.filter((h) => {
+                  const [d, m, y] = h.date.split("-");
+                  return `${y}-${m}-${d}` >= startDate;
+                })
+              : rawUpdated;
             if (updatedHistory.length > 0) {
               return {
                 meta: {
@@ -512,28 +522,29 @@ export function getSchemeHistoryForDbCode(
  */
 export function findClosestNav(
   navHistory: { date: string; nav: string }[],
-  targetDateStr: string
+  targetDateStr: string,
+  preParsedNavs?: { time: number; nav: number }[]
 ): number {
-  const targetDate = new Date(targetDateStr);
+  const targetTime = new Date(targetDateStr).getTime();
 
-  // Sort NAV history from oldest to newest
-  // Input dates from API are DD-MM-YYYY
   const parseApiDate = (apiDateStr: string) => {
     const [dd, mm, yyyy] = apiDateStr.split("-");
-    return new Date(`${yyyy}-${mm}-${dd}`);
+    return new Date(`${yyyy}-${mm}-${dd}`).getTime();
   };
 
-  const sortedNavs = [...navHistory]
-    .map((p) => ({ date: parseApiDate(p.date), nav: parseFloat(p.nav) }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const sortedNavs =
+    preParsedNavs ||
+    [...navHistory]
+      .map((p) => ({ time: parseApiDate(p.date), nav: parseFloat(p.nav) }))
+      .sort((a, b) => a.time - b.time);
 
-  if (sortedNavs.length === 0) return 10; // Propose a dummy NAV to prevent division by zero
+  if (sortedNavs.length === 0) return 10;
 
   let closestNav = sortedNavs[0].nav;
   let closestDateDiff = Infinity;
 
   for (const point of sortedNavs) {
-    const diff = targetDate.getTime() - point.date.getTime();
+    const diff = targetTime - point.time;
 
     // We want the closest date that is on or before the target date
     if (diff >= 0 && diff < closestDateDiff) {
@@ -550,13 +561,10 @@ export function findClosestNav(
   if (closestDateDiff > MAX_LOOKBACK_MS) {
     // Check if targetDate is slightly before first NAV (inception fallback)
     const oldestPoint = sortedNavs[0];
-    const inceptionDiff = oldestPoint.date.getTime() - targetDate.getTime();
+    const inceptionDiff = oldestPoint.time - targetTime;
     if (inceptionDiff >= 0 && inceptionDiff <= MAX_LOOKBACK_MS) {
       return oldestPoint.nav;
     }
-    console.warn(
-      `[NAV LOOKBACK GAP] Target date ${targetDateStr} is ${Math.round(closestDateDiff / (24 * 60 * 60 * 1000))} days away from nearest NAV. Using closest available.`
-    );
   }
 
   return closestNav;
@@ -715,7 +723,8 @@ export async function calculateAlpha(
 
   for (const tx of sortedTxs) {
     // BUY is cash outflow (negative), SELL is cash inflow (positive)
-    const amount = tx.type === "BUY" ? -tx.amount : tx.amount;
+    const absAmount = Math.abs(tx.amount);
+    const amount = tx.type === "BUY" ? -absAmount : absAmount;
     portfolioCashFlows.push({
       amount,
       date: new Date(tx.date),
@@ -753,6 +762,15 @@ export async function calculateAlpha(
   }
 
   const navHistory = benchmarkDetails.data;
+  const preParsedNavs = [...navHistory]
+    .map((p) => {
+      const [dd, mm, yyyy] = p.date.split("-");
+      return {
+        time: new Date(`${yyyy}-${mm}-${dd}`).getTime(),
+        nav: parseFloat(p.nav) || 0,
+      };
+    })
+    .sort((a, b) => a.time - b.time);
 
   // 3. Simulate Investing same cash flows in the Benchmark Index Fund
   let benchmarkUnitsHeld = 0;
@@ -760,18 +778,19 @@ export async function calculateAlpha(
 
   for (const tx of sortedTxs) {
     // Find benchmark NAV on the transaction date
-    const nav = findClosestNav(navHistory, tx.date);
+    const nav = findClosestNav(navHistory, tx.date, preParsedNavs);
+    const txAmount = Math.abs(tx.amount);
 
     if (tx.type === "BUY") {
-      const unitsBought = tx.amount / nav;
+      const unitsBought = txAmount / nav;
       benchmarkUnitsHeld += unitsBought;
       benchmarkCashFlows.push({
-        amount: -tx.amount, // cash outflow
+        amount: -txAmount, // cash outflow
         date: new Date(tx.date),
       });
     } else {
       // In case of sell, we redeem equivalent amount from benchmark, clamped to holdings
-      let unitsSold = tx.amount / nav;
+      let unitsSold = txAmount / nav;
       if (unitsSold > benchmarkUnitsHeld) {
         unitsSold = benchmarkUnitsHeld;
       }
@@ -780,7 +799,7 @@ export async function calculateAlpha(
       // cash inflow reflects simulated redeemed value from index fund
       const simulatedRedeemedAmount = unitsSold * nav;
       benchmarkCashFlows.push({
-        amount: simulatedRedeemedAmount,
+        amount: Math.abs(simulatedRedeemedAmount),
         date: new Date(tx.date),
       });
     }
@@ -1123,7 +1142,12 @@ export function generateFactsheetChartData(
 ): FactsheetChartPoint[] {
   if (fundNavHistory.length === 0) return [];
 
-  const targetDate = new Date(asOfDate);
+  const cleanAsOf = asOfDate.slice(0, 10);
+  const asOfParts = cleanAsOf.split("-").map(Number);
+  const targetDate =
+    asOfParts.length === 3
+      ? new Date(asOfParts[0], asOfParts[1] - 1, asOfParts[2], 0, 0, 0, 0)
+      : new Date(asOfDate);
 
   // Find earliest date when fund has history data (by comparing parsed date timestamps)
   let earliestFundDate = new Date(0);
@@ -1134,12 +1158,29 @@ export function generateFactsheetChartData(
       let d: Date;
       if (parts.length === 3) {
         if (parts[0].length === 4) {
-          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+          d = new Date(
+            Number(parts[0]),
+            Number(parts[1]) - 1,
+            Number(parts[2]),
+            0,
+            0,
+            0,
+            0
+          );
         } else {
-          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          d = new Date(
+            Number(parts[2]),
+            Number(parts[1]) - 1,
+            Number(parts[0]),
+            0,
+            0,
+            0,
+            0
+          );
         }
       } else {
         d = new Date(p.date);
+        d = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
       }
       const t = d.getTime();
       if (!isNaN(t) && t < minTime) {
@@ -1160,12 +1201,29 @@ export function generateFactsheetChartData(
       let d: Date;
       if (parts.length === 3) {
         if (parts[0].length === 4) {
-          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+          d = new Date(
+            Number(parts[0]),
+            Number(parts[1]) - 1,
+            Number(parts[2]),
+            0,
+            0,
+            0,
+            0
+          );
         } else {
-          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+          d = new Date(
+            Number(parts[2]),
+            Number(parts[1]) - 1,
+            Number(parts[0]),
+            0,
+            0,
+            0,
+            0
+          );
         }
       } else {
         d = new Date(p.date);
+        d = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
       }
       const t = d.getTime();
       if (!isNaN(t) && t < minTime) {
@@ -1179,11 +1237,21 @@ export function generateFactsheetChartData(
 
   // When startDateOverride is provided (e.g. 1Y/3Y/5Y slice), use the later
   // of the override and the fund's inception so we don't go before inception.
-  // When no override (full history / "all"), use fund inception as before.
-  const finalStartDate = startDateOverride
-    ? new Date(
-        Math.max(startDateOverride.getTime(), earliestFundDate.getTime())
-      )
+  let overrideLocal: Date | undefined;
+  if (startDateOverride) {
+    overrideLocal = new Date(
+      startDateOverride.getFullYear(),
+      startDateOverride.getMonth(),
+      startDateOverride.getDate(),
+      0,
+      0,
+      0,
+      0
+    );
+  }
+
+  const finalStartDate = overrideLocal
+    ? new Date(Math.max(overrideLocal.getTime(), earliestFundDate.getTime()))
     : earliestFundDate;
 
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -1193,8 +1261,26 @@ export function generateFactsheetChartData(
   const pointDates = new Set<number>();
 
   for (let i = daysToGenerate; i >= 0; i--) {
-    const checkDate = new Date(targetDate.getTime() - i * ONE_DAY_MS);
+    const d = new Date(targetDate.getTime() - i * ONE_DAY_MS);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    const checkDate = new Date(`${y}-${m}-${day}T12:00:00.000Z`);
     pointDates.add(checkDate.getTime());
+  }
+
+  // Explicitly add transaction date timestamps so the exact BUY/SELL date is always a point in the chart data
+  for (const tx of transactions) {
+    if (tx.date) {
+      const txD = parseToLocalMidnight(tx.date);
+      if (
+        !isNaN(txD.getTime()) &&
+        txD.getTime() >= finalStartDate.getTime() &&
+        txD.getTime() <= targetDate.getTime()
+      ) {
+        pointDates.add(txD.getTime());
+      }
+    }
   }
 
   // Preserve inception points only for the full-history view. Adding these to
@@ -1211,7 +1297,10 @@ export function generateFactsheetChartData(
     .sort((a, b) => a - b)
     .map((timestamp) => {
       const dateObj = new Date(timestamp);
-      const checkDateStr = dateObj.toISOString().split("T")[0];
+      const year = dateObj.getUTCFullYear();
+      const month = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(dateObj.getUTCDate()).padStart(2, "0");
+      const checkDateStr = `${year}-${month}-${day}`;
       const fundNav = findClosestNav(fundNavHistory, checkDateStr);
 
       // Only plot benchmark from its actual first NAV within the displayed
@@ -1251,14 +1340,18 @@ export function generateFactsheetChartData(
     };
   });
 
-  // Attach transactions
+  // Attach transactions using exact local timestamp matching
   for (const tx of transactions) {
-    const txDate = new Date(tx.date);
+    if (!tx.date) continue;
+    const txD = parseToLocalMidnight(tx.date);
+    if (!txD) continue;
+    const txTime = txD.getTime();
+
     let closestIdx = 0;
     let minDiff = Infinity;
 
     for (let i = 0; i < tempPoints.length; i++) {
-      const diff = Math.abs(txDate.getTime() - tempPoints[i].dateObj.getTime());
+      const diff = Math.abs(txTime - tempPoints[i].dateObj.getTime());
       if (diff < minDiff) {
         minDiff = diff;
         closestIdx = i;

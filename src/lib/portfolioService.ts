@@ -384,7 +384,8 @@ export async function getReportHoldings(
     .from(holdingsSnapshot)
     .leftJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
     .leftJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
-    .where(eq(holdingsSnapshot.reportId, reportId));
+    .where(eq(holdingsSnapshot.reportId, reportId))
+    .orderBy(desc(holdingsSnapshot.currentValue));
 
   return snapshots as HoldingDetails[];
 }

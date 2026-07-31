@@ -143,60 +143,152 @@ export async function getInsightsData(): Promise<InsightsData> {
 
   const reportId = latestReport.id;
   const reportDate = latestReport.asOfDate;
+  const financialYearStart = getFinancialYearStart(reportDate);
 
-  // 2. Get all holdings for the latest report joined with schemes and members
-  const holdings = await db
-    .select({
-      id: holdingsSnapshot.id,
-      balanceUnits: holdingsSnapshot.balanceUnits,
-      purchaseNav: holdingsSnapshot.purchaseNav,
-      schemeId: holdingsSnapshot.schemeId,
-      schemeCodeApi: schemes.schemeCodeApi,
-      purchaseValue: holdingsSnapshot.purchaseValue,
-      currentValue: holdingsSnapshot.currentValue,
-      gain: holdingsSnapshot.gain,
-      absoluteReturn: holdingsSnapshot.absoluteReturn,
-      cagr: holdingsSnapshot.cagr,
-      holdingDays: holdingsSnapshot.holdingDays,
-      folioNo: holdingsSnapshot.folioNo,
-      memberId: holdingsSnapshot.memberId,
-      memberName: familyMembers.name,
-      schemeName: schemes.name,
-      schemeCategory: schemes.category,
-    })
-    .from(holdingsSnapshot)
-    .innerJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
-    .innerJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
-    .where(eq(holdingsSnapshot.reportId, reportId));
+  // Parallelize all independent database & benchmark queries using Promise.all
+  const [
+    holdings,
+    sips,
+    memberCagrRows,
+    rawTxs,
+    openingReport,
+    sipPayments,
+    benchmarkReturns,
+    zHolds,
+    mHolds,
+  ] = await Promise.all([
+    // 1. Get all holdings for latest report (ordered by currentValue descending in SQL)
+    db
+      .select({
+        id: holdingsSnapshot.id,
+        balanceUnits: holdingsSnapshot.balanceUnits,
+        purchaseNav: holdingsSnapshot.purchaseNav,
+        schemeId: holdingsSnapshot.schemeId,
+        schemeCodeApi: schemes.schemeCodeApi,
+        purchaseValue: holdingsSnapshot.purchaseValue,
+        currentValue: holdingsSnapshot.currentValue,
+        gain: holdingsSnapshot.gain,
+        absoluteReturn: holdingsSnapshot.absoluteReturn,
+        cagr: holdingsSnapshot.cagr,
+        holdingDays: holdingsSnapshot.holdingDays,
+        folioNo: holdingsSnapshot.folioNo,
+        memberId: holdingsSnapshot.memberId,
+        memberName: familyMembers.name,
+        schemeName: schemes.name,
+        schemeCategory: schemes.category,
+      })
+      .from(holdingsSnapshot)
+      .innerJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
+      .innerJoin(familyMembers, eq(holdingsSnapshot.memberId, familyMembers.id))
+      .where(eq(holdingsSnapshot.reportId, reportId))
+      .orderBy(desc(holdingsSnapshot.currentValue)),
 
-  // 3. Get all SIP mandates joined with schemes and members
-  const sips = await db
-    .select({
-      memberName: familyMembers.name,
-      schemeName: schemes.name,
-      schemeCategory: schemes.category,
-      monthlyAmount: sipMandates.monthlyAmount,
-      startMonth: sipMandates.startMonth,
-      isActive: sipMandates.isActive,
-    })
-    .from(sipMandates)
-    .innerJoin(familyMembers, eq(sipMandates.memberId, familyMembers.id))
-    .innerJoin(schemes, eq(sipMandates.schemeId, schemes.id));
+    // 2. Get all SIP mandates (ordered by member name & scheme name in SQL)
+    db
+      .select({
+        memberName: familyMembers.name,
+        schemeName: schemes.name,
+        schemeCategory: schemes.category,
+        monthlyAmount: sipMandates.monthlyAmount,
+        startMonth: sipMandates.startMonth,
+        isActive: sipMandates.isActive,
+      })
+      .from(sipMandates)
+      .innerJoin(familyMembers, eq(sipMandates.memberId, familyMembers.id))
+      .innerJoin(schemes, eq(sipMandates.schemeId, schemes.id))
+      .orderBy(familyMembers.name, schemes.name),
 
-  // 4. Get member CAGRs for the latest report joined with members
-  const memberCagrRows = await db
-    .select({
-      memberName: familyMembers.name,
-      cagr: memberReportCagrs.cagr,
-    })
-    .from(memberReportCagrs)
-    .innerJoin(familyMembers, eq(memberReportCagrs.memberId, familyMembers.id))
-    .where(eq(memberReportCagrs.reportId, reportId))
-    .orderBy(desc(memberReportCagrs.cagr));
+    // 3. Get member CAGRs for latest report (ordered by CAGR descending in SQL)
+    db
+      .select({
+        memberName: familyMembers.name,
+        cagr: memberReportCagrs.cagr,
+      })
+      .from(memberReportCagrs)
+      .innerJoin(
+        familyMembers,
+        eq(memberReportCagrs.memberId, familyMembers.id)
+      )
+      .where(eq(memberReportCagrs.reportId, reportId))
+      .orderBy(desc(memberReportCagrs.cagr)),
 
-  // 5. Compute aggregations
+    // 4. Get transaction history up to report date (ordered by date descending in SQL)
+    db
+      .select({
+        id: transactions.id,
+        memberId: transactions.memberId,
+        schemeId: transactions.schemeId,
+        folioNo: transactions.folioNo,
+        date: transactions.date,
+        type: transactions.type,
+        units: transactions.units,
+        nav: transactions.nav,
+        amount: transactions.amount,
+        sourceReportId: transactions.sourceReportId,
+        schemeCategory: schemes.category,
+        schemeName: schemes.name,
+      })
+      .from(transactions)
+      .leftJoin(schemes, eq(transactions.schemeId, schemes.id))
+      .where(lte(transactions.date, reportDate))
+      .orderBy(desc(transactions.date), desc(transactions.id)),
 
-  // Totals
+    // 5. Get opening report for financial year
+    db
+      .select({ id: reports.id })
+      .from(reports)
+      .where(lt(reports.asOfDate, financialYearStart))
+      .orderBy(desc(reports.asOfDate))
+      .limit(1)
+      .then((rows) => rows[0]),
+
+    // 6. Get SIP transactions
+    db
+      .select({
+        month: sipTransactions.month,
+        amount: sipTransactions.amount,
+        memberId: sipMandates.memberId,
+        schemeId: sipMandates.schemeId,
+        folioNo: sipMandates.folioNo,
+        category: schemes.category,
+        schemeName: schemes.name,
+        schemeCodeApi: schemes.schemeCodeApi,
+      })
+      .from(sipTransactions)
+      .innerJoin(sipMandates, eq(sipTransactions.sipMandateId, sipMandates.id))
+      .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id)),
+
+    // 7. Benchmark returns
+    getBenchmarkReturns(reportDate),
+
+    // 8. Zerodha stock holdings
+    db
+      .select({
+        quantity: zerodhaHoldings.quantity,
+        averagePrice: zerodhaHoldings.averagePrice,
+        currentPrice: zerodhaHoldings.currentPrice,
+        symbol: zerodhaSchemes.name,
+        holdingType: zerodhaSchemes.holdingType,
+      })
+      .from(zerodhaHoldings)
+      .leftJoin(
+        zerodhaSchemes,
+        eq(zerodhaHoldings.schemeId, zerodhaSchemes.id)
+      ),
+
+    // 9. MSFL stock holdings
+    db
+      .select({
+        quantity: msflHoldings.quantity,
+        averagePrice: msflHoldings.averagePrice,
+        currentPrice: msflHoldings.currentPrice,
+        symbol: msflSchemes.name,
+      })
+      .from(msflHoldings)
+      .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id)),
+  ]);
+
+  // Compute aggregations
   const totalInvested = holdings.reduce((s, h) => s + h.purchaseValue, 0);
   const totalCurrent = holdings.reduce((s, h) => s + h.currentValue, 0);
   const totalGain = holdings.reduce((s, h) => s + h.gain, 0);
@@ -207,41 +299,12 @@ export async function getInsightsData(): Promise<InsightsData> {
     holdings.map((h) => h.memberId).filter(Boolean)
   );
 
-  // 5.1 Fetch transactions history up to the latest report date and calculate portfolio XIRR
-  const rawTxs = await db
-    .select({
-      id: transactions.id,
-      memberId: transactions.memberId,
-      schemeId: transactions.schemeId,
-      folioNo: transactions.folioNo,
-      date: transactions.date,
-      type: transactions.type,
-      units: transactions.units,
-      nav: transactions.nav,
-      amount: transactions.amount,
-      sourceReportId: transactions.sourceReportId,
-      schemeCategory: schemes.category,
-      schemeName: schemes.name,
-    })
-    .from(transactions)
-    .leftJoin(schemes, eq(transactions.schemeId, schemes.id))
-    .where(lte(transactions.date, reportDate));
-
   const overallTxs = rawTxs.map((tx) => ({
     date: tx.date,
     type: tx.type as "BUY" | "SELL",
     amount: tx.amount,
     units: tx.units,
   }));
-
-  const financialYearStart = getFinancialYearStart(reportDate);
-  const openingReport = await db
-    .select({ id: reports.id })
-    .from(reports)
-    .where(lt(reports.asOfDate, financialYearStart))
-    .orderBy(desc(reports.asOfDate))
-    .limit(1)
-    .then((rows) => rows[0]);
 
   const openingHoldings = openingReport
     ? await db
@@ -276,21 +339,6 @@ export async function getInsightsData(): Promise<InsightsData> {
       category: tx.schemeCategory || "",
       schemeName: tx.schemeName || "",
     }));
-
-  const sipPayments = await db
-    .select({
-      month: sipTransactions.month,
-      amount: sipTransactions.amount,
-      memberId: sipMandates.memberId,
-      schemeId: sipMandates.schemeId,
-      folioNo: sipMandates.folioNo,
-      category: schemes.category,
-      schemeName: schemes.name,
-      schemeCodeApi: schemes.schemeCodeApi,
-    })
-    .from(sipTransactions)
-    .innerJoin(sipMandates, eq(sipTransactions.sipMandateId, sipMandates.id))
-    .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id));
 
   for (const payment of sipPayments) {
     const paymentDate = getMonthStartFromLabel(payment.month);
@@ -546,28 +594,8 @@ export async function getInsightsData(): Promise<InsightsData> {
     startMonth: s.startMonth ?? "",
   }));
 
-  const benchmarkReturns = await getBenchmarkReturns(reportDate);
-
-  // Fetch Zerodha and MSFL stock holdings
-  const zHolds = await db
-    .select({
-      quantity: zerodhaHoldings.quantity,
-      averagePrice: zerodhaHoldings.averagePrice,
-      currentPrice: zerodhaHoldings.currentPrice,
-      symbol: zerodhaSchemes.name,
-      holdingType: zerodhaSchemes.holdingType,
-    })
-    .from(zerodhaHoldings)
-    .leftJoin(zerodhaSchemes, eq(zerodhaHoldings.schemeId, zerodhaSchemes.id));
-  const mHolds = await db
-    .select({
-      quantity: msflHoldings.quantity,
-      averagePrice: msflHoldings.averagePrice,
-      currentPrice: msflHoldings.currentPrice,
-      symbol: msflSchemes.name,
-    })
-    .from(msflHoldings)
-    .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id));
+  const roundedPortfolioXirr = Math.round(portfolioXirr * 100) / 100;
+  const roundedBenchmarkXirr = Math.round(benchmarkXirr * 100) / 100;
 
   return {
     reportDate,
@@ -579,8 +607,10 @@ export async function getInsightsData(): Promise<InsightsData> {
       totalMonthlySip: Math.round(totalMonthlySip),
       uniqueSchemes: uniqueSchemeNames.size,
       memberCount: uniqueMemberIds.size,
-      portfolioXirr,
-      benchmarkXirr,
+      portfolioXirr: roundedPortfolioXirr,
+      benchmarkXirr: roundedBenchmarkXirr,
+      alpha:
+        Math.round((roundedPortfolioXirr - roundedBenchmarkXirr) * 100) / 100,
     },
     memberCagrs: memberCagrRows.map((r) => ({
       memberName: r.memberName,

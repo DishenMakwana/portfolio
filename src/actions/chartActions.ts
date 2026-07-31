@@ -10,7 +10,7 @@ import {
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
-import { parseHistoryDate } from "@/helpers/dates";
+import { parseHistoryDate, parseToLocalMidnight } from "@/helpers/dates";
 import { FactsheetChartPoint } from "@/types/portfolio";
 import { FundTimeframe } from "@/types/fund-details";
 
@@ -53,12 +53,27 @@ export async function fetchChartData(
   source?: string
 ): Promise<ChartDataResponse> {
   const months = timeframeToMonths(timeframe);
-  const startDate = new Date(asOfDate);
-  if (months !== null) {
-    startDate.setMonth(startDate.getMonth() - months);
+  const asOfLocal = parseToLocalMidnight(asOfDate);
+  const startDate =
+    months !== null
+      ? new Date(
+          asOfLocal.getFullYear(),
+          asOfLocal.getMonth() - months,
+          asOfLocal.getDate(),
+          0,
+          0,
+          0,
+          0
+        )
+      : undefined;
+
+  let startDateString: string | undefined = undefined;
+  if (startDate) {
+    const y = startDate.getFullYear();
+    const m = String(startDate.getMonth() + 1).padStart(2, "0");
+    const d = String(startDate.getDate()).padStart(2, "0");
+    startDateString = `${y}-${m}-${d}`;
   }
-  const startDateString =
-    months === null ? undefined : startDate.toISOString().slice(0, 10);
 
   // 1. Fetch NAV histories from DB cache (same path as page.tsx)
   let fundDetailsPromise;

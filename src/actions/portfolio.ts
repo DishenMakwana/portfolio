@@ -40,7 +40,7 @@ import {
   memberReportCagrs,
   familyMembers,
 } from "@/db/schema";
-import { eq, lte, inArray } from "drizzle-orm";
+import { eq, lte, inArray, desc } from "drizzle-orm";
 
 /**
  * Upload and parse Excel report
@@ -326,42 +326,49 @@ export async function getDashboardDataAction(
       ? chronologicalReports[selectedReportIndex - 1]
       : null;
 
-  const holdings = await getReportHoldings(selectedReport.id);
-
   // Pre-fetch all member CAGRs for selected and previous reports to avoid N+1 queries in loop
   const reportIdsToCheck = [selectedReport.id];
   if (previousReport) {
     reportIdsToCheck.push(previousReport.id);
   }
-  const allMemberCagrs = await db
-    .select({
-      reportId: memberReportCagrs.reportId,
-      memberId: memberReportCagrs.memberId,
-      cagr: memberReportCagrs.cagr,
-    })
-    .from(memberReportCagrs)
-    .where(inArray(memberReportCagrs.reportId, reportIdsToCheck));
+
+  // Run DB queries in parallel for optimal render performance
+  const [holdings, allMemberCagrs, txHistory, previousHoldings] =
+    await Promise.all([
+      getReportHoldings(selectedReport.id),
+      db
+        .select({
+          reportId: memberReportCagrs.reportId,
+          memberId: memberReportCagrs.memberId,
+          cagr: memberReportCagrs.cagr,
+        })
+        .from(memberReportCagrs)
+        .where(inArray(memberReportCagrs.reportId, reportIdsToCheck)),
+      db
+        .select({
+          id: txTable.id,
+          memberId: txTable.memberId,
+          schemeId: txTable.schemeId,
+          folioNo: txTable.folioNo,
+          date: txTable.date,
+          type: txTable.type,
+          units: txTable.units,
+          nav: txTable.nav,
+          amount: txTable.amount,
+          sourceReportId: txTable.sourceReportId,
+        })
+        .from(txTable)
+        .where(lte(txTable.date, selectedReport.asOfDate))
+        .orderBy(desc(txTable.date), desc(txTable.id)),
+      previousReport
+        ? getReportHoldings(previousReport.id)
+        : Promise.resolve([]),
+    ]);
+
   const memberCagrMap = new Map<string, number>();
   allMemberCagrs.forEach((c) => {
     memberCagrMap.set(`${c.reportId}_${c.memberId}`, c.cagr);
   });
-
-  // 1. Fetch transactions up to report date
-  const txHistory = await db
-    .select({
-      id: txTable.id,
-      memberId: txTable.memberId,
-      schemeId: txTable.schemeId,
-      folioNo: txTable.folioNo,
-      date: txTable.date,
-      type: txTable.type,
-      units: txTable.units,
-      nav: txTable.nav,
-      amount: txTable.amount,
-      sourceReportId: txTable.sourceReportId,
-    })
-    .from(txTable)
-    .where(lte(txTable.date, selectedReport.asOfDate));
 
   const getPortfolioTransactions = (
     filterFn?: (tx: RawTransaction) => boolean
@@ -416,7 +423,6 @@ export async function getDashboardDataAction(
   >();
 
   if (previousReport) {
-    const previousHoldings = await getReportHoldings(previousReport.id);
     const previousValuation = previousHoldings.reduce(
       (acc, h) => acc + h.currentValue,
       0
@@ -710,8 +716,6 @@ export async function getDashboardDataAction(
     .sort((a, b) => b.value - a.value);
 
   // 5. Timeline data (invested vs value over time)
-  // Retrieve total valuation for each report
-  const timelineData = [];
   const latestTimelineDate =
     chronologicalReports[chronologicalReports.length - 1]?.asOfDate ||
     selectedReport.asOfDate;
@@ -731,48 +735,53 @@ export async function getDashboardDataAction(
     .from(txTable)
     .where(lte(txTable.date, latestTimelineDate));
 
-  for (const r of chronologicalReports) {
-    const snapHoldings = await getReportHoldings(r.id);
-    const snapInvested = snapHoldings.reduce(
-      (acc, h) => acc + h.purchaseValue,
-      0
-    );
-    const snapValue = snapHoldings.reduce((acc, h) => acc + h.currentValue, 0);
-    const snapCagr =
-      r.cagr !== undefined && r.cagr !== null
-        ? r.cagr
-        : snapHoldings.length > 0
-          ? snapHoldings.reduce(
-              (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
-              0
-            ) / (snapInvested || 1)
-          : 0;
-    const snapTxs: PortfolioTransaction[] = timelineTxHistory
-      .filter((tx) => tx.date <= r.asOfDate)
-      .map((tx) => ({
-        date: tx.date,
-        type: tx.type as "BUY" | "SELL",
-        amount: tx.amount,
-        units: tx.units,
-      }));
-    const snapAlpha = await calculateAlpha(snapTxs, r.asOfDate, snapValue);
+  const timelineData = await Promise.all(
+    chronologicalReports.map(async (r) => {
+      const snapHoldings = await getReportHoldings(r.id);
+      const snapInvested = snapHoldings.reduce(
+        (acc, h) => acc + h.purchaseValue,
+        0
+      );
+      const snapValue = snapHoldings.reduce(
+        (acc, h) => acc + h.currentValue,
+        0
+      );
+      const snapCagr =
+        r.cagr !== undefined && r.cagr !== null
+          ? r.cagr
+          : snapHoldings.length > 0
+            ? snapHoldings.reduce(
+                (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
+                0
+              ) / (snapInvested || 1)
+            : 0;
+      const snapTxs: PortfolioTransaction[] = timelineTxHistory
+        .filter((tx) => tx.date <= r.asOfDate)
+        .map((tx) => ({
+          date: tx.date,
+          type: tx.type as "BUY" | "SELL",
+          amount: tx.amount,
+          units: tx.units,
+        }));
+      const snapAlpha = await calculateAlpha(snapTxs, r.asOfDate, snapValue);
 
-    const formattedDate = new Date(r.asOfDate).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+      const formattedDate = new Date(r.asOfDate).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
 
-    timelineData.push({
-      date: formattedDate,
-      invested: snapInvested,
-      value: snapValue,
-      portfolioXirr: snapAlpha.portfolioXirr,
-      benchmarkXirr: snapAlpha.benchmarkXirr,
-      alpha: snapAlpha.alpha,
-      cagr: snapCagr,
-    });
-  }
+      return {
+        date: formattedDate,
+        invested: snapInvested,
+        value: snapValue,
+        portfolioXirr: snapAlpha.portfolioXirr,
+        benchmarkXirr: snapAlpha.benchmarkXirr,
+        alpha: snapAlpha.alpha,
+        cagr: snapCagr,
+      };
+    })
+  );
 
   return {
     reportsList,
@@ -888,12 +897,12 @@ export async function refreshBullionDataAction(): Promise<
  */
 export async function globalRefreshAction(): Promise<ActionResult> {
   try {
-    // 1. Clear in-memory caches
+    // 1. Clear in-memory RAM caches for benchmarks, NAVs, and stocks
     clearAllAlphaCaches();
     clearAllZerodhaCaches();
     clearAllMsflCaches();
 
-    // 3. Purge Next.js page cache
+    // 2. Purge Next.js page layout cache
     revalidatePath("/", "layout");
 
     return { success: true };

@@ -6,7 +6,7 @@ import {
   msflSchemeNavCacheMeta,
   msflSchemeNavHistory,
 } from "../db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { fetchStockHistory } from "./stockApi";
 import {
   getBenchmarkHistory,
@@ -22,6 +22,7 @@ import {
 } from "@/types/msfl";
 import { MsflHoldingParsed } from "@/types/msfl-parser";
 import { MfDetailsResponse } from "@/types/mf-api";
+import { inferFallbackClassification } from "@/helpers/stockClassifier";
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -360,7 +361,8 @@ async function triggerMsflStockNavCacheUpdate(ticker: string, range = "max") {
 
 export async function getMsflStockHistoryForSymbol(
   ticker: string,
-  range = "10y"
+  range = "10y",
+  startDate?: string
 ): Promise<MfDetailsResponse | null> {
   if (!ticker) return null;
 
@@ -385,9 +387,15 @@ export async function getMsflStockHistoryForSymbol(
       }
     }
 
-    const history = await db.query.msflSchemeNavHistory.findMany({
+    const rawHistory = await db.query.msflSchemeNavHistory.findMany({
       where: eq(msflSchemeNavHistory.schemeCode, ticker),
     });
+    const history = startDate
+      ? rawHistory.filter((h) => {
+          const [d, m, y] = h.date.split("-");
+          return `${y}-${m}-${d}` >= startDate;
+        })
+      : rawHistory;
 
     if (history.length > 0) {
       return {
@@ -585,6 +593,9 @@ export async function getMsflDashboardData(
       },
       timelineData: [],
       insights: emptyMsflInsightsData(),
+      sectorBreakdown: [],
+      marketCapBreakdown: [],
+      portfolioTimeSeries: [],
     };
   }
 
@@ -613,14 +624,35 @@ export async function getMsflDashboardData(
     .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
     .where(eq(msflHoldings.reportId, selectedReport.id));
 
+  // Fetch schemes metadata directly from PostgreSQL database
   const schemesList = await db
     .select({
       id: msflSchemes.id,
       name: msflSchemes.name,
       category: msflSchemes.category,
+      sector: msflSchemes.sector,
+      marketCapCategory: msflSchemes.marketCapCategory,
       schemeCodeApi: msflSchemes.schemeCodeApi,
     })
     .from(msflSchemes);
+
+  // If any newly inserted scheme lacks sector or marketCapCategory in DB, infer and persist into PostgreSQL
+  for (const s of schemesList) {
+    if (!s.sector || !s.marketCapCategory) {
+      const cls = inferFallbackClassification(s.name);
+      const sector = s.sector || cls.sector;
+      const marketCapCategory = s.marketCapCategory || cls.marketCapCategory;
+      await db
+        .update(msflSchemes)
+        .set({
+          sector,
+          marketCapCategory,
+        })
+        .where(eq(msflSchemes.id, s.id));
+      s.sector = sector;
+      s.marketCapCategory = marketCapCategory;
+    }
+  }
 
   const niftyHistory = await getBenchmarkHistory("120716");
   const niftyData = niftyHistory?.data || [];
@@ -630,6 +662,11 @@ export async function getMsflDashboardData(
       const symbol = h.symbol || "";
       const scheme = schemesList.find((s) => s.name === symbol);
       const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
+
+      // Read sector & marketCapCategory exclusively from DB scheme record
+      const sector = scheme?.sector || "Unclassified";
+      const marketCapCategory =
+        (scheme?.marketCapCategory as any) || "Small Cap";
 
       const stockDetails = await getMsflStockHistoryForSymbol(ticker);
       if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
@@ -643,6 +680,8 @@ export async function getMsflDashboardData(
         return {
           ...h,
           symbol,
+          sector,
+          marketCapCategory,
           xirr: metrics.xirr,
           cagr: metrics.cagr,
           alpha: metrics.alpha,
@@ -651,6 +690,8 @@ export async function getMsflDashboardData(
       return {
         ...h,
         symbol,
+        sector,
+        marketCapCategory,
         xirr: null,
         cagr: null,
         alpha: null,
@@ -817,6 +858,92 @@ export async function getMsflDashboardData(
     };
   }
 
+  // 1. Sector Breakdown
+  const sectorMap = new Map<
+    string,
+    { invested: number; currentValue: number; stockCount: number }
+  >();
+  for (const h of holdings) {
+    const sec = h.sector || "Unclassified";
+    const existing = sectorMap.get(sec) || {
+      invested: 0,
+      currentValue: 0,
+      stockCount: 0,
+    };
+    existing.invested += h.investedValue;
+    existing.currentValue += h.currentValue;
+    existing.stockCount += 1;
+    sectorMap.set(sec, existing);
+  }
+
+  const totalCurrentVal = totals.currentValue || 1;
+  const sectorBreakdown = Array.from(sectorMap.entries())
+    .map(([sec, data]) => {
+      const g = data.currentValue - data.invested;
+      const gPct = data.invested > 0 ? (g / data.invested) * 100 : 0;
+      const allocPct = (data.currentValue / totalCurrentVal) * 100;
+      return {
+        sector: sec,
+        invested: round2(data.invested),
+        currentValue: round2(data.currentValue),
+        gain: round2(g),
+        gainPct: round2(gPct),
+        allocationPct: round2(allocPct),
+        stockCount: data.stockCount,
+      };
+    })
+    .sort((a, b) => b.currentValue - a.currentValue);
+
+  // 2. Market Cap Breakdown
+  const capCategories: Array<
+    "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap"
+  > = ["Large Cap", "Mid Cap", "Small Cap", "Micro Cap"];
+  const capMap = new Map<
+    string,
+    { invested: number; currentValue: number; stockCount: number }
+  >();
+  for (const cat of capCategories) {
+    capMap.set(cat, { invested: 0, currentValue: 0, stockCount: 0 });
+  }
+
+  for (const h of holdings) {
+    const cat = h.marketCapCategory || "Small Cap";
+    const existing = capMap.get(cat) || {
+      invested: 0,
+      currentValue: 0,
+      stockCount: 0,
+    };
+    existing.invested += h.investedValue;
+    existing.currentValue += h.currentValue;
+    existing.stockCount += 1;
+    capMap.set(cat, existing);
+  }
+
+  const marketCapBreakdown = capCategories.map((cat) => {
+    const data = capMap.get(cat)!;
+    const allocPct = (data.currentValue / totalCurrentVal) * 100;
+    return {
+      category: cat,
+      invested: round2(data.invested),
+      currentValue: round2(data.currentValue),
+      allocationPct: round2(allocPct),
+      stockCount: data.stockCount,
+    };
+  });
+
+  // 3. Portfolio Time Series
+  const portfolioTimeSeries = timelineData.map((t) => {
+    const dIso = parseIsoDate(t.date);
+    const dNoon = new Date(`${t.date}T12:00:00.000Z`);
+    return {
+      date: t.date,
+      timestamp: isNaN(dNoon.getTime()) ? dIso.getTime() : dNoon.getTime(),
+      invested: totals.invested,
+      currentValue: t.portfolioValue,
+      gain: round2(t.portfolioValue - totals.invested),
+    };
+  });
+
   return {
     reportsList,
     selectedReport,
@@ -825,5 +952,8 @@ export async function getMsflDashboardData(
     metricDeltas,
     timelineData,
     insights,
+    sectorBreakdown,
+    marketCapBreakdown,
+    portfolioTimeSeries,
   };
 }
