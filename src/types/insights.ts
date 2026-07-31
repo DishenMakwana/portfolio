@@ -23,6 +23,7 @@ export interface InsightsData {
     memberCount: number;
     portfolioXirr: number;
     benchmarkXirr: number;
+    alpha: number;
   };
   memberCagrs: Array<{ memberName: string; cagr: number }>;
   categoryAllocation: Array<{

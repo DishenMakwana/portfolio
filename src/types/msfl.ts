@@ -44,6 +44,32 @@ export interface MsflInsightsData {
   };
 }
 
+export interface MsflSectorBreakdownItem {
+  sector: string;
+  invested: number;
+  currentValue: number;
+  gain: number;
+  gainPct: number;
+  allocationPct: number;
+  stockCount: number;
+}
+
+export interface MsflMarketCapBreakdownItem {
+  category: "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap";
+  invested: number;
+  currentValue: number;
+  allocationPct: number;
+  stockCount: number;
+}
+
+export interface MsflTimeSeriesPoint {
+  date: string;
+  timestamp: number;
+  invested: number;
+  currentValue: number;
+  gain: number;
+}
+
 export interface MsflHoldingData {
   id: number;
   reportId: number | null;
@@ -55,6 +81,9 @@ export interface MsflHoldingData {
   currentValue: number;
   unrealizedPnl: number;
   unrealizedPnlPct: number;
+  sector?: string | null;
+  marketCapCategory?:
+    "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap" | null;
   xirr?: number | null;
   cagr?: number | null;
   alpha?: number | null;
@@ -101,6 +130,9 @@ export interface MsflDashboardData {
     portfolioReturn: number;
     niftyReturn: number;
   }[];
+  sectorBreakdown: MsflSectorBreakdownItem[];
+  marketCapBreakdown: MsflMarketCapBreakdownItem[];
+  portfolioTimeSeries: MsflTimeSeriesPoint[];
 }
 
 export interface MsflDashboardClientProps {
@@ -127,4 +159,32 @@ export interface MsflLeaderboardChartProps {
 export interface DeltaBadgeProps {
   delta: number | null;
   label?: string;
+}
+
+export interface MsflHeroCardsProps {
+  totals: MsflDashboardData["totals"];
+  insights: MsflInsightsData;
+  mfCagrDelta: number | null;
+  benchmarkLabel: string;
+}
+
+export interface MsflBenchmarkAndSummaryCardsProps {
+  totals: MsflDashboardData["totals"];
+  metricDeltas: MsflDashboardData["metricDeltas"];
+  holdingsCount: number;
+  topPerformer: MsflHoldingData | null;
+}
+
+export interface MsflHoldingsSectionProps {
+  holdings: MsflHoldingData[];
+  filteredHoldings: MsflHoldingData[];
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  sortField: MsflSortField;
+  sortOrder: "asc" | "desc";
+  toggleSort: (field: MsflSortField) => void;
+  renderSortIcon: (field: MsflSortField) => React.ReactNode;
+  handleEditMapping: (h: MsflHoldingData) => void;
+  beatingFunds: MsflHoldingData[];
+  laggingFunds: MsflHoldingData[];
 }

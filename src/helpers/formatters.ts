@@ -122,6 +122,7 @@ export function formatDate(date: string | Date): string {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -200,13 +201,19 @@ export function formatMetricDiff(
     };
   }
 
+  const rounded = Math.round(diff);
+  if (rounded === 0 && rounded < 0.5) {
+    return {
+      sub: "No change",
+      subColor: "text-slate-400",
+    };
+  }
+
   const isDiffPositive = diff >= 0;
   const sub =
     diff > 0
       ? `+${formatCurrency(diff)} vs last`
-      : diff < 0
-        ? `${formatCurrency(diff)} vs last`
-        : "No change";
+      : `${formatCurrency(diff)} vs last`;
 
   const subColor = isDiffPositive ? "text-emerald-400" : "text-red-400";
 

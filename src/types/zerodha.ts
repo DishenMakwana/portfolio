@@ -6,6 +6,7 @@ export interface ZerodhaHolding {
   symbol: string;
   isin: string;
   sector: string | null;
+  marketCapCategory?: string | null;
   instrumentType: string | null;
   quantity: number;
   averagePrice: number;
@@ -28,6 +29,24 @@ export interface ZerodhaHolding {
   lockinQuantity?: number | null;
   lockinDate?: string | null;
   balanceDescription?: string | null;
+}
+
+export interface ZerodhaSectorBreakdownItem {
+  sector: string;
+  investedValue: number;
+  currentValue: number;
+  gain: number;
+  gainPct: number;
+  allocationPct: number;
+  stockCount: number;
+}
+
+export interface ZerodhaMarketCapBreakdownItem {
+  category: "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap";
+  investedValue: number;
+  currentValue: number;
+  allocationPct: number;
+  stockCount: number;
 }
 
 export interface ZerodhaScheme {
@@ -115,6 +134,8 @@ export interface ZerodhaDashboardData {
   };
   sectorAllocation: { name: string; value: number }[];
   categoryAllocation: { name: string; value: number }[];
+  sectorBreakdown: ZerodhaSectorBreakdownItem[];
+  marketCapBreakdown: ZerodhaMarketCapBreakdownItem[];
   assetSplit: { name: string; value: number }[];
   timelineData: {
     date: string;

@@ -1,4 +1,5 @@
 import type { OverviewHolding } from "@/types/portfolio";
+import type { SortOrder } from "@/types/allocation";
 
 export const OVERVIEW_COLORS = [
   "#10b981",
@@ -91,4 +92,76 @@ export interface CustomTooltipProps {
 
 export interface PageProps {
   searchParams: Promise<{ reportId?: string }>;
+}
+
+export interface OverviewHeroCardsProps {
+  totals: OverviewTabProps["totals"];
+  topFund: OverviewHolding | undefined;
+  worstFund: OverviewHolding | undefined;
+  insights: {
+    weightedCagr: number | null;
+  };
+  benchmarkLabel: string;
+  mfCagrDelta: number | null;
+}
+
+export interface OverviewBenchmarkCardsProps {
+  totals: OverviewTabProps["totals"];
+  metricDeltas: OverviewTabProps["metricDeltas"];
+  benchmarkLabel: string;
+  mfCagrDelta: number | null;
+  cagrAlpha: number | null;
+}
+
+export interface OverviewGrowthChartProps {
+  timelineData: OverviewTabProps["timelineData"];
+  totals: OverviewTabProps["totals"];
+  metricDeltas: OverviewTabProps["metricDeltas"];
+}
+
+export interface OverviewXirrChartProps {
+  timelineData: OverviewTabProps["timelineData"];
+}
+
+export interface OverviewAllocationPanelsProps {
+  categoryAllocation: OverviewTabProps["categoryAllocation"];
+  amcAllocation: OverviewTabProps["amcAllocation"];
+  totals: OverviewTabProps["totals"];
+  taxEstimate: {
+    ltcgEstimate: number;
+    stcgEstimate: number;
+    totalTaxEstimate: number;
+  };
+  metricDeltas: OverviewTabProps["metricDeltas"];
+}
+
+export interface OverviewMemberAndSubCategorySectionProps {
+  memberSummaries: OverviewTabProps["memberSummaries"];
+  totalCurrentValue: number;
+  capAllocation: OverviewTabProps["capAllocation"];
+  diversityInsights: {
+    categoryCount: number;
+    amcCount: number;
+    schemeCount: number;
+  };
+  concentrationInsights: {
+    topCategory: string;
+    categoryPct: number;
+    topAmc: string;
+    amcPct: number;
+    avgDays: number;
+  };
+  topFund: OverviewHolding | undefined;
+  worstFund: OverviewHolding | undefined;
+  sortField:
+    "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha";
+  sortOrder: SortOrder;
+  toggleSort: (
+    field:
+      "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha"
+  ) => void;
+  renderSortIcon: (
+    field:
+      "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha"
+  ) => React.ReactNode;
 }
