@@ -200,6 +200,7 @@ export const schemeNavHistory = mySchema.table(
   },
   (table) => [
     unique("scheme_nav_history_code_date_uq").on(table.schemeCode, table.date),
+    index("scheme_nav_history_scheme_code_idx").on(table.schemeCode),
   ]
 );
 
@@ -250,6 +251,7 @@ export const zerodhaSchemes = mySchema.table(
     isin: text("isin"),
     holdingType: text("holding_type"),
     sector: text("sector"),
+    marketCapCategory: text("market_cap_category"),
     instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
@@ -291,6 +293,7 @@ export const zerodhaSchemeNavHistory = mySchema.table(
       table.schemeCode,
       table.date
     ),
+    index("zerodha_scheme_nav_history_scheme_code_idx").on(table.schemeCode),
   ]
 );
 
@@ -354,6 +357,7 @@ export const benchmarkNavHistory = mySchema.table(
       table.benchmarkCode,
       table.date
     ),
+    index("benchmark_nav_history_benchmark_code_idx").on(table.benchmarkCode),
   ]
 );
 
@@ -399,6 +403,7 @@ export const msflSchemes = mySchema.table(
     isin: text("isin"),
     holdingType: text("holding_type"),
     sector: text("sector"),
+    marketCapCategory: text("market_cap_category"),
     instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
@@ -438,6 +443,7 @@ export const msflSchemeNavHistory = mySchema.table(
       table.schemeCode,
       table.date
     ),
+    index("msfl_scheme_nav_history_scheme_code_idx").on(table.schemeCode),
   ]
 );
 
