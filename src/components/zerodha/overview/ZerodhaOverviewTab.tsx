@@ -342,8 +342,8 @@ export default function ZerodhaOverviewTab({
                       <span
                         className={`w-2.5 h-2.5 rounded-sm flex-shrink-0 ${ZERODHA_COLOR_CLASSES[(index + 2) % ZERODHA_COLOR_CLASSES.length]}`}
                       />
-                      <div className="flex flex-col">
-                        <span className="text-slate-300 font-medium truncate max-w-[140px]">
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="text-slate-300 font-medium leading-snug">
                           {entry.name}
                         </span>
                         <span className="text-[10px] text-slate-500 font-normal mt-0.5">
@@ -593,7 +593,7 @@ export default function ZerodhaOverviewTab({
                 Top AMC Exposure
               </div>
               <div
-                className="text-base font-extrabold text-slate-100 truncate"
+                className="text-base font-extrabold text-slate-100 leading-snug"
                 title={insights.topAmc}
               >
                 {insights.topAmc}
@@ -622,12 +622,12 @@ export default function ZerodhaOverviewTab({
           {/* Top Assets */}
           <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
             {insights.topStock ? (
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 font-medium">
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-slate-400 font-medium shrink-0">
                   Top Stock Asset
                 </span>
                 <span
-                  className="text-teal-400 font-bold truncate max-w-[180px] text-right"
+                  className="text-teal-400 font-bold text-right leading-snug"
                   title={insights.topStock.symbol}
                 >
                   {insights.topStock.symbol} ({insights.topStockPct.toFixed(1)}%
@@ -643,16 +643,16 @@ export default function ZerodhaOverviewTab({
               </div>
             )}
             {insights.topFund ? (
-              <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
-                <span className="text-slate-400 font-medium">
+              <div className="flex justify-between items-center gap-2 border-t border-slate-800/50 pt-2">
+                <span className="text-slate-400 font-medium shrink-0">
                   Top Mutual Fund
                 </span>
                 <span
-                  className="text-violet-400 font-bold truncate max-w-[180px] text-right"
+                  className="text-violet-400 font-bold text-right leading-snug"
                   title={insights.topFund.symbol}
                 >
-                  {insights.topFund.symbol.split(" ")[0]} (
-                  {insights.topFundPct.toFixed(1)}% share)
+                  {insights.topFund.symbol} ({insights.topFundPct.toFixed(1)}%
+                  share)
                 </span>
               </div>
             ) : (

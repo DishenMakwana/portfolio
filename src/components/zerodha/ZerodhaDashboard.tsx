@@ -38,6 +38,7 @@ import { ZERODHA_COLORS } from "@/types/zerodha";
 import ZerodhaMappingTab from "@/components/zerodha/mapping/ZerodhaMappingTab";
 import ZerodhaOverviewTab from "@/components/zerodha/overview/ZerodhaOverviewTab";
 import ZerodhaStocksTab from "@/components/zerodha/stocks/ZerodhaStocksTab";
+import ZerodhaSectorAndCapAnalysis from "@/components/zerodha/stocks/ZerodhaSectorAndCapAnalysis";
 import ZerodhaFundsTab from "@/components/zerodha/funds/ZerodhaFundsTab";
 import ZerodhaSnapshotsTab from "@/components/zerodha/snapshots/ZerodhaSnapshotsTab";
 import ZerodhaInsightsTab from "@/components/zerodha/insights/ZerodhaInsightsTab";
@@ -564,14 +565,20 @@ export default function ZerodhaDashboard({
         {activeTab === "insights" && <ZerodhaInsightsTab data={data} />}
 
         {activeTab === "stocks" && (
-          <ZerodhaStocksTab
-            stocks={stocks}
-            renderStockSortIcon={renderStockSortIcon}
-            toggleStockSort={toggleStockSort}
-            stockSortField={stockSortField}
-            stockSortOrder={stockSortOrder}
-            formatPrice={formatPrice}
-          />
+          <div className="space-y-6">
+            <ZerodhaStocksTab
+              stocks={stocks}
+              renderStockSortIcon={renderStockSortIcon}
+              toggleStockSort={toggleStockSort}
+              stockSortField={stockSortField}
+              stockSortOrder={stockSortOrder}
+              formatPrice={formatPrice}
+            />
+            <ZerodhaSectorAndCapAnalysis
+              sectorBreakdown={data.sectorBreakdown}
+              marketCapBreakdown={data.marketCapBreakdown}
+            />
+          </div>
         )}
 
         {activeTab === "funds" && (

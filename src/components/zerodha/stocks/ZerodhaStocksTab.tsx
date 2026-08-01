@@ -194,7 +194,7 @@ export default function ZerodhaStocksTab({
                       <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] shrink-0 whitespace-nowrap">
                         {s.instrumentType || "EQ"}
                       </span>
-                      <span className="font-mono shrink-0">{s.isin}</span>
+                      <span className="shrink-0">{s.isin}</span>
                     </div>
                   </td>
                   {/* Quantity */}
@@ -220,20 +220,12 @@ export default function ZerodhaStocksTab({
                   {/* P&L + abs return sub-line */}
                   <td className="p-4 text-right">
                     <div
-                      className={`font-semibold ${
-                        s.unrealizedPnl >= 0
-                          ? "text-emerald-400"
-                          : "text-red-400"
-                      }`}
+                      className={`font-semibold ${s.unrealizedPnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
                     >
                       {formatCurrency(s.unrealizedPnl)}
                     </div>
                     <div
-                      className={`text-[11px] ${
-                        s.unrealizedPnl >= 0
-                          ? "text-emerald-500/80"
-                          : "text-red-500/80"
-                      }`}
+                      className={`text-[11px] ${s.unrealizedPnl >= 0 ? "text-emerald-500/80" : "text-red-500/80"}`}
                     >
                       {s.unrealizedPnlPct >= 0 ? "+" : ""}
                       {s.unrealizedPnlPct.toFixed(1)}% Abs
@@ -241,13 +233,7 @@ export default function ZerodhaStocksTab({
                   </td>
                   {/* XIRR */}
                   <td
-                    className={`p-4 text-right font-bold ${
-                      s.xirr !== null && s.xirr !== undefined && s.xirr >= 0
-                        ? "text-teal-400"
-                        : s.xirr !== null && s.xirr !== undefined
-                          ? "text-red-400"
-                          : "text-teal-400"
-                    }`}
+                    className={`p-4 text-right font-bold ${s.xirr !== null && s.xirr !== undefined && s.xirr >= 0 ? "text-teal-400" : s.xirr !== null && s.xirr !== undefined ? "text-red-400" : "text-teal-400"}`}
                   >
                     {s.xirr !== null && s.xirr !== undefined
                       ? formatPercent(s.xirr)
@@ -257,11 +243,7 @@ export default function ZerodhaStocksTab({
                   <td className="p-4 text-right">
                     {s.alpha !== null && s.alpha !== undefined ? (
                       <span
-                        className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
-                          s.alpha >= 0
-                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
-                            : "bg-red-950/80 text-red-400 border border-red-800/40"
-                        }`}
+                        className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${s.alpha >= 0 ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
                       >
                         {s.alpha >= 0 ? "+" : ""}
                         {s.alpha.toFixed(2)}%
@@ -309,30 +291,20 @@ export default function ZerodhaStocksTab({
                     {formatCurrency(stockTotals.totalPnlSum)}
                   </div>
                   <div
-                    className={`text-[11px] ${
-                      stockTotals.totalPnlSum >= 0
-                        ? "text-emerald-500/80"
-                        : "text-red-500/80"
-                    }`}
+                    className={`text-[11px] ${stockTotals.totalPnlSum >= 0 ? "text-emerald-500/80" : "text-red-500/80"}`}
                   >
                     {stockTotals.totalPnlPct >= 0 ? "+" : ""}
                     {stockTotals.totalPnlPct.toFixed(1)}% Abs
                   </div>
                 </td>
                 <td
-                  className={`p-4 text-right ${
-                    stockTotals.avgXirr >= 0 ? "text-teal-400" : "text-red-400"
-                  }`}
+                  className={`p-4 text-right ${stockTotals.avgXirr >= 0 ? "text-teal-400" : "text-red-400"}`}
                 >
                   {formatPercent(stockTotals.avgXirr)}
                 </td>
                 <td className="p-4 text-right">
                   <span
-                    className={`inline-block px-2 py-0.5 rounded text-xs ${
-                      stockTotals.avgAlpha >= 0
-                        ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
-                        : "bg-red-950/80 text-red-400 border border-red-800/40"
-                    }`}
+                    className={`inline-block px-2 py-0.5 rounded text-xs ${stockTotals.avgAlpha >= 0 ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
                   >
                     {stockTotals.avgAlpha >= 0 ? "+" : ""}
                     {stockTotals.avgAlpha.toFixed(2)}%

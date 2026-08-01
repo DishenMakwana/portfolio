@@ -4,8 +4,9 @@ import {
 } from "@/lib/zerodhaService";
 import ZerodhaDashboard from "@/components/zerodha/ZerodhaDashboard";
 import { Briefcase } from "lucide-react";
-
 import { PageProps } from "@/types/zerodha";
+import { Suspense } from "react";
+import Loading from "@/app/loading";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Zerodha Portfolio" };
@@ -32,7 +33,9 @@ export default async function ZerodhaPage({ searchParams }: PageProps) {
         </div>
       </header>
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30 selection:text-teal-200">
-        <ZerodhaDashboard data={data} allSchemes={allSchemes} />
+        <Suspense fallback={<Loading />}>
+          <ZerodhaDashboard data={data} allSchemes={allSchemes} />
+        </Suspense>
       </main>
     </>
   );

@@ -172,11 +172,7 @@ export default function ZerodhaMappingTab({
               <button
                 key={tab}
                 onClick={() => setMappingFilter(tab)}
-                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${
-                  mappingFilter === tab
-                    ? "bg-slate-800 text-slate-100 shadow-md"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${mappingFilter === tab ? "bg-slate-800 text-slate-100 shadow-md" : "text-slate-400 hover:text-slate-200"}`}
               >
                 {tab === "all" ? "All Status" : tab}
               </button>
@@ -189,11 +185,7 @@ export default function ZerodhaMappingTab({
               <button
                 key={type}
                 onClick={() => setAssetTypeFilter(type)}
-                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${
-                  assetTypeFilter === type
-                    ? "bg-slate-800 text-slate-100 shadow-md"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+                className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${assetTypeFilter === type ? "bg-slate-800 text-slate-100 shadow-md" : "text-slate-400 hover:text-slate-200"}`}
               >
                 {type === "all"
                   ? "All Assets"
@@ -247,7 +239,7 @@ export default function ZerodhaMappingTab({
                     </td>
                     <td className="py-3.5 px-4">
                       {s.schemeCodeApi ? (
-                        <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-bold">
+                        <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
                           <CheckCircle size={12} />
                           {s.schemeCodeApi}
                         </div>
@@ -443,7 +435,7 @@ export default function ZerodhaMappingTab({
                           <div className="font-bold text-slate-300 flex-1 pr-4 leading-normal">
                             {res.schemeName}
                           </div>
-                          <div className="font-mono text-[10px] font-bold text-teal-400 shrink-0">
+                          <div className="text-[10px] font-bold text-teal-400 shrink-0">
                             {res.schemeCode}
                           </div>
                         </div>
