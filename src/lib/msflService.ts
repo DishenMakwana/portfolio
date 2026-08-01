@@ -590,6 +590,9 @@ export async function getMsflDashboardData(
         portfolioXirr: null,
         benchmarkXirr: null,
         alpha: null,
+        investedDiff: null,
+        currentValueDiff: null,
+        gainDiff: null,
       },
       timelineData: [],
       insights: emptyMsflInsightsData(),
@@ -841,6 +844,13 @@ export async function getMsflDashboardData(
     portfolioXirr: null as number | null,
     benchmarkXirr: null as number | null,
     alpha: null as number | null,
+    investedDiff: previousTotals
+      ? round2(totals.invested - previousTotals.invested)
+      : null,
+    currentValueDiff: previousTotals
+      ? round2(totals.currentValue - previousTotals.currentValue)
+      : null,
+    gainDiff: previousTotals ? round2(totals.gain - previousTotals.gain) : null,
   };
 
   if (previousReport) {
@@ -855,6 +865,15 @@ export async function getMsflDashboardData(
       portfolioXirr: round2(totals.portfolioXirr - prevMetrics.portfolioXirr),
       benchmarkXirr: round2(totals.benchmarkXirr - prevMetrics.benchmarkXirr),
       alpha: round2(totals.alpha - prevMetrics.alpha),
+      investedDiff: previousTotals
+        ? round2(totals.invested - previousTotals.invested)
+        : null,
+      currentValueDiff: previousTotals
+        ? round2(totals.currentValue - previousTotals.currentValue)
+        : null,
+      gainDiff: previousTotals
+        ? round2(totals.gain - previousTotals.gain)
+        : null,
     };
   }
 

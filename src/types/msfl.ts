@@ -120,6 +120,9 @@ export interface MsflDashboardData {
     portfolioXirr: number | null;
     benchmarkXirr: number | null;
     alpha: number | null;
+    investedDiff: number | null;
+    currentValueDiff: number | null;
+    gainDiff: number | null;
   };
   insights: MsflInsightsData;
   timelineData: {
@@ -164,6 +167,7 @@ export interface DeltaBadgeProps {
 export interface MsflHeroCardsProps {
   totals: MsflDashboardData["totals"];
   insights: MsflInsightsData;
+  metricDeltas: MsflDashboardData["metricDeltas"];
   mfCagrDelta: number | null;
   benchmarkLabel: string;
 }
