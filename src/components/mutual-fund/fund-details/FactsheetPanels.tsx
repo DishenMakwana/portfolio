@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Layers,
@@ -12,6 +12,9 @@ import {
   ChevronDown,
   Calendar,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from "lucide-react";
 import {
   formatNullableDate,
@@ -19,6 +22,50 @@ import {
   formatCurrency,
 } from "@/helpers/formatters";
 import { FactsheetPanelsProps } from "@/types/fund-details";
+
+function getCurrentFinancialYearLabel(date: Date = new Date()): string {
+  const month = date.getMonth(); // 0-indexed (0 = Jan, 3 = Apr)
+  const year = date.getFullYear();
+  const startYear = month >= 3 ? year : year - 1;
+  const endYearShort = (startYear + 1).toString().slice(-2);
+  return `FY ${startYear}-${endYearShort}`;
+}
+
+function getTxFinancialYear(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Unknown";
+  let d: Date;
+  if (dateStr.includes("-")) {
+    const parts = dateStr.split("-");
+    if (parts[0].length === 4) {
+      d = new Date(`${dateStr}T00:00:00`);
+    } else if (parts[2]?.length === 4) {
+      const [day, month, year] = parts;
+      const monthIdx = isNaN(Number(month))
+        ? new Date(`${month} 1, 2000`).getMonth()
+        : Number(month) - 1;
+      d = new Date(Number(year), monthIdx, Number(day));
+    } else {
+      d = new Date(dateStr);
+    }
+  } else {
+    d = new Date(dateStr);
+  }
+
+  if (isNaN(d.getTime())) {
+    const match = dateStr.match(/\b(20\d\d|19\d\d)\b/);
+    if (match) {
+      const yr = Number(match[1]);
+      return `FY ${yr}-${(yr + 1).toString().slice(-2)}`;
+    }
+    return "Unknown";
+  }
+
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  const startYear = month >= 3 ? year : year - 1;
+  const endYearShort = (startYear + 1).toString().slice(-2);
+  return `FY ${startYear}-${endYearShort}`;
+}
 
 export default function FactsheetPanels({
   holding,
@@ -30,6 +77,74 @@ export default function FactsheetPanels({
   isDebt,
 }: FactsheetPanelsProps) {
   const [showExplanation, setShowExplanation] = useState<boolean>(false);
+
+  // Current Financial Year label (e.g., "FY 2026-27")
+  const currentFYLabel = useMemo(() => getCurrentFinancialYearLabel(), []);
+
+  // Group transactions count by Financial Year
+  const fyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    transactions.forEach((tx) => {
+      const fy = getTxFinancialYear(tx.date);
+      counts[fy] = (counts[fy] || 0) + 1;
+    });
+    return counts;
+  }, [transactions]);
+
+  // Unique list of Financial Years in descending order
+  const availableFYs = useMemo(() => {
+    return Object.keys(fyCounts).sort((a, b) => b.localeCompare(a));
+  }, [fyCounts]);
+
+  // Determine default Financial Year filter (Current FY if transactions exist, else latest available FY)
+  const defaultFY = useMemo(() => {
+    if (fyCounts[currentFYLabel]) return currentFYLabel;
+    if (availableFYs.length > 0) return availableFYs[0];
+    return currentFYLabel;
+  }, [currentFYLabel, fyCounts, availableFYs]);
+
+  // Transaction History Pagination & Filtering State (Defaults to Current Financial Year)
+  const [selectedFY, setSelectedFY] = useState<string>(defaultFY);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Sync selectedFY when defaultFY changes or transactions update
+  useEffect(() => {
+    if (selectedFY !== "ALL" && !fyCounts[selectedFY]) {
+      setSelectedFY(defaultFY);
+      setCurrentPage(1);
+    }
+  }, [transactions, defaultFY, selectedFY, fyCounts]);
+
+  // Filter transactions by selected Financial Year
+  const filteredTransactions = useMemo(() => {
+    if (selectedFY === "ALL") return transactions;
+    return transactions.filter(
+      (tx) => getTxFinancialYear(tx.date) === selectedFY
+    );
+  }, [transactions, selectedFY]);
+
+  // Calculate total pages
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredTransactions.length / pageSize)
+  );
+
+  // Paginate transactions
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, currentPage, pageSize]);
+
+  const handleFYChange = (fy: string) => {
+    setSelectedFY(fy);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="space-y-8">
@@ -59,7 +174,7 @@ export default function FactsheetPanels({
                   <span className="text-slate-400 font-medium">
                     Corpus (Cr)
                   </span>
-                  <span className="font-mono font-bold text-slate-200">
+                  <span className="font-bold text-slate-200">
                     ₹{factsheetMeta.profile.corpusCr.toLocaleString("en-IN")}
                   </span>
                 </div>
@@ -78,7 +193,7 @@ export default function FactsheetPanels({
                     <span className="text-slate-400 font-medium">
                       Expense Ratio
                     </span>
-                    <span className="font-mono font-bold text-slate-200">
+                    <span className="font-bold text-slate-200">
                       {factsheetMeta.profile.expenseRatio.toFixed(2)}%
                     </span>
                   </div>
@@ -128,7 +243,7 @@ export default function FactsheetPanels({
                 <div>
                   <div className="flex justify-between text-xs font-bold mb-1.5">
                     <span className="text-slate-300">Equity Allocation</span>
-                    <span className="text-teal-400 font-mono">
+                    <span className="text-teal-400">
                       {factsheetMeta.allocation.equity.toFixed(1)}%
                     </span>
                   </div>
@@ -147,7 +262,7 @@ export default function FactsheetPanels({
                 <div>
                   <div className="flex justify-between text-xs font-bold mb-1.5">
                     <span className="text-slate-300">Debt Allocation</span>
-                    <span className="text-purple-400 font-mono">
+                    <span className="text-purple-400">
                       {factsheetMeta.allocation.debt.toFixed(1)}%
                     </span>
                   </div>
@@ -164,7 +279,7 @@ export default function FactsheetPanels({
                 <div>
                   <div className="flex justify-between text-xs font-bold mb-1.5">
                     <span className="text-slate-300">Gold</span>
-                    <span className="text-amber-400 font-mono">
+                    <span className="text-amber-400">
                       {factsheetMeta.allocation.gold.toFixed(1)}%
                     </span>
                   </div>
@@ -181,7 +296,7 @@ export default function FactsheetPanels({
                 <div>
                   <div className="flex justify-between text-xs font-bold mb-1.5">
                     <span className="text-slate-300">Global Equity</span>
-                    <span className="text-blue-400 font-mono">
+                    <span className="text-blue-400">
                       {factsheetMeta.allocation.globalEquity.toFixed(1)}%
                     </span>
                   </div>
@@ -202,7 +317,7 @@ export default function FactsheetPanels({
                     <span className="text-slate-300">
                       Other (Cash/Call Money)
                     </span>
-                    <span className="text-slate-400 font-mono">
+                    <span className="text-slate-400">
                       {factsheetMeta.allocation.other.toFixed(1)}%
                     </span>
                   </div>
@@ -242,7 +357,7 @@ export default function FactsheetPanels({
                   </span>
                 </span>
                 <span
-                  className={`text-base font-black font-mono block mt-1 ${currentVolatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                  className={`text-base font-black block mt-1 ${currentVolatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
                 >
                   {currentVolatilityStats.alpha.toFixed(2)}%
                 </span>
@@ -254,7 +369,7 @@ export default function FactsheetPanels({
                     <Info size={10} className="text-slate-600" />
                   </span>
                 </span>
-                <span className="text-base font-black font-mono text-teal-400 block mt-1">
+                <span className="text-base font-black text-teal-400 block mt-1">
                   {currentVolatilityStats.sharpe.toFixed(2)}
                 </span>
               </div>
@@ -265,7 +380,7 @@ export default function FactsheetPanels({
                     <Info size={10} className="text-slate-600" />
                   </span>
                 </span>
-                <span className="text-base font-black font-mono text-slate-200 block mt-1">
+                <span className="text-base font-black text-slate-200 block mt-1">
                   {currentVolatilityStats.mean.toFixed(2)}%
                 </span>
               </div>
@@ -276,7 +391,7 @@ export default function FactsheetPanels({
                     <Info size={10} className="text-slate-600" />
                   </span>
                 </span>
-                <span className="text-base font-black font-mono text-indigo-400 block mt-1">
+                <span className="text-base font-black text-indigo-400 block mt-1">
                   {currentVolatilityStats.beta.toFixed(2)}
                 </span>
               </div>
@@ -289,7 +404,7 @@ export default function FactsheetPanels({
                     <Info size={10} className="text-slate-600" />
                   </span>
                 </span>
-                <span className="text-base font-black font-mono text-slate-200 block mt-1">
+                <span className="text-base font-black text-slate-200 block mt-1">
                   {currentVolatilityStats.stdDev.toFixed(2)}%
                 </span>
               </div>
@@ -302,7 +417,7 @@ export default function FactsheetPanels({
                         <Info size={10} className="text-slate-600" />
                       </span>
                     </span>
-                    <span className="text-base font-black font-mono text-slate-400 block mt-1">
+                    <span className="text-base font-black text-slate-400 block mt-1">
                       {currentVolatilityStats.ytm > 0
                         ? `${currentVolatilityStats.ytm.toFixed(2)}%`
                         : "0.0%"}
@@ -315,7 +430,7 @@ export default function FactsheetPanels({
                         <Info size={10} className="text-slate-600" />
                       </span>
                     </span>
-                    <span className="text-base font-black font-mono text-slate-400 block mt-1">
+                    <span className="text-base font-black text-slate-400 block mt-1">
                       {currentVolatilityStats.modifiedDuration > 0
                         ? `${currentVolatilityStats.modifiedDuration.toFixed(2)} Yr`
                         : "0.0"}
@@ -328,7 +443,7 @@ export default function FactsheetPanels({
                         <Info size={10} className="text-slate-600" />
                       </span>
                     </span>
-                    <span className="text-base font-black font-mono text-slate-400 block mt-1 text-center">
+                    <span className="text-base font-black text-slate-400 block mt-1 text-center">
                       {currentVolatilityStats.avgMaturity > 0
                         ? `${currentVolatilityStats.avgMaturity.toFixed(2)} Yr`
                         : "0.0"}
@@ -375,7 +490,7 @@ export default function FactsheetPanels({
                     Outperformance
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-emerald-400 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                <div className="flex items-center gap-2 text-emerald-400 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                   <span>α = Rₚ - [ R_f + β ( R_m - R_f ) ]</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
@@ -403,7 +518,7 @@ export default function FactsheetPanels({
                     Risk-Adjusted Return
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-teal-400 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                <div className="flex items-center gap-2 text-teal-400 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                   <span>Sharpe =</span>
                   <div className="flex items-center gap-2">
                     <span>( Rₚ - R_f )</span>
@@ -432,7 +547,7 @@ export default function FactsheetPanels({
                     Market Sensitivity
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-indigo-400 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                <div className="flex items-center gap-2 text-indigo-400 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                   <span>β = Cov(Rₚ, R_m) / Var(R_m)</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
@@ -458,7 +573,7 @@ export default function FactsheetPanels({
                     Total Risk
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-200 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                <div className="flex items-center gap-2 text-slate-200 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                   <span>σ = √[ Σ(R_i - R̄)² / (n - 1) ] × √52</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
@@ -482,7 +597,7 @@ export default function FactsheetPanels({
                     Average Return
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-200 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                <div className="flex items-center gap-2 text-slate-200 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                   <span>Mean Return = R̄ × 52</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
@@ -508,7 +623,7 @@ export default function FactsheetPanels({
                       Debt Specifics
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-slate-200 font-mono text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                  <div className="flex items-center gap-2 text-slate-200 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
                     <span>Δ Price ≈ - Duration × Δy</span>
                   </div>
                   <div className="text-slate-400 text-xs leading-relaxed space-y-1">
@@ -542,7 +657,7 @@ export default function FactsheetPanels({
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                 {isStock ? "Quantity" : "Balance Units"}
               </div>
-              <div className="font-mono text-slate-200 mt-0.5 font-bold">
+              <div className="text-slate-200 mt-0.5 font-bold">
                 {isStock
                   ? holding.balanceUnits.toLocaleString("en-IN")
                   : holding.balanceUnits.toFixed(4)}
@@ -563,7 +678,7 @@ export default function FactsheetPanels({
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                 {isStock ? "Avg Purchase Price" : "Purchase NAV"}
               </div>
-              <div className="font-mono text-slate-200 mt-0.5 font-bold">
+              <div className="text-slate-200 mt-0.5 font-bold">
                 ₹{holding.purchaseNav.toFixed(4)}
               </div>
             </div>
@@ -571,7 +686,7 @@ export default function FactsheetPanels({
               <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                 {isStock ? "Current Price" : "Current NAV"}
               </div>
-              <div className="font-mono text-slate-200 mt-0.5 font-bold">
+              <div className="text-slate-200 mt-0.5 font-bold">
                 ₹{holding.currentNav.toFixed(4)}
               </div>
             </div>
@@ -581,7 +696,7 @@ export default function FactsheetPanels({
                   <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                     Dividend Paid
                   </div>
-                  <div className="font-mono text-slate-200 mt-0.5 font-bold">
+                  <div className="text-slate-200 mt-0.5 font-bold">
                     ₹{(holding.dividend ?? 0).toFixed(2)}
                   </div>
                 </div>
@@ -603,7 +718,7 @@ export default function FactsheetPanels({
                   <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                     Free Quantity
                   </div>
-                  <div className="font-mono text-slate-200 mt-0.5 font-bold">
+                  <div className="text-slate-200 mt-0.5 font-bold">
                     {holding.freeQuantity.toFixed(3)}
                   </div>
                 </div>
@@ -615,7 +730,7 @@ export default function FactsheetPanels({
                   <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                     Frozen Quantity
                   </div>
-                  <div className="font-mono text-slate-200 mt-0.5 font-bold text-red-400">
+                  <div className="text-slate-200 mt-0.5 font-bold text-red-400">
                     {holding.frozenQuantity.toFixed(3)}
                   </div>
                 </div>
@@ -627,7 +742,7 @@ export default function FactsheetPanels({
                   <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                     Pledged Quantity
                   </div>
-                  <div className="font-mono text-slate-200 mt-0.5 font-bold text-amber-400">
+                  <div className="text-slate-200 mt-0.5 font-bold text-amber-400">
                     {holding.pledgedQuantity.toFixed(3)}
                   </div>
                 </div>
@@ -640,7 +755,7 @@ export default function FactsheetPanels({
                     <div className="text-slate-500 text-[10px] font-extrabold uppercase tracking-wider">
                       Lock-in Quantity
                     </div>
-                    <div className="font-mono text-slate-200 mt-0.5 font-bold text-teal-400">
+                    <div className="text-slate-200 mt-0.5 font-bold text-teal-400">
                       {holding.lockinQuantity.toFixed(3)}
                     </div>
                   </div>
@@ -709,11 +824,11 @@ export default function FactsheetPanels({
                   {isStock ? "Stock Symbol:" : "Scheme Code:"}
                 </span>
                 {holding.schemeCodeApi ? (
-                  <span className="font-mono text-emerald-400 font-bold bg-emerald-950/20 px-2.5 py-0.5 border border-emerald-900/40 rounded text-xs">
+                  <span className="text-emerald-400 font-bold bg-emerald-950/20 px-2.5 py-0.5 border border-emerald-900/40 rounded text-xs">
                     {holding.schemeCodeApi}
                   </span>
                 ) : (
-                  <span className="font-mono text-amber-500 bg-amber-950/20 px-2.5 py-0.5 border border-amber-900/40 rounded text-xs flex items-center gap-1 font-bold">
+                  <span className="text-amber-500 bg-amber-950/20 px-2.5 py-0.5 border border-amber-900/40 rounded text-xs flex items-center gap-1 font-bold">
                     <AlertTriangle size={12} />
                     <span>Unmapped</span>
                   </span>
@@ -739,16 +854,73 @@ export default function FactsheetPanels({
 
       {/* TRANSACTION HISTORY SECTION */}
       <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm">
-        <div className="p-6 border-b border-slate-850 flex items-center justify-between">
-          <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
-            <Calendar className="text-teal-400" size={18} />
-            <span>
-              Reconstructed Transaction History ({transactions.length})
+        <div className="p-6 border-b border-slate-850 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
+              <Calendar className="text-teal-400" size={18} />
+              <span>
+                Reconstructed Transaction History ({transactions.length})
+              </span>
+            </h3>
+            <span className="text-slate-400 text-xs font-semibold">
+              Calculated from chronological snapshots
             </span>
-          </h3>
-          <span className="text-slate-400 text-xs font-semibold">
-            Calculated from chronological snapshots
-          </span>
+          </div>
+
+          {/* FINANCIAL YEAR FILTER PILLS */}
+          {availableFYs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-850/80">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+                <Filter size={12} className="text-teal-400" /> Filter FY:
+              </span>
+
+              {/* Current Financial Year Pill */}
+              {availableFYs.includes(currentFYLabel) && (
+                <button
+                  onClick={() => handleFYChange(currentFYLabel)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 flex items-center gap-1.5 ${
+                    selectedFY === currentFYLabel
+                      ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md shadow-teal-500/20"
+                      : "bg-teal-950/40 text-teal-400 border border-teal-800/60 hover:bg-teal-900/40"
+                  }`}
+                >
+                  <span>{currentFYLabel} (Current FY)</span>
+                  <span className="bg-slate-950/40 px-1.5 py-0.5 text-[10px] rounded font-black">
+                    {fyCounts[currentFYLabel]}
+                  </span>
+                </button>
+              )}
+
+              {/* Other Financial Years */}
+              {availableFYs
+                .filter((fy) => fy !== currentFYLabel)
+                .map((fy) => (
+                  <button
+                    key={fy}
+                    onClick={() => handleFYChange(fy)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
+                      selectedFY === fy
+                        ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md shadow-teal-500/20"
+                        : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80 hover:border-slate-700"
+                    }`}
+                  >
+                    {fy} ({fyCounts[fy]})
+                  </button>
+                ))}
+
+              {/* All Transactions Pill */}
+              <button
+                onClick={() => handleFYChange("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all duration-200 ${
+                  selectedFY === "ALL"
+                    ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md shadow-teal-500/20"
+                    : "bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800/80 hover:border-slate-700"
+                }`}
+              >
+                All Transactions ({transactions.length})
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -763,36 +935,38 @@ export default function FactsheetPanels({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850 text-slate-300 text-sm font-medium">
-              {transactions.length === 0 ? (
+              {paginatedTransactions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
                     className="p-8 text-center text-slate-500 font-semibold"
                   >
-                    No transactions found for this holding.
+                    No transactions found for the selected filter.
                   </td>
                 </tr>
               ) : (
-                transactions.map((tx) => (
+                paginatedTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-950/40 transition">
                     <td className="p-4">{formatNullableDate(tx.date)}</td>
                     <td className="p-4">
                       <span
-                        className={`px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider ${tx.type === "BUY" ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
+                        className={`px-2.5 py-0.5 rounded text-[10px] font-black tracking-wider ${
+                          tx.type === "BUY"
+                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                            : "bg-red-950/80 text-red-400 border border-red-800/40"
+                        }`}
                       >
                         {tx.type}
                       </span>
                     </td>
-                    <td className="p-4 font-mono font-bold">
+                    <td className="p-4 font-bold">
                       {isStock
-                        ? tx.units.toLocaleString("en-IN")
-                        : tx.units.toFixed(4)}
+                        ? Math.abs(tx.units).toLocaleString("en-IN")
+                        : Math.abs(tx.units).toFixed(4)}
                     </td>
-                    <td className="p-4 font-mono font-bold">
-                      ₹{tx.nav.toFixed(4)}
-                    </td>
-                    <td className="p-4 font-mono font-black text-slate-200">
-                      {formatCurrency(tx.amount)}
+                    <td className="p-4 font-bold">₹{tx.nav.toFixed(4)}</td>
+                    <td className="p-4 font-black text-slate-200">
+                      {formatCurrency(Math.abs(tx.amount))}
                     </td>
                   </tr>
                 ))
@@ -800,6 +974,94 @@ export default function FactsheetPanels({
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION FOOTER */}
+        {filteredTransactions.length > 0 && (
+          <div className="p-4 bg-slate-950/80 border-t border-slate-850 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-slate-400 font-medium">
+              Showing{" "}
+              <span className="font-bold text-slate-200">
+                {(currentPage - 1) * pageSize + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-bold text-slate-200">
+                {Math.min(currentPage * pageSize, filteredTransactions.length)}
+              </span>{" "}
+              of{" "}
+              <span className="font-bold text-teal-400">
+                {filteredTransactions.length}
+              </span>{" "}
+              transactions
+              {selectedFY !== "ALL" && (
+                <span className="text-slate-500 ml-1">
+                  (Filtered for {selectedFY}
+                  {selectedFY === currentFYLabel ? " - Current FY" : ""})
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Page size buttons */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-slate-500 font-bold mr-1">Show:</span>
+                {[10, 25, 50].map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => handlePageSizeChange(size)}
+                    className={`px-2.5 py-1 rounded text-xs font-extrabold transition ${
+                      pageSize === size
+                        ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                        : "text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800/80 hover:border-slate-700"
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+                <button
+                  onClick={() =>
+                    handlePageSizeChange(
+                      Math.max(filteredTransactions.length, 100)
+                    )
+                  }
+                  className={`px-2.5 py-1 rounded text-xs font-extrabold transition ${
+                    pageSize >= 100
+                      ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                      : "text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800/80 hover:border-slate-700"
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+
+              {/* Prev / Next Page controls */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                <span className="text-xs font-bold text-slate-300 px-2">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage >= totalPages}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800/80 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  title="Next Page"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

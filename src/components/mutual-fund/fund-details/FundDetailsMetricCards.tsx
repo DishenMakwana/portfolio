@@ -38,12 +38,12 @@ export default function FundDetailsMetricCards({
             <DollarSign size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-slate-100 font-mono tracking-tight">
+        <div className="text-2xl font-black text-slate-100 tracking-tight">
           {formatCurrency(holding.purchaseValue)}
         </div>
         <div className="text-xs text-slate-400 mt-2 font-medium">
           {isStock ? "Avg Price" : "Avg NAV"}:{" "}
-          <strong className="text-slate-200 font-mono">
+          <strong className="text-slate-200">
             ₹{holding.purchaseNav.toFixed(4)}
           </strong>
         </div>
@@ -59,12 +59,12 @@ export default function FundDetailsMetricCards({
             <Layers size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-slate-100 font-mono tracking-tight">
+        <div className="text-2xl font-black text-slate-100 tracking-tight">
           {formatCurrency(holding.currentValue)}
         </div>
         <div className="text-xs text-slate-400 mt-2 font-medium">
           {isStock ? "Current Price" : "Current NAV"}:{" "}
-          <strong className="text-slate-200 font-mono">
+          <strong className="text-slate-200">
             ₹{holding.currentNav.toFixed(4)}
           </strong>
         </div>
@@ -83,7 +83,7 @@ export default function FundDetailsMetricCards({
           </div>
         </div>
         <div
-          className={`text-2xl font-black font-mono tracking-tight ${isPositiveGain ? "text-emerald-400" : "text-red-400"}`}
+          className={`text-2xl font-black tracking-tight ${isPositiveGain ? "text-emerald-400" : "text-red-400"}`}
         >
           {isPositiveGain ? "+" : ""}
           {formatCurrency(absoluteGain)}
@@ -91,7 +91,7 @@ export default function FundDetailsMetricCards({
         <div className="text-xs text-slate-400 mt-2 font-medium flex items-center gap-1.5">
           <span>Absolute Return:</span>
           <span
-            className={`font-bold font-mono ${holding.absoluteReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}
+            className={`font-bold ${holding.absoluteReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}
           >
             {holding.absoluteReturn >= 0 ? "+" : ""}
             {holding.absoluteReturn.toFixed(2)}%
@@ -109,7 +109,7 @@ export default function FundDetailsMetricCards({
             <Clock size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-slate-100 font-mono tracking-tight">
+        <div className="text-2xl font-black text-slate-100 tracking-tight">
           {hasHoldingDays ? `${holding.holdingDays} Days` : "N/A"}
         </div>
         <div className="text-xs text-slate-400 mt-2 font-medium">
@@ -131,7 +131,7 @@ export default function FundDetailsMetricCards({
             <Zap size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-teal-400 font-mono tracking-tight">
+        <div className="text-2xl font-black text-teal-400 tracking-tight">
           {metrics.portfolioXirr.toFixed(2)}%
         </div>
         <div className="text-xs text-slate-400 mt-2 font-medium">
@@ -149,7 +149,7 @@ export default function FundDetailsMetricCards({
             <Target size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-indigo-400 font-mono tracking-tight">
+        <div className="text-2xl font-black text-indigo-400 tracking-tight">
           {metrics.benchmarkXirr.toFixed(2)}%
         </div>
         <div className="text-xs text-slate-400 mt-2 font-medium">
@@ -167,7 +167,7 @@ export default function FundDetailsMetricCards({
             <TrendingUp size={18} />
           </div>
         </div>
-        <div className="text-2xl font-black text-purple-400 font-mono tracking-tight">
+        <div className="text-2xl font-black text-purple-400 tracking-tight">
           {holding.cagr !== null && holding.cagr !== undefined
             ? `${holding.cagr.toFixed(2)}%`
             : "N/A"}
@@ -190,7 +190,7 @@ export default function FundDetailsMetricCards({
           </div>
         </div>
         <div
-          className={`text-2xl font-black font-mono tracking-tight ${metrics.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+          className={`text-2xl font-black tracking-tight ${metrics.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
         >
           {metrics.alpha >= 0 ? "+" : ""}
           {metrics.alpha.toFixed(2)}%

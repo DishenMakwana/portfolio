@@ -16,7 +16,7 @@ import {
   msflSchemes,
   schemeNavCacheMeta,
 } from "@/db/schema";
-import { eq, and, lte, asc, inArray } from "drizzle-orm";
+import { eq, and, lte, desc, inArray } from "drizzle-orm";
 import {
   calculateAlpha,
   getSchemeHistoryForDbCode,
@@ -282,7 +282,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             lte(zerodhaTransactions.date, holding.asOfDate!)
           )
         )
-        .orderBy(asc(zerodhaTransactions.date));
+        .orderBy(desc(zerodhaTransactions.date), desc(zerodhaTransactions.id));
     })();
   }
 
@@ -314,7 +314,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
                   lte(transactions.date, holding.asOfDate)
                 )
               )
-              .orderBy(asc(transactions.date)),
+              .orderBy(desc(transactions.date), desc(transactions.id)),
     holding.schemeCodeApi
       ? isMsfl
         ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
@@ -539,8 +539,16 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         };
 
   // 7. Generate comparison chart data (only 1Y for initial load; wider ranges fetched lazily)
-  const oneYearAgo = new Date(holding.asOfDate);
-  oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+  const asOfLocal = parseHistoryDate(holding.asOfDate);
+  const oneYearAgo = new Date(
+    asOfLocal.getFullYear(),
+    asOfLocal.getMonth() - 12,
+    asOfLocal.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
 
   const chartData =
     fundNavHistory.length > 0

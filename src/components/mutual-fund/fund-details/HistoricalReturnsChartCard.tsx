@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { TrendingUp, AlertTriangle, Calendar, Layers } from "lucide-react";
 import { formatNullableDate } from "@/helpers/formatters";
+import { parseToLocalMidnight } from "@/helpers/dates";
 import {
   HistoricalReturnsChartCardProps,
   FundTimeframe,
@@ -33,10 +34,19 @@ function CustomChartTooltip({
   const data = payload[0].payload;
   if (!data) return null;
 
+  const fullDateStr = data.timestamp
+    ? new Date(data.timestamp).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : data.date;
+
   return (
-    <div className="bg-slate-900/95 border border-slate-700/80 p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-xs font-sans space-y-2 min-w-[200px]">
+    <div className="bg-slate-900/95 border border-slate-700/80 p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-2 min-w-[200px]">
       <div className="text-slate-400 font-semibold border-b border-slate-800 pb-1.5 flex items-center justify-between">
-        <span>{data.date}</span>
+        <span>{fullDateStr}</span>
       </div>
 
       <div className="space-y-1.5">
@@ -45,12 +55,12 @@ function CustomChartTooltip({
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
             Fund Return:
           </span>
-          <span className="font-mono font-bold text-slate-100">
+          <span className="font-bold text-slate-100">
             {data.fundReturn >= 0 ? "+" : ""}
             {data.fundReturn.toFixed(2)}%
           </span>
         </div>
-        <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between font-mono">
+        <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between">
           <span>NAV:</span>
           <span>₹{data.fundNav.toFixed(2)}</span>
         </div>
@@ -62,13 +72,13 @@ function CustomChartTooltip({
                 <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
                 {benchmarkName || "Benchmark"}:
               </span>
-              <span className="font-mono font-bold text-slate-100">
+              <span className="font-bold text-slate-100">
                 {data.benchReturn >= 0 ? "+" : ""}
                 {data.benchReturn.toFixed(2)}%
               </span>
             </div>
             {data.benchNav !== null && (
-              <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between font-mono">
+              <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between">
                 <span>Index NAV:</span>
                 <span>₹{data.benchNav.toFixed(2)}</span>
               </div>
@@ -77,16 +87,24 @@ function CustomChartTooltip({
         )}
 
         {data.txs && data.txs.length > 0 && (
-          <div className="border-t border-slate-800 pt-2 space-y-1">
-            {data.txs.map((tx, idx) => (
+          <div className="pt-2 border-t border-slate-800 flex flex-col gap-1">
+            {data.txs.map((tx: any, idx: number) => (
               <div
                 key={idx}
-                className="flex justify-between items-center text-[10px] font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40"
+                className="flex items-center justify-between text-[11px] bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50"
               >
-                <span>{tx.type} Transaction:</span>
-                <span className="font-mono">
-                  ₹{tx.amount.toLocaleString("en-IN")}
+                <span
+                  className={`font-semibold ${
+                    tx.type === "BUY" ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {tx.type === "BUY" ? "BUY TRANSACTION" : "SELL TRANSACTION"}
                 </span>
+                {tx.amount > 0 && (
+                  <span className="text-slate-200 font-mono">
+                    ₹{tx.amount.toLocaleString("en-IN")}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -362,7 +380,9 @@ export default function HistoricalReturnsChartCard({
       const markers: EntryPointMarker[] = [];
 
       for (const tx of allTxs) {
-        const txTime = new Date(tx.date).getTime();
+        const txD = parseToLocalMidnight(tx.date);
+        if (!txD) continue;
+        const txTime = txD.getTime();
         const txType = tx.type as "BUY" | "SELL";
 
         const isVisible = filteredChartData.some(
@@ -462,11 +482,7 @@ export default function HistoricalReturnsChartCard({
                   <button
                     key={tf}
                     onClick={() => handleTimeframeChange(tf)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${
-                      timeframe === tf
-                        ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${timeframe === tf ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105" : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"}`}
                   >
                     {tf}
                   </button>
@@ -476,11 +492,7 @@ export default function HistoricalReturnsChartCard({
 
             <button
               onClick={() => setShowHighLow(!showHighLow)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${
-                showHighLow
-                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-950/40"
-                  : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"
-              }`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${showHighLow ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-950/40" : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"}`}
               title="Toggle High and Low points on graph"
             >
               <Layers size={13} />
@@ -742,10 +754,10 @@ export default function HistoricalReturnsChartCard({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="text-slate-400 font-semibold">Period High:</span>
-            <strong className="text-emerald-400 font-mono font-bold">
+            <strong className="text-emerald-400 font-bold">
               ₹{periodHighLow.highPt.fundNav.toFixed(2)}
             </strong>
-            <span className="text-slate-500 font-mono">
+            <span className="text-slate-500">
               (
               {new Date(periodHighLow.highPt.timestamp).toLocaleDateString(
                 "en-IN",
@@ -758,10 +770,10 @@ export default function HistoricalReturnsChartCard({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
             <span className="text-slate-400 font-semibold">Period Low:</span>
-            <strong className="text-rose-400 font-mono font-bold">
+            <strong className="text-rose-400 font-bold">
               ₹{periodHighLow.lowPt.fundNav.toFixed(2)}
             </strong>
-            <span className="text-slate-500 font-mono">
+            <span className="text-slate-500">
               (
               {new Date(periodHighLow.lowPt.timestamp).toLocaleDateString(
                 "en-IN",
@@ -774,7 +786,7 @@ export default function HistoricalReturnsChartCard({
 
           <div className="flex items-center gap-2 text-slate-300 font-medium border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0 sm:pl-3">
             <span>Range:</span>
-            <strong className="text-amber-400 font-mono font-bold">
+            <strong className="text-amber-400 font-bold">
               {(
                 periodHighLow.highPt.fundReturn - periodHighLow.lowPt.fundReturn
               ).toFixed(1)}
@@ -789,7 +801,7 @@ export default function HistoricalReturnsChartCard({
                   (24 * 60 * 60 * 1000)
               );
               return (
-                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300 font-mono ml-1">
+                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300 ml-1">
                   <Calendar size={12} className="text-amber-400" />
                   <span>
                     {daysDiff} {daysDiff === 1 ? "day" : "days"} apart

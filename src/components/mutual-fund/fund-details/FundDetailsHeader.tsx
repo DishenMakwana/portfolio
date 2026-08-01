@@ -49,7 +49,7 @@ export default function FundDetailsHeader({
                 <span className="text-slate-700 font-extrabold">•</span>
                 <span>
                   Folio:{" "}
-                  <span className="font-mono text-slate-300 font-bold">
+                  <span className="text-slate-300 font-bold">
                     {holding.folioNo}
                   </span>
                 </span>
@@ -60,7 +60,7 @@ export default function FundDetailsHeader({
                 <span className="text-slate-700 font-extrabold">•</span>
                 <span>
                   ISIN:{" "}
-                  <span className="font-mono text-slate-300 font-bold">
+                  <span className="text-slate-300 font-bold">
                     {holding.isin}
                   </span>
                 </span>
