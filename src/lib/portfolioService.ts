@@ -38,17 +38,13 @@ export async function deleteReport(reportId: number): Promise<void> {
   await db
     .delete(memberReportCagrs)
     .where(eq(memberReportCagrs.reportId, reportId));
-  // 1. Delete transactions referencing this report
-  await db
-    .delete(transactions)
-    .where(eq(transactions.sourceReportId, reportId));
-  // 2. Delete holdings snapshots referencing this report
+  // 1. Delete holdings snapshots referencing this report
   await db
     .delete(holdingsSnapshot)
     .where(eq(holdingsSnapshot.reportId, reportId));
-  // 3. Delete the report row
+  // 2. Delete the report row
   await db.delete(reports).where(eq(reports.id, reportId));
-  // 4. Rebuild all transactions to update snapshots diff ledger
+  // 3. Re-sync transaction deltas incrementally without wiping existing transactions
   await rebuildAllTransactions();
 }
 
@@ -185,25 +181,26 @@ export async function saveReportSnapshot(
     }
   }
 
-  // 4. Rebuild the transaction history chronologically
+  // 4. Incrementally sync transactions without deleting existing authentic history
   await rebuildAllTransactions();
 
   return newReport.id;
 }
 
 /**
- * Completely rebuilds the reconstructed transaction ledger based on all report snapshots
+ * Incrementally synchronizes transaction deltas based on report snapshots.
+ * Preserves all existing granular transactions in the database and only adds NEW transactions if snapshot unit deltas are detected.
  */
 export async function rebuildAllTransactions(): Promise<void> {
-  // Clear all transactions first
-  await db.delete(transactions);
-
   // Get all reports in chronological order
   const allReports = await db.query.reports.findMany({
     orderBy: [asc(reports.asOfDate)],
   });
 
   if (allReports.length === 0) return;
+
+  // Fetch all existing transactions in database once for fast lookup
+  const existingTxs = await db.query.transactions.findMany();
 
   for (let rIndex = 0; rIndex < allReports.length; rIndex++) {
     const currentReport = allReports[rIndex];
@@ -212,32 +209,66 @@ export async function rebuildAllTransactions(): Promise<void> {
     });
 
     if (rIndex === 0) {
-      // First Report: Reconstruct initial buys from holdingDays
+      // First Report: Reconstruct initial buys only if no existing transactions exist for this holding
       for (const holding of currentHoldings) {
+        const matchingTxs = existingTxs.filter(
+          (tx) =>
+            tx.memberId === holding.memberId &&
+            tx.schemeId === holding.schemeId &&
+            (tx.folioNo === holding.folioNo ||
+              (!tx.folioNo && !holding.folioNo))
+        );
+
+        const totalAllTxsUnits = matchingTxs.reduce((sum, tx) => {
+          return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
+        }, 0);
+
+        // If existing transactions already equal or exceed holding units, do NOT add a dummy buy
+        if (
+          Math.abs(totalAllTxsUnits - holding.balanceUnits) < 0.01 ||
+          totalAllTxsUnits > holding.balanceUnits
+        ) {
+          continue;
+        }
+
+        const diffUnits = holding.balanceUnits - currentNetUnits;
         const purchaseDate = subDays(
           currentReport.asOfDate,
           holding.holdingDays
         );
-        await db.insert(transactions).values({
-          memberId: holding.memberId,
-          schemeId: holding.schemeId,
-          folioNo: holding.folioNo,
-          date: purchaseDate,
-          type: "BUY",
-          units: holding.balanceUnits,
-          nav: holding.purchaseNav,
-          amount: holding.purchaseValue,
-          sourceReportId: currentReport.id,
-        });
+
+        const exists = matchingTxs.some(
+          (tx) =>
+            tx.date === purchaseDate &&
+            tx.type === "BUY" &&
+            Math.abs(tx.units - diffUnits) < 0.001
+        );
+
+        if (!exists) {
+          const [inserted] = await db
+            .insert(transactions)
+            .values({
+              memberId: holding.memberId,
+              schemeId: holding.schemeId,
+              folioNo: holding.folioNo,
+              date: purchaseDate,
+              type: "BUY",
+              units: diffUnits,
+              nav: holding.purchaseNav,
+              amount: holding.purchaseValue,
+              sourceReportId: currentReport.id,
+            })
+            .returning();
+          existingTxs.push(inserted);
+        }
       }
     } else {
-      // Subsequent Reports: Diff units against the previous report
+      // Subsequent Reports: Check unit deltas against previous report or existing database transactions
       const prevReport = allReports[rIndex - 1];
       const prevHoldings = await db.query.holdingsSnapshot.findMany({
         where: eq(holdingsSnapshot.reportId, prevReport.id),
       });
 
-      // Create a map of previous holdings for quick lookup: memberId_schemeId_folioNo
       const prevMap = new Map<string, typeof holdingsSnapshot.$inferSelect>();
       for (const ph of prevHoldings) {
         const key = `${ph.memberId}_${ph.schemeId}_${ph.folioNo}`;
@@ -246,10 +277,21 @@ export async function rebuildAllTransactions(): Promise<void> {
 
       const processedKeys = new Set<string>();
 
-      // Check current holdings for buys/sells
       for (const holding of currentHoldings) {
         const key = `${holding.memberId}_${holding.schemeId}_${holding.folioNo}`;
         processedKeys.add(key);
+
+        const matchingTxs = existingTxs.filter(
+          (tx) =>
+            tx.memberId === holding.memberId &&
+            tx.schemeId === holding.schemeId &&
+            (tx.folioNo === holding.folioNo ||
+              (!tx.folioNo && !holding.folioNo))
+        );
+
+        const currentNetUnits = matchingTxs.reduce((sum, tx) => {
+          return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
+        }, 0);
 
         const prevHolding = prevMap.get(key);
 
@@ -257,58 +299,110 @@ export async function rebuildAllTransactions(): Promise<void> {
           const diffUnits = holding.balanceUnits - prevHolding.balanceUnits;
 
           if (diffUnits > 0.001) {
-            // Units increased (SIP / Lumpsum Buy)
+            if (currentNetUnits >= holding.balanceUnits - 0.001) {
+              continue;
+            }
+
+            const unitsToAdd = holding.balanceUnits - currentNetUnits;
             const diffAmount =
               holding.purchaseValue - prevHolding.purchaseValue;
             const amount =
-              diffAmount > 0 ? diffAmount : diffUnits * holding.purchaseNav;
-            const nav = amount / diffUnits;
+              diffAmount > 0 ? diffAmount : unitsToAdd * holding.purchaseNav;
+            const nav = amount / unitsToAdd;
 
-            await db.insert(transactions).values({
-              memberId: holding.memberId,
-              schemeId: holding.schemeId,
-              folioNo: holding.folioNo,
-              date: currentReport.asOfDate,
-              type: "BUY",
-              units: diffUnits,
-              nav,
-              amount,
-              sourceReportId: currentReport.id,
-            });
+            const exists = matchingTxs.some(
+              (tx) =>
+                tx.date === currentReport.asOfDate &&
+                tx.type === "BUY" &&
+                Math.abs(tx.units - unitsToAdd) < 0.001
+            );
+
+            if (!exists) {
+              const [inserted] = await db
+                .insert(transactions)
+                .values({
+                  memberId: holding.memberId,
+                  schemeId: holding.schemeId,
+                  folioNo: holding.folioNo,
+                  date: currentReport.asOfDate,
+                  type: "BUY",
+                  units: unitsToAdd,
+                  nav,
+                  amount,
+                  sourceReportId: currentReport.id,
+                })
+                .returning();
+              existingTxs.push(inserted);
+            }
           } else if (diffUnits < -0.001) {
-            // Units decreased (Partial Redemption)
-            const unitsSold = Math.abs(diffUnits);
+            if (currentNetUnits <= holding.balanceUnits + 0.001) {
+              continue;
+            }
+
+            const unitsSold = currentNetUnits - holding.balanceUnits;
             const amount = unitsSold * holding.currentNav;
 
-            await db.insert(transactions).values({
-              memberId: holding.memberId,
-              schemeId: holding.schemeId,
-              folioNo: holding.folioNo,
-              date: currentReport.asOfDate,
-              type: "SELL",
-              units: unitsSold,
-              nav: holding.currentNav,
-              amount,
-              sourceReportId: currentReport.id,
-            });
+            const exists = matchingTxs.some(
+              (tx) =>
+                tx.date === currentReport.asOfDate &&
+                tx.type === "SELL" &&
+                Math.abs(tx.units - unitsSold) < 0.001
+            );
+
+            if (!exists) {
+              const [inserted] = await db
+                .insert(transactions)
+                .values({
+                  memberId: holding.memberId,
+                  schemeId: holding.schemeId,
+                  folioNo: holding.folioNo,
+                  date: currentReport.asOfDate,
+                  type: "SELL",
+                  units: unitsSold,
+                  nav: holding.currentNav,
+                  amount,
+                  sourceReportId: currentReport.id,
+                })
+                .returning();
+              existingTxs.push(inserted);
+            }
           }
         } else {
           // New Scheme / Folio added in this report snapshot
+          if (currentNetUnits >= holding.balanceUnits - 0.001) {
+            continue;
+          }
+
+          const unitsToAdd = holding.balanceUnits - currentNetUnits;
           const purchaseDate = subDays(
             currentReport.asOfDate,
             holding.holdingDays
           );
-          await db.insert(transactions).values({
-            memberId: holding.memberId,
-            schemeId: holding.schemeId,
-            folioNo: holding.folioNo,
-            date: purchaseDate,
-            type: "BUY",
-            units: holding.balanceUnits,
-            nav: holding.purchaseNav,
-            amount: holding.purchaseValue,
-            sourceReportId: currentReport.id,
-          });
+
+          const exists = matchingTxs.some(
+            (tx) =>
+              tx.date === purchaseDate &&
+              tx.type === "BUY" &&
+              Math.abs(tx.units - unitsToAdd) < 0.001
+          );
+
+          if (!exists) {
+            const [inserted] = await db
+              .insert(transactions)
+              .values({
+                memberId: holding.memberId,
+                schemeId: holding.schemeId,
+                folioNo: holding.folioNo,
+                date: purchaseDate,
+                type: "BUY",
+                units: unitsToAdd,
+                nav: holding.purchaseNav,
+                amount: holding.purchaseValue,
+                sourceReportId: currentReport.id,
+              })
+              .returning();
+            existingTxs.push(inserted);
+          }
         }
       }
 
@@ -316,19 +410,48 @@ export async function rebuildAllTransactions(): Promise<void> {
       for (const prevHolding of prevHoldings) {
         const key = `${prevHolding.memberId}_${prevHolding.schemeId}_${prevHolding.folioNo}`;
         if (!processedKeys.has(key)) {
-          // Fully redeemed (Sell all remaining units)
-          const amount = prevHolding.balanceUnits * prevHolding.currentNav;
-          await db.insert(transactions).values({
-            memberId: prevHolding.memberId,
-            schemeId: prevHolding.schemeId,
-            folioNo: prevHolding.folioNo,
-            date: currentReport.asOfDate,
-            type: "SELL",
-            units: prevHolding.balanceUnits,
-            nav: prevHolding.currentNav,
-            amount,
-            sourceReportId: currentReport.id,
-          });
+          const matchingTxs = existingTxs.filter(
+            (tx) =>
+              tx.memberId === prevHolding.memberId &&
+              tx.schemeId === prevHolding.schemeId &&
+              (tx.folioNo === prevHolding.folioNo ||
+                (!tx.folioNo && !prevHolding.folioNo)) &&
+              tx.date <= currentReport.asOfDate
+          );
+
+          const currentNetUnits = matchingTxs.reduce((sum, tx) => {
+            return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
+          }, 0);
+
+          if (currentNetUnits > 0.001) {
+            const unitsSold = currentNetUnits;
+            const amount = unitsSold * prevHolding.currentNav;
+
+            const exists = matchingTxs.some(
+              (tx) =>
+                tx.date === currentReport.asOfDate &&
+                tx.type === "SELL" &&
+                Math.abs(tx.units - unitsSold) < 0.001
+            );
+
+            if (!exists) {
+              const [inserted] = await db
+                .insert(transactions)
+                .values({
+                  memberId: prevHolding.memberId,
+                  schemeId: prevHolding.schemeId,
+                  folioNo: prevHolding.folioNo,
+                  date: currentReport.asOfDate,
+                  type: "SELL",
+                  units: unitsSold,
+                  nav: prevHolding.currentNav,
+                  amount,
+                  sourceReportId: currentReport.id,
+                })
+                .returning();
+              existingTxs.push(inserted);
+            }
+          }
         }
       }
     }
