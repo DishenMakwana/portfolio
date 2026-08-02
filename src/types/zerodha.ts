@@ -125,12 +125,25 @@ export interface ZerodhaDashboardData {
     portfolioXirr: number;
     benchmarkXirr: number;
     alpha: number;
+    stocksXirr: number;
+    stocksBenchmarkXirr: number;
+    stocksAlpha: number;
+    fundsXirr: number;
+    fundsBenchmarkXirr: number;
+    fundsAlpha: number;
   };
   metricDeltas: {
     previousDate: string | null;
     portfolioXirr: number | null;
     benchmarkXirr: number | null;
     alpha: number | null;
+    stocksXirr: number | null;
+    stocksBenchmarkXirr: number | null;
+    stocksAlpha: number | null;
+    fundsXirr: number | null;
+    fundsBenchmarkXirr: number | null;
+    fundsAlpha: number | null;
+    cagr?: number | null;
   };
   sectorAllocation: { name: string; value: number }[];
   categoryAllocation: { name: string; value: number }[];
@@ -200,6 +213,21 @@ export interface ZerodhaOverviewTabProps {
   COLORS: string[];
 }
 
+export interface ZerodhaBenchmarkCardsProps {
+  totals: {
+    portfolioXirr: number;
+    benchmarkXirr: number;
+    alpha: number;
+  };
+  metricDeltas: {
+    portfolioXirr: number | null;
+    benchmarkXirr: number | null;
+    alpha: number | null;
+  };
+  title?: string;
+  benchmarkLabel?: string;
+}
+
 export interface ZerodhaPerformancePoint {
   date: string;
   equity: number;
@@ -231,6 +259,8 @@ export interface ZerodhaStocksTabProps {
   stockSortField: ZerodhaStockSortField;
   stockSortOrder: "asc" | "desc";
   formatPrice: (v: number) => string;
+  totals?: ZerodhaDashboardData["totals"];
+  metricDeltas?: ZerodhaDashboardData["metricDeltas"];
 }
 
 export interface ZerodhaFundsTabProps {
@@ -239,6 +269,8 @@ export interface ZerodhaFundsTabProps {
   toggleFundSort: (field: ZerodhaFundSortField) => void;
   fundSortField: ZerodhaFundSortField;
   fundSortOrder: "asc" | "desc";
+  totals?: ZerodhaDashboardData["totals"];
+  metricDeltas?: ZerodhaDashboardData["metricDeltas"];
 }
 
 export interface ZerodhaInsightsTabProps {

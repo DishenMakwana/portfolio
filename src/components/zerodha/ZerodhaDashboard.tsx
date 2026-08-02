@@ -279,7 +279,7 @@ export default function ZerodhaDashboard({
             >
               {reportsList.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {formatDate(r.asOfDate)}
+                  #{r.id} - {formatDate(r.asOfDate)}
                 </option>
               ))}
             </select>
@@ -326,7 +326,7 @@ export default function ZerodhaDashboard({
                 <IndianRupee size={17} className="text-teal-400" />
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
               {formatCurrency(totals.currentValue)}
             </div>
             <div className="text-xs font-semibold mt-2 text-slate-400">
@@ -370,7 +370,7 @@ export default function ZerodhaDashboard({
               </div>
             </div>
             <div
-              className={`text-2xl font-extrabold leading-tight ${
+              className={`text-xl font-extrabold leading-tight tracking-tight ${
                 totals.gain >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
@@ -406,7 +406,7 @@ export default function ZerodhaDashboard({
                 <Activity size={17} className="text-blue-400" />
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
               {formatCurrency(totals.stocksCurrentValue)}
             </div>
             <div
@@ -444,7 +444,7 @@ export default function ZerodhaDashboard({
                 <Target size={17} className="text-violet-400" />
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
               {formatCurrency(totals.fundsCurrentValue)}
             </div>
             <div
@@ -568,6 +568,8 @@ export default function ZerodhaDashboard({
           <div className="space-y-6">
             <ZerodhaStocksTab
               stocks={stocks}
+              totals={totals}
+              metricDeltas={data.metricDeltas}
               renderStockSortIcon={renderStockSortIcon}
               toggleStockSort={toggleStockSort}
               stockSortField={stockSortField}
@@ -584,6 +586,8 @@ export default function ZerodhaDashboard({
         {activeTab === "funds" && (
           <ZerodhaFundsTab
             funds={funds}
+            totals={totals}
+            metricDeltas={data.metricDeltas}
             renderFundSortIcon={renderFundSortIcon}
             toggleFundSort={toggleFundSort}
             fundSortField={fundSortField}

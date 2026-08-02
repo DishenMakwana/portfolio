@@ -150,7 +150,13 @@ export default function ZerodhaSnapshotsTab({
     const query = searchQuery.toLowerCase();
     const formattedDate = formatDate(report.asOfDate).toLowerCase();
     const filename = report.filename.toLowerCase();
-    return formattedDate.includes(query) || filename.includes(query);
+    const reportIdStr = report.id.toString();
+    return (
+      formattedDate.includes(query) ||
+      filename.includes(query) ||
+      reportIdStr.includes(query) ||
+      `#${reportIdStr}`.includes(query)
+    );
   });
 
   return (
@@ -201,7 +207,9 @@ export default function ZerodhaSnapshotsTab({
             {latestFile}
           </div>
           <div className="mt-1 text-xs font-semibold text-violet-400">
-            {reportsList[0] ? formatDate(reportsList[0].asOfDate) : "No date"}
+            {reportsList[0]
+              ? `#${reportsList[0].id} • ${formatDate(reportsList[0].asOfDate)}`
+              : "No date"}
           </div>
         </div>
       </div>
@@ -313,7 +321,7 @@ export default function ZerodhaSnapshotsTab({
                     const isUploaded = Boolean(report);
                     const isMissed = inExpectedRange && !isUploaded;
                     const title = report
-                      ? `${formatDate(report.asOfDate)} - ${report.filename}`
+                      ? `#${report.id} - ${formatDate(report.asOfDate)} - ${report.filename}`
                       : key;
 
                     return (
@@ -401,7 +409,7 @@ export default function ZerodhaSnapshotsTab({
                   />
                   <input
                     type="text"
-                    placeholder="Search uploaded files by date or name..."
+                    placeholder="Search uploaded files by date, name, or ID..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-slate-950/80 border border-slate-800/80 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition font-medium"
@@ -434,6 +442,9 @@ export default function ZerodhaSnapshotsTab({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-black text-slate-100 whitespace-nowrap">
+                              <span className="text-teal-400 font-extrabold mr-1.5">
+                                #{report.id}
+                              </span>
                               {formatDate(report.asOfDate)}
                             </span>
                             <span

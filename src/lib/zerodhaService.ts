@@ -415,7 +415,18 @@ async function getZerodhaReportWeightedMetrics(
     category: string;
     schemeCodeApi: string | null;
   }[]
-): Promise<{ portfolioXirr: number; benchmarkXirr: number; alpha: number }> {
+): Promise<{
+  portfolioXirr: number;
+  benchmarkXirr: number;
+  alpha: number;
+  cagr: number | null;
+  stocksXirr: number;
+  stocksBenchmarkXirr: number;
+  stocksAlpha: number;
+  fundsXirr: number;
+  fundsBenchmarkXirr: number;
+  fundsAlpha: number;
+}> {
   const rawHoldings = await db
     .select({
       id: zerodhaHoldings.id,
@@ -469,6 +480,7 @@ async function getZerodhaReportWeightedMetrics(
               benchDetails?.data || []
             );
             return {
+              holdingType: h.holdingType,
               currentValue: h.currentValue,
               xirr: metrics.xirr,
               benchmarkXirr: metrics.benchmarkXirr,
@@ -490,6 +502,7 @@ async function getZerodhaReportWeightedMetrics(
             benchDetails?.data || []
           );
           return {
+            holdingType: h.holdingType,
             currentValue: h.currentValue,
             xirr: metrics.xirr,
             benchmarkXirr: metrics.benchmarkXirr,
@@ -497,6 +510,7 @@ async function getZerodhaReportWeightedMetrics(
         }
       }
       return {
+        holdingType: h.holdingType,
         currentValue: h.currentValue,
         xirr: null,
         benchmarkXirr: null,
@@ -528,7 +542,84 @@ async function getZerodhaReportWeightedMetrics(
 
   const alpha = portfolioXirr - benchmarkXirr;
 
-  return { portfolioXirr, benchmarkXirr, alpha };
+  const stockHoldings = enrichedHoldings.filter(
+    (h) => h.holdingType === "equity"
+  );
+  const fundHoldings = enrichedHoldings.filter(
+    (h) => h.holdingType === "mutual_fund"
+  );
+
+  const validStockXirr = stockHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const stocksXirr =
+    validStockXirr.length > 0
+      ? validStockXirr.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validStockXirr.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validStockBench = stockHoldings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const stocksBenchmarkXirr =
+    validStockBench.length > 0
+      ? validStockBench.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validStockBench.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const stocksAlpha = stocksXirr - stocksBenchmarkXirr;
+
+  const validFundXirr = fundHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const fundsXirr =
+    validFundXirr.length > 0
+      ? validFundXirr.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validFundXirr.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validFundBench = fundHoldings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const fundsBenchmarkXirr =
+    validFundBench.length > 0
+      ? validFundBench.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validFundBench.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const fundsAlpha = fundsXirr - fundsBenchmarkXirr;
+
+  const validCagrHoldings = enrichedHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const weightedCagr =
+    validCagrHoldings.length > 0
+      ? validCagrHoldings.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validCagrHoldings.reduce((sum, h) => sum + h.currentValue, 0)
+      : null;
+
+  return {
+    portfolioXirr,
+    benchmarkXirr,
+    alpha,
+    cagr: weightedCagr,
+    stocksXirr,
+    stocksBenchmarkXirr,
+    stocksAlpha,
+    fundsXirr,
+    fundsBenchmarkXirr,
+    fundsAlpha,
+  };
 }
 
 export async function getZerodhaDashboardData(
@@ -562,12 +653,24 @@ export async function getZerodhaDashboardData(
         portfolioXirr: 0,
         benchmarkXirr: 0,
         alpha: 0,
+        stocksXirr: 0,
+        stocksBenchmarkXirr: 0,
+        stocksAlpha: 0,
+        fundsXirr: 0,
+        fundsBenchmarkXirr: 0,
+        fundsAlpha: 0,
       },
       metricDeltas: {
         previousDate: null,
         portfolioXirr: null,
         benchmarkXirr: null,
         alpha: null,
+        stocksXirr: null,
+        stocksBenchmarkXirr: null,
+        stocksAlpha: null,
+        fundsXirr: null,
+        fundsBenchmarkXirr: null,
+        fundsAlpha: null,
       },
       sectorAllocation: [],
       categoryAllocation: [],
@@ -1171,11 +1274,73 @@ export async function getZerodhaDashboardData(
 
   const alpha = portfolioXirr - benchmarkXirr;
 
+  const currentStockHoldings = holdings.filter(
+    (h) => h.holdingType === "equity"
+  );
+  const currentFundHoldings = holdings.filter(
+    (h) => h.holdingType === "mutual_fund"
+  );
+
+  const validStockXirr = currentStockHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const stocksXirr =
+    validStockXirr.length > 0
+      ? validStockXirr.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validStockXirr.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validStockBench = currentStockHoldings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const stocksBenchmarkXirr =
+    validStockBench.length > 0
+      ? validStockBench.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validStockBench.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const stocksAlpha = stocksXirr - stocksBenchmarkXirr;
+
+  const validFundXirr = currentFundHoldings.filter(
+    (h) => typeof h.xirr === "number" && h.currentValue > 0
+  );
+  const fundsXirr =
+    validFundXirr.length > 0
+      ? validFundXirr.reduce(
+          (sum, h) => sum + (h.xirr ?? 0) * h.currentValue,
+          0
+        ) / validFundXirr.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const validFundBench = currentFundHoldings.filter(
+    (h) => typeof h.benchmarkXirr === "number" && h.currentValue > 0
+  );
+  const fundsBenchmarkXirr =
+    validFundBench.length > 0
+      ? validFundBench.reduce(
+          (sum, h) => sum + (h.benchmarkXirr ?? 0) * h.currentValue,
+          0
+        ) / validFundBench.reduce((sum, h) => sum + h.currentValue, 0)
+      : 0;
+
+  const fundsAlpha = fundsXirr - fundsBenchmarkXirr;
+
   let metricDeltas = {
     previousDate: previousReport?.asOfDate ?? null,
     portfolioXirr: null as number | null,
     benchmarkXirr: null as number | null,
     alpha: null as number | null,
+    stocksXirr: null as number | null,
+    stocksBenchmarkXirr: null as number | null,
+    stocksAlpha: null as number | null,
+    fundsXirr: null as number | null,
+    fundsBenchmarkXirr: null as number | null,
+    fundsAlpha: null as number | null,
+    cagr: null as number | null,
   };
 
   if (previousReport) {
@@ -1189,6 +1354,17 @@ export async function getZerodhaDashboardData(
       portfolioXirr: portfolioXirr - prevMetrics.portfolioXirr,
       benchmarkXirr: benchmarkXirr - prevMetrics.benchmarkXirr,
       alpha: alpha - prevMetrics.alpha,
+      stocksXirr: stocksXirr - prevMetrics.stocksXirr,
+      stocksBenchmarkXirr:
+        stocksBenchmarkXirr - prevMetrics.stocksBenchmarkXirr,
+      stocksAlpha: stocksAlpha - prevMetrics.stocksAlpha,
+      fundsXirr: fundsXirr - prevMetrics.fundsXirr,
+      fundsBenchmarkXirr: fundsBenchmarkXirr - prevMetrics.fundsBenchmarkXirr,
+      fundsAlpha: fundsAlpha - prevMetrics.fundsAlpha,
+      cagr:
+        weightedCagr !== null && prevMetrics.cagr !== null
+          ? weightedCagr - prevMetrics.cagr
+          : null,
     };
   }
 
@@ -1211,6 +1387,12 @@ export async function getZerodhaDashboardData(
       portfolioXirr,
       benchmarkXirr,
       alpha,
+      stocksXirr,
+      stocksBenchmarkXirr,
+      stocksAlpha,
+      fundsXirr,
+      fundsBenchmarkXirr,
+      fundsAlpha,
     },
     metricDeltas,
     sectorAllocation,
