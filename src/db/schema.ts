@@ -123,9 +123,12 @@ export const transactions = mySchema.table(
     folioNo: text("folio_no"),
     date: text("date").notNull(),
     type: text("type").notNull(), // 'BUY', 'SELL'
+    transactionType: text("transaction_type"), // 'SIP', 'Purchase', 'Switch In', 'Switch Out', 'Sell', etc.
     units: doublePrecision("units").notNull(),
     nav: doublePrecision("nav").notNull(),
     amount: doublePrecision("amount").notNull(),
+    stampDuty: doublePrecision("stamp_duty"),
+    stt: doublePrecision("stt"),
     sourceReportId: integer("source_report_id").references(() => reports.id),
   },
   (table) => [
@@ -133,6 +136,15 @@ export const transactions = mySchema.table(
     index("transactions_scheme_id_idx").on(table.schemeId),
     index("transactions_source_report_id_idx").on(table.sourceReportId),
     index("transactions_date_idx").on(table.date),
+    index("transactions_stt_idx").on(table.stt),
+    index("transactions_type_idx").on(table.type),
+    index("transactions_txn_type_idx").on(table.transactionType),
+    index("transactions_holding_lookup_idx").on(
+      table.memberId,
+      table.schemeId,
+      table.folioNo,
+      table.type
+    ),
   ]
 );
 
