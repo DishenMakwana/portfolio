@@ -13,6 +13,7 @@ import {
   Zap,
   Layers,
   LineChart,
+  History,
 } from "lucide-react";
 import {
   getAmcName,
@@ -30,6 +31,7 @@ import ActionsTab from "@/components/mutual-fund/insights/tabs/ActionsTab";
 import OverlapsTab from "@/components/mutual-fund/insights/tabs/OverlapsTab";
 import AmcAnalysisTab from "@/components/mutual-fund/insights/tabs/AmcAnalysisTab";
 import CategoryAnalysisTab from "@/components/mutual-fund/insights/tabs/CategoryAnalysisTab";
+import SoldFundsTab from "@/components/mutual-fund/insights/tabs/SoldFundsTab";
 import {
   type Tab,
   type SortKey,
@@ -80,6 +82,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
       "overlaps",
       "amc",
       "category",
+      "sold",
     ].includes(tabParam)
       ? tabParam
       : "overview";
@@ -117,6 +120,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     { id: "overlaps", label: "Overlaps", icon: Layers },
     { id: "amc", label: "AMC Analysis", icon: LineChart },
     { id: "category", label: "Category Allocation", icon: Layers },
+    { id: "sold", label: "Past Sold Funds", icon: History },
   ];
 
   // Decompiled reverse engineering portfolio insights
@@ -467,6 +471,8 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     });
   }, [data.schemes, filterCategory, sort]);
 
+  const niftyBenchmark = data.benchmarkReturns.cagr3Y ?? 12;
+
   const top5Schemes = useMemo(
     () =>
       new Set(
@@ -480,8 +486,16 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
 
   const watchlistSchemes = useMemo(
     () =>
-      new Set(data.schemes.filter((s) => s.avgCagr < 8).map((s) => s.scheme)),
-    [data.schemes]
+      new Set(
+        data.schemes
+          .filter(
+            (s) =>
+              ((s.invested ?? 0) > 0 || (s.current ?? 0) > 0) &&
+              s.avgCagr < niftyBenchmark
+          )
+          .map((s) => s.scheme)
+      ),
+    [data.schemes, niftyBenchmark]
   );
 
   // SIP Projection
@@ -546,7 +560,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
       ? data.memberCagrs.reduce((s, m) => s + m.cagr, 0) /
         data.memberCagrs.length
       : 0;
-  const niftyBenchmark = data.benchmarkReturns.cagr3Y ?? 12;
   const hasNiftyBenchmark = data.benchmarkReturns.cagr3Y !== null;
   const benchmarkLabel = hasNiftyBenchmark
     ? `Nifty 3Y CAGR ${niftyBenchmark.toFixed(2)}%`
@@ -626,31 +639,42 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
         </p>
       </div>
 
-      {/* Tab Bar */}
-      <div className="flex items-center gap-1 p-1 bg-slate-900/70 rounded-xl border border-slate-800/80 backdrop-blur-md w-fit">
-        {TABS.map((tab) => {
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleTabChange(tab.id)}
-              className={`relative flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                active ? "text-teal-300" : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {active && (
-                <motion.div
-                  layoutId="tabPill"
-                  className="absolute inset-0 bg-teal-500/15 border border-teal-500/30 rounded-lg"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      {/* Navigation Tab Bar */}
+      <div className="w-full overflow-x-auto no-scrollbar scroll-smooth py-1">
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-850 backdrop-blur-md min-w-max shadow-inner">
+          {TABS.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTabChange(tab.id)}
+                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer select-none ${
+                  active
+                    ? "text-emerald-400 font-semibold shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="activeTabIndicator"
+                    className="absolute inset-0 bg-emerald-500/15 border border-emerald-500/30 rounded-xl"
+                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                  />
+                )}
+                <tab.icon
+                  size={15}
+                  className={`relative z-10 ${
+                    active ? "text-emerald-400" : "text-slate-400"
+                  }`}
                 />
-              )}
-              <tab.icon size={14} className="relative z-10" />
-              <span className="relative z-10">{tab.label}</span>
-            </button>
-          );
-        })}
+                <span className="relative z-10 whitespace-nowrap">
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tab Panels */}
@@ -778,6 +802,16 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
               sortKey={categorySortKey}
               sortDir={categorySortDir}
               onSort={handleCategorySort}
+            />
+          )}
+
+          {/* ── PAST SOLD FUNDS ────────────────────────────────────────────────── */}
+          {activeTab === "sold" && (
+            <SoldFundsTab
+              soldHoldings={data.soldHoldings || []}
+              partiallySoldHoldings={data.partiallySoldHoldings || []}
+              getCategoryDotClass={getCategoryDotClass}
+              getCategoryBadgeClass={getCategoryBadgeClass}
             />
           )}
         </motion.div>

@@ -72,10 +72,10 @@ export default function SipPlannerTab({
                   <td className="px-4 py-3 font-semibold text-slate-300">
                     Year {row.year}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-200">
+                  <td className="px-4 py-3 text-xs text-slate-200">
                     {formatInrCompact(row.monthlySip)}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                  <td className="px-4 py-3 text-xs text-slate-400">
                     {formatInrCompact(row.monthlySip * 12)}
                   </td>
                   <td className="px-4 py-3 font-bold text-teal-300">

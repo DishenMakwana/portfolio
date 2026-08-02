@@ -56,7 +56,7 @@ export default function OverviewTab({
                       className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(cat.category)}`}
                     />
                     <span
-                      className="font-semibold text-slate-200 truncate"
+                      className="font-semibold text-slate-200 leading-snug"
                       title={cat.category}
                     >
                       {cat.category}
@@ -114,7 +114,7 @@ export default function OverviewTab({
                   className={`w-2 h-2 rounded-full shrink-0 ${getCategoryDotClass(c.category)}`}
                 />
                 <span
-                  className="text-xs text-slate-400 truncate flex-1"
+                  className="text-xs text-slate-400 leading-snug flex-1"
                   title={c.category}
                 >
                   {c.category}

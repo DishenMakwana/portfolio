@@ -69,11 +69,7 @@ export default function FundsTab({
             key={item.key}
             type="button"
             onClick={() => onFilterChange(item.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all cursor-pointer ${
-              filterCategory === item.key
-                ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
-                : "bg-slate-900/50 text-slate-400 border border-slate-800/80 hover:border-slate-700"
-            }`}
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all cursor-pointer ${filterCategory === item.key ? "bg-teal-500/20 text-teal-300 border border-teal-500/40" : "bg-slate-900/50 text-slate-400 border border-slate-800/80 hover:border-slate-700"}`}
           >
             {item.label}
             <span className="ml-1.5 text-xs opacity-60">({item.count})</span>
@@ -109,23 +105,36 @@ export default function FundsTab({
                 const isTop = top5Schemes.has(s.scheme);
                 const isWatch = watchlistSchemes.has(s.scheme);
                 const isExpanded = expandedSchemes.has(s.scheme);
+                const isZeroValue =
+                  (s.current ?? 0) <= 0 && (s.invested ?? 0) <= 0;
+                const isBelowNifty =
+                  !isZeroValue && (isWatch || s.avgCagr < niftyBenchmark);
+
+                // Row background styling:
+                // - Zero value fund: distinct muted grey style with slate left border
+                // - Underperforming active fund (below Nifty): red highlight with rose left border
+                // - Default: standard hover
+                const rowBgClass = isZeroValue
+                  ? "bg-slate-950/40 text-slate-400 opacity-65 hover:opacity-100 hover:bg-slate-900/60 border-l-2 border-l-slate-700"
+                  : isBelowNifty
+                    ? "bg-rose-500/10 hover:bg-rose-500/20 border-l-2 border-l-rose-500/80"
+                    : "hover:bg-slate-700/20";
+
                 return (
                   <Fragment key={s.scheme}>
                     <motion.tr
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.02 }}
-                      className={`transition-colors group cursor-pointer ${
-                        isWatch
-                          ? "bg-rose-500/10 hover:bg-rose-500/20"
-                          : "hover:bg-slate-700/20"
-                      }`}
+                      className={`transition-colors group cursor-pointer ${rowBgClass}`}
                       onClick={() => onToggleExpand(s.scheme)}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-200 truncate max-w-[280px]">
+                            <p
+                              className={`font-semibold leading-snug ${isZeroValue ? "text-slate-400" : "text-slate-200"}`}
+                            >
                               {s.scheme}
                               {isTop && (
                                 <Star
@@ -133,35 +142,44 @@ export default function FundsTab({
                                   className="inline ml-1 text-amber-400 fill-amber-400"
                                 />
                               )}
+                              {isZeroValue && (
+                                <span className="inline-block ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800/80 text-slate-400 border border-slate-700/60">
+                                  Zero Balance
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap border ${getCategoryBadgeClass(
-                            s.category
-                          )}`}
+                          className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap border ${getCategoryBadgeClass(s.category)}`}
                         >
                           {s.category}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                      <td
+                        className={`px-4 py-3 text-xs ${isZeroValue ? "text-slate-500 font-medium" : "text-slate-400"}`}
+                      >
                         {formatInrCompact(s.invested)}
                       </td>
-                      <td className="px-4 py-3 text-slate-200 font-mono text-xs font-semibold">
+                      <td
+                        className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : "text-slate-200"}`}
+                      >
                         {formatInrCompact(s.current)}
                       </td>
-                      <td className="px-4 py-3 text-emerald-400 font-mono text-xs font-semibold">
+                      <td
+                        className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : s.gain >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                      >
                         {formatInrCompact(s.gain)}
                       </td>
-                      <td className="px-4 py-3 text-xs font-semibold text-slate-300">
+                      <td
+                        className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : "text-slate-300"}`}
+                      >
                         {s.absReturn.toFixed(1)}%
                       </td>
                       <td
-                        className={`px-4 py-3 text-xs font-mono font-bold ${
-                          s.avgCagr >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
+                        className={`px-4 py-3 text-xs font-bold ${isZeroValue ? "text-slate-500" : isBelowNifty ? "text-rose-400" : "text-emerald-400"}`}
                       >
                         {s.avgCagr.toFixed(2)}%
                       </td>
@@ -172,11 +190,7 @@ export default function FundsTab({
                             e.stopPropagation();
                             onToggleExpand(s.scheme);
                           }}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer select-none ${
-                            isExpanded
-                              ? "bg-teal-500/15 border-teal-500/30 text-teal-300 shadow-[0_0_10px_rgba(20,184,166,0.1)]"
-                              : "bg-slate-900/50 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:border-slate-700"
-                          }`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer select-none ${isExpanded ? "bg-teal-500/15 border-teal-500/30 text-teal-300 shadow-[0_0_10px_rgba(20,184,166,0.1)]" : "bg-slate-900/50 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:border-slate-700"}`}
                         >
                           {s.memberCount}{" "}
                           {s.memberCount === 1 ? "member" : "members"}
@@ -223,67 +237,90 @@ export default function FundsTab({
                                 </span>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {s.holdings.map((hold) => (
-                                  <Link
-                                    key={hold.holdingId}
-                                    href={`/fund/${hold.holdingId}`}
-                                    className="flex flex-col p-3.5 rounded-xl border border-slate-750 bg-slate-950/40 hover:border-teal-500/50 hover:bg-slate-950/75 transition-all duration-200 group shadow-md"
-                                  >
-                                    <div className="font-bold text-slate-100 group-hover:text-teal-300 transition-colors break-words text-sm sm:text-base leading-tight">
-                                      {hold.memberName}
-                                    </div>
-                                    <div className="mt-2.5 flex items-center gap-3">
-                                      <span
-                                        className={`text-[10px] px-2 py-0.5 rounded font-black shrink-0 ${
-                                          (hold.cagr ?? 0) >= niftyBenchmark
-                                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                        }`}
-                                      >
-                                        {hold.cagr !== null &&
-                                        hold.cagr !== undefined
-                                          ? `${hold.cagr.toFixed(2)}%`
-                                          : "-"}{" "}
-                                        CAGR
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        Folio: {hold.folioNo}
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3 mt-2.5 pt-2.5 border-t border-slate-800/50 text-xs text-slate-400">
-                                      <div className="text-left">
-                                        <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
-                                          Invested
-                                        </span>
-                                        <span className="font-mono text-slate-300">
-                                          {formatInrCompact(hold.invested)}
-                                        </span>
+                                {s.holdings.map((hold) => {
+                                  const isHoldZero =
+                                    (hold.current ?? 0) <= 0 &&
+                                    (hold.invested ?? 0) <= 0;
+                                  return (
+                                    <Link
+                                      key={hold.holdingId}
+                                      href={`/fund/${hold.holdingId}`}
+                                      className={`flex flex-col p-3.5 rounded-xl border transition-all duration-200 group shadow-md ${
+                                        isHoldZero
+                                          ? "border-slate-800 bg-slate-950/30 opacity-70 hover:opacity-100 hover:bg-slate-950/60"
+                                          : "border-slate-750 bg-slate-950/40 hover:border-teal-500/50 hover:bg-slate-950/75"
+                                      }`}
+                                    >
+                                      <div className="font-bold text-slate-100 group-hover:text-teal-300 transition-colors break-words text-sm sm:text-base leading-tight flex items-center justify-between">
+                                        <span>{hold.memberName}</span>
+                                        {isHoldZero && (
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-800 text-slate-400 border border-slate-700/60">
+                                            Zero Balance
+                                          </span>
+                                        )}
                                       </div>
-                                      <div className="text-center">
-                                        <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
-                                          Current
-                                        </span>
-                                        <span className="font-mono text-slate-300 font-semibold">
-                                          {formatInrCompact(hold.current)}
-                                        </span>
-                                      </div>
-                                      <div className="text-right">
-                                        <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
-                                          Gain
-                                        </span>
+                                      <div className="mt-2.5 flex items-center gap-3">
                                         <span
-                                          className={`font-mono font-bold ${
-                                            hold.gain >= 0
-                                              ? "text-emerald-400"
-                                              : "text-rose-400"
+                                          className={`text-[10px] px-2 py-0.5 rounded font-black shrink-0 ${
+                                            isHoldZero
+                                              ? "bg-slate-800 text-slate-400 border border-slate-700/60"
+                                              : (hold.cagr ?? 0) >=
+                                                  niftyBenchmark
+                                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                                           }`}
                                         >
-                                          {formatInrCompact(hold.gain)}
+                                          {isHoldZero
+                                            ? "0.00%"
+                                            : hold.cagr !== null &&
+                                                hold.cagr !== undefined
+                                              ? `${hold.cagr.toFixed(2)}%`
+                                              : "-"}{" "}
+                                          CAGR
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">
+                                          Folio: {hold.folioNo}
                                         </span>
                                       </div>
-                                    </div>
-                                  </Link>
-                                ))}
+                                      <div className="grid grid-cols-3 gap-3 mt-2.5 pt-2.5 border-t border-slate-800/50 text-xs text-slate-400">
+                                        <div className="text-left">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
+                                            Invested
+                                          </span>
+                                          <span
+                                            className={
+                                              isHoldZero
+                                                ? "text-slate-500"
+                                                : "text-slate-300"
+                                            }
+                                          >
+                                            {formatInrCompact(hold.invested)}
+                                          </span>
+                                        </div>
+                                        <div className="text-center">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
+                                            Current
+                                          </span>
+                                          <span
+                                            className={`font-semibold ${isHoldZero ? "text-slate-500" : "text-slate-300"}`}
+                                          >
+                                            {formatInrCompact(hold.current)}
+                                          </span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-500 tracking-wider">
+                                            Gain
+                                          </span>
+                                          <span
+                                            className={`font-bold ${isHoldZero ? "text-slate-500" : hold.gain >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                          >
+                                            {formatInrCompact(hold.gain)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </Link>
+                                  );
+                                })}
                               </div>
                             </div>
                           </motion.div>

@@ -11,6 +11,26 @@ export interface BenchmarkReturns {
   earliestDate: string | null;
 }
 
+export interface SoldHoldingItem {
+  holdingId: number;
+  memberId: number | null;
+  memberName: string;
+  schemeId: number | null;
+  schemeName: string;
+  schemeCategory: string;
+  folioNo: string;
+  buyAmount: number;
+  sellAmount: number;
+  netProfit: number;
+  absReturn: number;
+  cagr: number;
+  holdingDays: number;
+  firstBuyDate: string | null;
+  lastSellDate: string | null;
+  currentValue?: number;
+  remainingUnits?: number;
+}
+
 export interface InsightsData {
   reportDate: string;
   totals: {
@@ -61,6 +81,8 @@ export interface InsightsData {
     monthlyAmount: number;
     startMonth: string;
   }>;
+  soldHoldings: SoldHoldingItem[];
+  partiallySoldHoldings: SoldHoldingItem[];
   benchmarkReturns: BenchmarkReturns;
   currentFinancialYearSnapshot: FinancialYearSnapshot;
   zerodhaHoldings: Array<{
@@ -116,7 +138,10 @@ export type Tab =
   | "actions"
   | "overlaps"
   | "amc"
-  | "category";
+  | "category"
+  | "sold";
+
+export type SoldFundsSegment = "all" | "fully-sold" | "partially-sold";
 
 export interface AmcPoint {
   name: string;

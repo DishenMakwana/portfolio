@@ -14,7 +14,7 @@ import {
   transactions,
   schemeNavHistory,
 } from "@/db/schema";
-import { eq, desc, lte, lt } from "drizzle-orm";
+import { eq, desc, lte, lt, inArray } from "drizzle-orm";
 import { getBenchmarkHistory, calculateAlpha } from "@/lib/alpha";
 import {
   calculateFinancialYearSnapshot,
@@ -29,6 +29,7 @@ import type {
   BenchmarkReturns,
   FinancialYearTransaction,
   InsightsData,
+  SoldHoldingItem,
 } from "@/types/insights";
 
 // ─── Benchmark helper ──────────────────────────────────────────────────────────
@@ -393,15 +394,25 @@ export async function getInsightsData(): Promise<InsightsData> {
       string,
       Array<{ date: string; nav: number }>
     >();
-    await Promise.all(
-      schemeCodes.map(async (schemeCode) => {
-        const rows = await db
-          .select({ date: schemeNavHistory.date, nav: schemeNavHistory.nav })
-          .from(schemeNavHistory)
-          .where(eq(schemeNavHistory.schemeCode, schemeCode));
-        navHistoryByCode.set(schemeCode, rows);
-      })
-    );
+    if (schemeCodes.length > 0) {
+      const rows = await db
+        .select({
+          schemeCode: schemeNavHistory.schemeCode,
+          date: schemeNavHistory.date,
+          nav: schemeNavHistory.nav,
+        })
+        .from(schemeNavHistory)
+        .where(inArray(schemeNavHistory.schemeCode, schemeCodes));
+
+      for (const row of rows) {
+        let list = navHistoryByCode.get(row.schemeCode);
+        if (!list) {
+          list = [];
+          navHistoryByCode.set(row.schemeCode, list);
+        }
+        list.push({ date: row.date, nav: row.nav });
+      }
+    }
 
     const sipUnits = new Map<string, number>();
     for (const payment of sipPayments) {
@@ -477,6 +488,7 @@ export async function getInsightsData(): Promise<InsightsData> {
     { invested: number; current: number; gain: number }
   >();
   for (const h of holdings) {
+    // if ((h.balanceUnits ?? 0) <= 0.0001) continue;
     const cat = h.schemeCategory;
     const existing = categoryMap.get(cat) ?? {
       invested: 0,
@@ -530,6 +542,7 @@ export async function getInsightsData(): Promise<InsightsData> {
     }
   >();
   for (const h of holdings) {
+    // if ((h.balanceUnits ?? 0) <= 0.0001) continue;
     const key = h.schemeName;
     const existing = schemeMap.get(key);
     const holdingItem = {
@@ -597,12 +610,143 @@ export async function getInsightsData(): Promise<InsightsData> {
   const roundedPortfolioXirr = Math.round(portfolioXirr * 100) / 100;
   const roundedBenchmarkXirr = Math.round(benchmarkXirr * 100) / 100;
 
+  // Pre-index rawTxs by holding key (memberId_schemeId_folioNo) for O(1) matching
+  const txsByHoldingMap = new Map<string, typeof rawTxs>();
+  const sellHoldingKeys = new Set<string>();
+
+  for (const t of rawTxs) {
+    const key = `${t.memberId}_${t.schemeId}_${t.folioNo || ""}`;
+    let list = txsByHoldingMap.get(key);
+    if (!list) {
+      list = [];
+      txsByHoldingMap.set(key, list);
+    }
+    list.push(t);
+    if (t.type === "SELL") {
+      sellHoldingKeys.add(key);
+    }
+  }
+
+  // Sold Holdings Analysis
+  const soldHoldingsRaw = holdings.filter(
+    (h) => (h.balanceUnits ?? 0) <= 0.0001 || (h.currentValue ?? 0) <= 0
+  );
+
+  const soldHoldings: SoldHoldingItem[] = [];
+
+  for (const h of soldHoldingsRaw) {
+    const key = `${h.memberId}_${h.schemeId}_${h.folioNo || ""}`;
+    const matchingTxs = txsByHoldingMap.get(key) || [];
+
+    const buyTxs = matchingTxs.filter((t) => t.type === "BUY");
+    const sellTxs = matchingTxs.filter((t) => t.type === "SELL");
+
+    const buyAmount = buyTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
+    const sellAmount = sellTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
+    const netProfit = sellAmount - buyAmount;
+    const absReturn =
+      buyAmount > 0 ? Math.round((netProfit / buyAmount) * 10000) / 100 : 0;
+
+    const buyDates = buyTxs.map((t) => t.date).sort();
+    const sellDates = sellTxs.map((t) => t.date).sort();
+    const firstBuyDate = buyDates.length > 0 ? buyDates[0] : null;
+    const lastSellDate =
+      sellDates.length > 0 ? sellDates[sellDates.length - 1] : null;
+
+    let holdingDays = h.holdingDays || 0;
+    if (firstBuyDate && lastSellDate) {
+      const d1 = new Date(firstBuyDate);
+      const d2 = new Date(lastSellDate);
+      holdingDays = Math.max(
+        1,
+        Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24))
+      );
+    }
+
+    soldHoldings.push({
+      holdingId: h.id,
+      memberId: h.memberId,
+      memberName: h.memberName,
+      schemeId: h.schemeId,
+      schemeName: h.schemeName,
+      schemeCategory: h.schemeCategory,
+      folioNo: h.folioNo || "",
+      buyAmount: Math.round(buyAmount * 100) / 100,
+      sellAmount: Math.round(sellAmount * 100) / 100,
+      netProfit: Math.round(netProfit * 100) / 100,
+      absReturn,
+      cagr: h.cagr || 0,
+      holdingDays,
+      firstBuyDate,
+      lastSellDate,
+    });
+  }
+
+  soldHoldings.sort((a, b) => b.netProfit - a.netProfit);
+
+  // Partially Sold Holdings Analysis — active holdings that have sell transactions
+  const partiallySoldRaw = holdings.filter((h) => {
+    if ((h.balanceUnits ?? 0) <= 0.0001 || (h.currentValue ?? 0) <= 0)
+      return false;
+    const key = `${h.memberId}_${h.schemeId}_${h.folioNo || ""}`;
+    return sellHoldingKeys.has(key);
+  });
+
+  const partiallySoldHoldings: SoldHoldingItem[] = [];
+
+  for (const h of partiallySoldRaw) {
+    const key = `${h.memberId}_${h.schemeId}_${h.folioNo || ""}`;
+    const matchingTxs = txsByHoldingMap.get(key) || [];
+
+    const buyTxs = matchingTxs.filter((t) => t.type === "BUY");
+    const sellTxs = matchingTxs.filter((t) => t.type === "SELL");
+
+    const buyAmount = buyTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
+    const sellAmount = sellTxs.reduce((acc, t) => acc + (t.amount || 0), 0);
+    const netProfit = sellAmount - buyAmount + h.currentValue;
+    const totalCapitalDeployed = buyAmount;
+    const absReturn =
+      totalCapitalDeployed > 0
+        ? Math.round((netProfit / totalCapitalDeployed) * 10000) / 100
+        : 0;
+
+    const buyDates = buyTxs.map((t) => t.date).sort();
+    const sellDates = sellTxs.map((t) => t.date).sort();
+    const firstBuyDate = buyDates.length > 0 ? buyDates[0] : null;
+    const lastSellDate =
+      sellDates.length > 0 ? sellDates[sellDates.length - 1] : null;
+
+    const holdingDays = h.holdingDays || 0;
+
+    partiallySoldHoldings.push({
+      holdingId: h.id,
+      memberId: h.memberId,
+      memberName: h.memberName,
+      schemeId: h.schemeId,
+      schemeName: h.schemeName,
+      schemeCategory: h.schemeCategory,
+      folioNo: h.folioNo || "",
+      buyAmount: Math.round(buyAmount * 100) / 100,
+      sellAmount: Math.round(sellAmount * 100) / 100,
+      netProfit: Math.round(netProfit * 100) / 100,
+      absReturn,
+      cagr: h.cagr || 0,
+      holdingDays,
+      firstBuyDate,
+      lastSellDate,
+      currentValue: Math.round(h.currentValue * 100) / 100,
+      remainingUnits: Math.round((h.balanceUnits ?? 0) * 1000) / 1000,
+    });
+  }
+
+  partiallySoldHoldings.sort((a, b) => b.netProfit - a.netProfit);
+
   return {
     reportDate,
     totals: {
-      invested: Math.round(totalInvested),
-      current: Math.round(totalCurrent),
-      gain: Math.round(totalGain),
+      invested: Math.round(totalInvested * 100) / 100,
+      current: Math.round(totalCurrent * 100) / 100,
+      gain: Math.round(totalGain * 100) / 100,
       absReturn: Math.round(absReturn * 100) / 100,
       totalMonthlySip: Math.round(totalMonthlySip),
       uniqueSchemes: uniqueSchemeNames.size,
@@ -619,6 +763,8 @@ export async function getInsightsData(): Promise<InsightsData> {
     categoryAllocation,
     schemes: schemesAgg,
     sips: sipsOut,
+    soldHoldings,
+    partiallySoldHoldings,
     benchmarkReturns,
     currentFinancialYearSnapshot,
     zerodhaHoldings: zHolds.map((h) => ({
