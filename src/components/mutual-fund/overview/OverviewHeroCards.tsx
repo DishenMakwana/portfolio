@@ -114,7 +114,7 @@ export default function OverviewHeroCards({
                 <card.icon size={17} className={card.iconColor} />
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
               {card.value}
             </div>
             <div className={`text-xs font-semibold mt-2 ${card.subColor}`}>

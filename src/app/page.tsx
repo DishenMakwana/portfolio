@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import Loading from "@/app/loading";
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import OverviewTab from "@/components/mutual-fund/overview/OverviewTab";
@@ -39,16 +41,18 @@ export default async function OverviewPage({ searchParams }: PageProps) {
             </p>
           </div>
         ) : (
-          <OverviewTab
-            totals={data.totals}
-            metricDeltas={data.metricDeltas}
-            timelineData={data.timelineData}
-            categoryAllocation={data.categoryAllocation}
-            amcAllocation={data.amcAllocation}
-            capAllocation={data.capAllocation}
-            memberSummaries={data.memberSummaries}
-            holdings={data.holdings}
-          />
+          <Suspense fallback={<Loading />}>
+            <OverviewTab
+              totals={data.totals}
+              metricDeltas={data.metricDeltas}
+              timelineData={data.timelineData}
+              categoryAllocation={data.categoryAllocation}
+              amcAllocation={data.amcAllocation}
+              capAllocation={data.capAllocation}
+              memberSummaries={data.memberSummaries}
+              holdings={data.holdings}
+            />
+          </Suspense>
         )}
       </main>
     </>

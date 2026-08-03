@@ -696,7 +696,7 @@ export default function BullionClient({
           {title}
         </div>
         <div className="flex justify-between items-baseline gap-4 mt-2">
-          <div className="text-2xl font-black text-slate-100 tracking-tight">
+          <div className="text-xl font-black text-slate-100 tracking-tight">
             {formatInr(value)}
           </div>
           <div

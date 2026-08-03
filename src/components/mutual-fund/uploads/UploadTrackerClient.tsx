@@ -252,7 +252,9 @@ export default function UploadTrackerClient({
               {latestFile}
             </div>
             <div className="mt-1 text-xs font-semibold text-violet-400">
-              {reportsList[0] ? formatDate(reportsList[0].asOfDate) : "No date"}
+              {reportsList[0]
+                ? `#${reportsList[0].id} • ${formatDate(reportsList[0].asOfDate)}`
+                : "No date"}
             </div>
           </div>
         </div>
@@ -365,7 +367,7 @@ export default function UploadTrackerClient({
                       const isUploaded = Boolean(report);
                       const isMissed = inExpectedRange && !isUploaded;
                       const title = report
-                        ? `${formatDate(report.asOfDate)} - ${report.filename}`
+                        ? `#${report.id} - ${formatDate(report.asOfDate)} - ${report.filename}`
                         : key;
 
                       return (

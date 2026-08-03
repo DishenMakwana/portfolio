@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap, Star, AlertTriangle } from "lucide-react";
-import { formatInrCompact } from "@/helpers/formatters";
+import { Zap, Star, AlertTriangle, Archive } from "lucide-react";
+import { formatCurrency } from "@/helpers/formatters";
 import type { ActionsTabProps } from "@/types/insights";
 
 export default function ActionsTab({
   scaleUpFunds,
   watchlistFunds,
+  zeroValueFunds = [],
   actionMonths,
   reverseInsights,
 }: ActionsTabProps) {
@@ -65,7 +66,7 @@ export default function ActionsTab({
                 <p className="text-sm font-semibold text-slate-100 leading-snug">
                   You have{" "}
                   <span className="text-amber-400 font-bold">
-                    {formatInrCompact(reverseInsights.totalRegularVal)}
+                    {formatCurrency(reverseInsights.totalRegularVal)}
                   </span>{" "}
                   locked in Regular Plans.
                 </p>
@@ -73,7 +74,7 @@ export default function ActionsTab({
                   Switching to commission-free Direct Plans can save you
                   approximately{" "}
                   <span className="text-emerald-400 font-bold">
-                    {formatInrCompact(reverseInsights.annualDrag)} every single
+                    {formatCurrency(reverseInsights.annualDrag)} every single
                     year
                   </span>
                   . Over 10 years compounding, this drag costs{" "}
@@ -245,6 +246,57 @@ export default function ActionsTab({
           })}
         </div>
       </div>
+
+      {/* Exited & Zero-Value Schemes — Historical Theme Review */}
+      {zeroValueFunds && zeroValueFunds.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/25 bg-slate-900/70 backdrop-blur-md p-5 space-y-4 shadow-xl">
+          <h2 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <Archive size={14} className="text-amber-400" />
+            Exited & Zero-Value Schemes — Historical Theme Review
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {zeroValueFunds.map((fund) => {
+              const isThematic =
+                fund.category.toLowerCase().includes("thematic") ||
+                fund.category.toLowerCase().includes("sector");
+              const themeTag = isThematic
+                ? "Thematic / Sectoral"
+                : "Fully Redeemed";
+              const tagColor = isThematic
+                ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                : "bg-amber-500/15 text-amber-400 border-amber-500/30";
+
+              return (
+                <motion.div
+                  key={fund.scheme}
+                  whileHover={{ y: -2 }}
+                  className="rounded-xl border border-amber-500/20 bg-slate-900/60 p-4 space-y-2 shadow-md hover:border-amber-500/40 transition-colors"
+                >
+                  <p className="text-sm font-bold text-slate-100 leading-tight">
+                    {fund.scheme}
+                  </p>
+                  <p className="text-xs text-slate-500">{fund.category}</p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-slate-400 font-extrabold text-sm">
+                      {formatCurrency(0)}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${tagColor}`}
+                    >
+                      {themeTag}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {isThematic
+                      ? "Thematic / sectoral scheme with zero current balance."
+                      : "Scheme fully redeemed / zero current holding value."}
+                  </p>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 12-Month Action Calendar */}
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 space-y-4 shadow-xl">

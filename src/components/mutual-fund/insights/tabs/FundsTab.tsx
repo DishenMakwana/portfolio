@@ -10,7 +10,7 @@ import {
   ChevronUp,
   ChevronsUpDown,
 } from "lucide-react";
-import { formatInrCompact } from "@/helpers/formatters";
+import { formatCurrency } from "@/helpers/formatters";
 import type { FundsTabProps, SortKey } from "@/types/insights";
 
 const SCHEME_COLUMNS: Array<{ key: SortKey; label: string }> = [
@@ -161,17 +161,17 @@ export default function FundsTab({
                       <td
                         className={`px-4 py-3 text-xs ${isZeroValue ? "text-slate-500 font-medium" : "text-slate-400"}`}
                       >
-                        {formatInrCompact(s.invested)}
+                        {formatCurrency(s.invested)}
                       </td>
                       <td
                         className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : "text-slate-200"}`}
                       >
-                        {formatInrCompact(s.current)}
+                        {formatCurrency(s.current)}
                       </td>
                       <td
                         className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : s.gain >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                       >
-                        {formatInrCompact(s.gain)}
+                        {formatCurrency(s.gain)}
                       </td>
                       <td
                         className={`px-4 py-3 text-xs font-semibold ${isZeroValue ? "text-slate-500" : "text-slate-300"}`}
@@ -294,7 +294,7 @@ export default function FundsTab({
                                                 : "text-slate-300"
                                             }
                                           >
-                                            {formatInrCompact(hold.invested)}
+                                            {formatCurrency(hold.invested)}
                                           </span>
                                         </div>
                                         <div className="text-center">
@@ -304,7 +304,7 @@ export default function FundsTab({
                                           <span
                                             className={`font-semibold ${isHoldZero ? "text-slate-500" : "text-slate-300"}`}
                                           >
-                                            {formatInrCompact(hold.current)}
+                                            {formatCurrency(hold.current)}
                                           </span>
                                         </div>
                                         <div className="text-right">
@@ -314,7 +314,7 @@ export default function FundsTab({
                                           <span
                                             className={`font-bold ${isHoldZero ? "text-slate-500" : hold.gain >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                           >
-                                            {formatInrCompact(hold.gain)}
+                                            {formatCurrency(hold.gain)}
                                           </span>
                                         </div>
                                       </div>

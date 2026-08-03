@@ -99,7 +99,7 @@ export default function OverviewBenchmarkCards({
               <BarChart2 size={17} className="text-violet-400" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-violet-400 leading-tight">
+          <div className="text-xl font-extrabold text-violet-400 leading-tight tracking-tight">
             {formatPercent(totals.benchmarkXirr)}
           </div>
           <div className="mt-2">
@@ -143,7 +143,7 @@ export default function OverviewBenchmarkCards({
             </div>
           </div>
           <div
-            className={`text-2xl font-extrabold leading-tight ${isAlphaPositive ? "text-emerald-400" : "text-red-400"}`}
+            className={`text-xl font-extrabold leading-tight tracking-tight ${isAlphaPositive ? "text-emerald-400" : "text-red-400"}`}
           >
             {totals.alpha >= 0 ? "+" : ""}
             {totals.alpha.toFixed(2)}%
@@ -188,7 +188,7 @@ export default function OverviewBenchmarkCards({
                 <card.icon size={17} className={card.iconColor} />
               </div>
             </div>
-            <div className="text-2xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
               {card.value}
             </div>
             <div className="mt-2">

@@ -70,15 +70,13 @@ export default function MetricCard({
               <Icon size={16} className={currentStyle.iconColor} />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-slate-100 leading-tight font-sans">
+          <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
             {value}
           </div>
         </div>
         {sub && (
           <div
-            className={`text-xs font-semibold mt-2.5 ${
-              subColor || currentStyle.subColor
-            }`}
+            className={`text-xs font-semibold mt-2.5 ${subColor || currentStyle.subColor}`}
           >
             {sub}
           </div>

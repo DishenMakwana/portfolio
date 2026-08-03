@@ -851,20 +851,21 @@ export async function getBenchmarkRule(
       .from(benchmarkRules)
       .orderBy(desc(benchmarkRules.priority));
 
-    const cleanCat = (category || "").toLowerCase();
-    const cleanName = (schemeName || "").toLowerCase();
+    const cleanCat = (category || "").toLowerCase().trim();
+    const cleanName = (schemeName || "").toLowerCase().trim();
 
     for (const r of rules) {
-      if (
-        r.schemeNamePattern &&
-        !cleanName.includes(r.schemeNamePattern.toLowerCase())
-      ) {
+      const catPattern = r.categoryPattern
+        ? r.categoryPattern.toLowerCase().trim()
+        : null;
+      const namePattern = r.schemeNamePattern
+        ? r.schemeNamePattern.toLowerCase().trim()
+        : null;
+
+      if (namePattern && !cleanName.includes(namePattern)) {
         continue;
       }
-      if (
-        r.categoryPattern &&
-        !cleanCat.includes(r.categoryPattern.toLowerCase())
-      ) {
+      if (catPattern && !cleanCat.includes(catPattern)) {
         continue;
       }
       return {

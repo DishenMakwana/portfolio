@@ -106,103 +106,114 @@ export default function MembersTab({
               )}
             </div>
             {selectedReport?.casId && (
-              <span className="text-[10px] text-teal-300 bg-teal-500/10 px-2 py-0.5 rounded font-mono font-bold border border-teal-500/25 tracking-normal normal-case">
+              <span className="text-[10px] text-teal-300 bg-teal-500/10 px-2 py-0.5 rounded font-bold border border-teal-500/25 tracking-normal normal-case">
                 CAS ID: {selectedReport.casId}
               </span>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-6 font-semibold">
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-x-5 gap-y-4 font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 Invested Value
               </div>
-              <div className="text-xl font-black text-slate-100 mt-1.5">
+              <div
+                className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-100 mt-1 tracking-tight whitespace-nowrap"
+                title={formatCurrency(totals.invested)}
+              >
                 {formatCurrency(totals.invested)}
               </div>
-              <div className={`text-[10px] ${ivDiffRes.subColor} mt-1`}>
+              <div
+                className={`text-[10px] ${ivDiffRes.subColor} mt-0.5 whitespace-nowrap`}
+              >
                 {ivDiffRes.sub}
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 Current Value
               </div>
-              <div className="text-xl font-black text-slate-100 mt-1.5">
+              <div
+                className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-100 mt-1 tracking-tight whitespace-nowrap"
+                title={formatCurrency(totals.currentValue)}
+              >
                 {formatCurrency(totals.currentValue)}
               </div>
-              <div className={`text-[10px] ${cvDiff.subColor} mt-1`}>
+              <div
+                className={`text-[10px] ${cvDiff.subColor} mt-0.5 whitespace-nowrap`}
+              >
                 {cvDiff.sub}
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 Unrealised Gain
               </div>
               <div
-                className={`text-xl font-black mt-1.5 ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                className={`text-xs sm:text-sm lg:text-base font-extrabold mt-1 tracking-tight whitespace-nowrap ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                title={formatCurrency(totals.gain)}
               >
                 {formatCurrency(totals.gain)}
               </div>
               <div
-                className={`text-[10px] mt-1 font-bold ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                className={`text-[10px] mt-0.5 font-bold whitespace-nowrap ${totals.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
               >
                 {totals.absoluteReturn.toFixed(2)}% Absolute
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 XIRR
               </div>
-              <div className="text-xl font-black text-teal-400 mt-1.5">
+              <div className="text-xs sm:text-sm lg:text-base font-extrabold text-teal-400 mt-1 tracking-tight whitespace-nowrap">
                 {formatPercent(totals.portfolioXirr)}
               </div>
-              <div className="mt-1.5">
+              <div className="mt-1">
                 <DeltaBadge delta={metricDeltas.portfolioXirr} />
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">
                 Annualised XIRR
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 CAGR
               </div>
-              <div className="text-xl font-black text-teal-400 mt-1.5">
+              <div className="text-xs sm:text-sm lg:text-base font-extrabold text-teal-400 mt-1 tracking-tight whitespace-nowrap">
                 {formatPercent(overallCagr)}
               </div>
-              <div className="mt-1.5">
+              <div className="mt-1">
                 <DeltaBadge delta={metricDeltas.cagr} />
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">
                 {totals.cagr !== undefined && totals.cagr !== null
                   ? "Excel Reported CAGR"
                   : "Weighted CAGR"}
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 Alpha
               </div>
               <div
-                className={`text-xl font-black mt-1.5 ${totals.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                className={`text-xs sm:text-sm lg:text-base font-extrabold mt-1 tracking-tight whitespace-nowrap ${totals.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
               >
                 {formatPercent(totals.alpha)}
               </div>
-              <div className="mt-1.5">
+              <div className="mt-1">
                 <DeltaBadge delta={metricDeltas.alpha} />
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">
                 Vs Benchmark
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 Holding Days
               </div>
-              <div className="text-xl font-black text-slate-200 mt-1.5">
+              <div className="text-xs sm:text-sm lg:text-base font-extrabold text-slate-200 mt-1 tracking-tight whitespace-nowrap">
                 {avgHoldingDays} Days
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">
+              <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">
                 {avgHoldingDays >= 30
                   ? `${formatHoldingYearsAndDays(avgHoldingDays)} • Weighted Avg`
                   : "Weighted Avg"}
@@ -225,7 +236,8 @@ export default function MembersTab({
           const mInvDiff = formatMetricDiff(member.investedDelta, "", "");
           const mCvDiff = formatMetricDiff(member.currentValueDelta, "", "");
           const memberHoldings = holdings.filter(
-            (h) => h.memberName === member.name
+            (h) =>
+              h.memberName === member.name && (h.balanceUnits ?? 0) > 0.0001
           );
           const schemesCount = memberHoldings.length;
           const isNsdl = !!(member.dpId && member.dpId.startsWith("IN"));
@@ -245,7 +257,7 @@ export default function MembersTab({
                   </h4>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     {member.pan && (
-                      <span className="bg-slate-850 text-slate-400 text-xs px-2 py-0.5 rounded font-mono">
+                      <span className="bg-slate-850 text-slate-400 text-xs px-2 py-0.5 rounded">
                         PAN: {member.pan}
                       </span>
                     )}
@@ -276,78 +288,101 @@ export default function MembersTab({
                   <div className="text-sm font-semibold text-slate-400">
                     XIRR
                   </div>
-                  <div className="text-2xl font-black text-teal-400">
-                    {formatPercent(member.xirr)}
+                  <div
+                    className={`text-2xl font-black ${schemesCount === 0 || member.currentValue <= 0 ? "text-slate-400" : "text-teal-400"}`}
+                  >
+                    {schemesCount === 0 || member.currentValue <= 0
+                      ? "0.00%"
+                      : formatPercent(member.xirr)}
                   </div>
                   <div className="mt-1">
-                    <DeltaBadge delta={member.xirrDelta} />
+                    {schemesCount > 0 && member.currentValue > 0 && (
+                      <DeltaBadge delta={member.xirrDelta} />
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 font-semibold">
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+              <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-5 gap-x-5 gap-y-4 font-semibold">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                     Invested
                   </div>
-                  <div className="text-sm sm:text-base font-bold text-slate-200 mt-1 whitespace-nowrap">
+                  <div
+                    className="text-xs sm:text-sm font-extrabold text-slate-200 mt-1 tracking-tight whitespace-nowrap"
+                    title={formatCurrency(member.invested)}
+                  >
                     {formatCurrency(member.invested)}
                   </div>
                   {mInvDiff.sub && (
                     <div
-                      className={`text-[10px] ${mInvDiff.subColor} mt-1 whitespace-nowrap`}
+                      className={`text-[10px] ${mInvDiff.subColor} mt-0.5 whitespace-nowrap`}
                     >
                       {mInvDiff.sub}
                     </div>
                   )}
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                     Current Value
                   </div>
-                  <div className="text-sm sm:text-base font-bold text-slate-200 mt-1 whitespace-nowrap">
+                  <div
+                    className="text-xs sm:text-sm font-extrabold text-slate-200 mt-1 tracking-tight whitespace-nowrap"
+                    title={formatCurrency(member.currentValue)}
+                  >
                     {formatCurrency(member.currentValue)}
                   </div>
                   {mCvDiff.sub && (
                     <div
-                      className={`text-[10px] ${mCvDiff.subColor} mt-1 whitespace-nowrap`}
+                      className={`text-[10px] ${mCvDiff.subColor} mt-0.5 whitespace-nowrap`}
                     >
                       {mCvDiff.sub}
                     </div>
                   )}
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                     Net Returns
                   </div>
                   <div
-                    className={`text-sm sm:text-base font-bold mt-1 whitespace-nowrap ${member.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    className={`text-xs sm:text-sm font-extrabold mt-1 tracking-tight whitespace-nowrap ${member.gain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    title={formatCurrency(member.gain)}
                   >
                     {formatCurrency(member.gain)}
                   </div>
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                     CAGR
                   </div>
-                  <div className="text-sm sm:text-base font-bold mt-1 text-teal-400 whitespace-nowrap">
-                    {formatPercent(member.cagr)}
+                  <div
+                    className={`text-xs sm:text-sm font-extrabold mt-1 tracking-tight whitespace-nowrap ${schemesCount === 0 || member.currentValue <= 0 ? "text-slate-400" : "text-teal-400"}`}
+                  >
+                    {schemesCount === 0 || member.currentValue <= 0
+                      ? "0.00%"
+                      : formatPercent(member.cagr)}
                   </div>
-                  <div className="mt-1">
-                    <DeltaBadge delta={member.cagrDelta} label="" />
+                  <div className="mt-0.5">
+                    {schemesCount > 0 && member.currentValue > 0 && (
+                      <DeltaBadge delta={member.cagrDelta} label="" />
+                    )}
                   </div>
                 </div>
-                <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold text-slate-500">
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wider font-semibold">
                     Alpha
                   </div>
                   <div
-                    className={`text-sm sm:text-base font-bold mt-1 whitespace-nowrap ${member.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    className={`text-xs sm:text-sm font-extrabold mt-1 tracking-tight whitespace-nowrap ${schemesCount === 0 || member.currentValue <= 0 ? "text-slate-400" : member.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
                   >
-                    {formatPercent(member.alpha)}
+                    {schemesCount === 0 || member.currentValue <= 0
+                      ? "0.00%"
+                      : formatPercent(member.alpha)}
                   </div>
-                  <div className="mt-1">
-                    <DeltaBadge delta={member.alphaDelta} label="" />
+                  <div className="mt-0.5">
+                    {schemesCount > 0 && member.currentValue > 0 && (
+                      <DeltaBadge delta={member.alphaDelta} label="" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -399,9 +434,7 @@ export default function MembersTab({
                             {member.nsdlId && (
                               <>
                                 <span className="text-slate-500">NSDL ID:</span>
-                                <span className="font-mono">
-                                  {member.nsdlId}
-                                </span>
+                                <span className="">{member.nsdlId}</span>
                               </>
                             )}
                             <span className="text-slate-500">Broker:</span>
@@ -409,9 +442,9 @@ export default function MembersTab({
                               {member.dpName}
                             </span>
                             <span className="text-slate-500">DP ID:</span>
-                            <span className="font-mono">{member.dpId}</span>
+                            <span className="">{member.dpId}</span>
                             <span className="text-slate-500">Client ID:</span>
-                            <span className="font-mono">{member.clientId}</span>
+                            <span className="">{member.clientId}</span>
                             {member.dob && (
                               <>
                                 <span className="text-slate-500">DOB:</span>
@@ -471,7 +504,7 @@ export default function MembersTab({
                               <span className="text-slate-500 min-w-16">
                                 Email:
                               </span>
-                              <span className="font-mono text-slate-200">
+                              <span className="text-slate-200">
                                 {member.email}
                               </span>
                             </div>
@@ -483,7 +516,7 @@ export default function MembersTab({
                               <span className="text-slate-500 min-w-16">
                                 Mobile:
                               </span>
-                              <span className="font-mono text-slate-200">
+                              <span className="text-slate-200">
                                 {member.mobile}
                               </span>
                             </div>
@@ -525,7 +558,7 @@ export default function MembersTab({
                             {member.linkedBankIfsc && (
                               <div className="flex items-center gap-1.5">
                                 <span className="text-slate-500">IFSC:</span>
-                                <span className="font-mono text-slate-200">
+                                <span className="text-slate-200">
                                   {member.linkedBankIfsc}
                                 </span>
                               </div>
@@ -533,7 +566,7 @@ export default function MembersTab({
                             {member.linkedBankAccountNo && (
                               <div className="flex items-center gap-1.5">
                                 <span className="text-slate-500">Acc No:</span>
-                                <span className="font-mono text-slate-200">
+                                <span className="text-slate-200">
                                   {member.linkedBankAccountNo}
                                 </span>
                               </div>

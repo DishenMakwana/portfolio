@@ -154,12 +154,14 @@ export default function OverviewMemberAndSubCategorySection({
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span
-                        className={`font-bold text-xs ${m.xirr >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                        className={`font-bold text-xs ${m.currentValue <= 0 ? "text-slate-400" : m.xirr >= 0 ? "text-emerald-400" : "text-red-400"}`}
                       >
-                        {formatPercent(m.xirr)}
+                        {m.currentValue <= 0 ? "0.00%" : formatPercent(m.xirr)}
                       </span>
                       <div className="mt-1">
-                        <DeltaBadge delta={m.xirrDelta} label="" />
+                        {m.currentValue > 0 && (
+                          <DeltaBadge delta={m.xirrDelta} label="" />
+                        )}
                       </div>
                     </td>
                   </tr>

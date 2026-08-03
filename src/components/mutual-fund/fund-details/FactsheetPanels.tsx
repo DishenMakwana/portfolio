@@ -15,6 +15,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  TrendingUp,
+  TrendingDown,
+  Receipt,
+  Coins,
 } from "lucide-react";
 import {
   formatNullableDate,
@@ -135,6 +139,44 @@ export default function FactsheetPanels({
     const start = (currentPage - 1) * pageSize;
     return filteredTransactions.slice(start, start + pageSize);
   }, [filteredTransactions, currentPage, pageSize]);
+
+  const isFullySold = useMemo(() => {
+    return (
+      (holding.balanceUnits ?? 0) <= 0.0001 ||
+      (holding.currentValue ?? 0) <= 0 ||
+      !!holding.comments?.toLowerCase().includes("sold") ||
+      !!holding.comments?.toLowerCase().includes("redeemed")
+    );
+  }, [holding.balanceUnits, holding.currentValue, holding.comments]);
+
+  // Summary totals for Buy, Sell, Stamp Duty & Realised PnL
+  const txSummary = useMemo(() => {
+    let buySum = 0;
+    let sellSum = 0;
+    let stampDutySum = 0;
+
+    transactions.forEach((tx) => {
+      const type = (tx.type || "").toUpperCase();
+      const amt = tx.amount || 0;
+      const stamp = (tx as any).stampDuty || 0;
+
+      if (type === "BUY" || type === "PURCHASE" || type === "SIP") {
+        buySum += amt;
+      } else if (type === "SELL" || type === "REDEMPTION" || type === "SWP") {
+        sellSum += amt;
+      }
+      stampDutySum += stamp;
+    });
+
+    const realisedProfit = sellSum - buySum;
+
+    return {
+      buySum,
+      sellSum,
+      stampDutySum,
+      realisedProfit,
+    };
+  }, [transactions]);
 
   const handleFYChange = (fy: string) => {
     setSelectedFY(fy);
@@ -852,18 +894,117 @@ export default function FactsheetPanels({
         </div>
       </div>
 
+      {/* TRANSACTION METRIC CARDS */}
+      <div
+        className={`grid grid-cols-1 gap-4 lg:gap-6 ${
+          isFullySold ? "sm:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"
+        }`}
+      >
+        {/* Card 1: Total Buy Value */}
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Total Fund Buy
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-inner">
+              <TrendingUp size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-emerald-400 tracking-tight">
+              {formatCurrency(txSummary.buySum)}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold">
+              Total purchases & SIP inflows
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Total Sell Value */}
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Total Fund Sell
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shadow-inner">
+              <TrendingDown size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-rose-400 tracking-tight">
+              {formatCurrency(txSummary.sellSum)}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold">
+              Total redemptions & sales
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Realised P&L (ONLY SHOWN FOR INACTIVE / FULLY SOLD FUNDS) */}
+        {isFullySold && (
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Realised P&L
+              </span>
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${
+                  txSummary.realisedProfit >= 0
+                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                    : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
+                }`}
+              >
+                <Coins size={20} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div
+                className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tight ${
+                  txSummary.realisedProfit >= 0
+                    ? "text-emerald-400"
+                    : "text-rose-400"
+                }`}
+              >
+                {formatCurrency(txSummary.realisedProfit)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1 font-semibold">
+                Total Sell minus Total Buy
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Card 4: Stamp Duty Paid */}
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Stamp Duty Paid
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
+              <Receipt size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-amber-400 tracking-tight">
+              {formatCurrency(txSummary.stampDutySum)}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold">
+              Govt stamp duty collected to date
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* TRANSACTION HISTORY SECTION */}
       <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm">
         <div className="p-6 border-b border-slate-850 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
               <Calendar className="text-teal-400" size={18} />
-              <span>
-                Reconstructed Transaction History ({transactions.length})
-              </span>
+              <span>Transaction History ({transactions.length})</span>
             </h3>
             <span className="text-slate-400 text-xs font-semibold">
-              Calculated from chronological snapshots
+              Complete SOA & statement ledger
             </span>
           </div>
 

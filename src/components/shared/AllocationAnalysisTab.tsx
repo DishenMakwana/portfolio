@@ -302,31 +302,19 @@ export default function AllocationAnalysisTab({
             <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
               <button
                 onClick={() => setGraphView("cagr")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  graphView === "cagr"
-                    ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
-                    : "text-slate-400 hover:text-slate-200 border border-transparent"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${graphView === "cagr" ? "bg-teal-500/20 text-teal-400 border border-teal-500/30" : "text-slate-400 hover:text-slate-200 border border-transparent"}`}
               >
                 CAGR Bubble
               </button>
               <button
                 onClick={() => setGraphView("abs")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  graphView === "abs"
-                    ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
-                    : "text-slate-400 hover:text-slate-200 border border-transparent"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${graphView === "abs" ? "bg-teal-500/20 text-teal-400 border border-teal-500/30" : "text-slate-400 hover:text-slate-200 border border-transparent"}`}
               >
                 Abs Return Combo
               </button>
               <button
                 onClick={() => setGraphView("xirr")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  graphView === "xirr"
-                    ? "bg-teal-500/20 text-teal-400 border border-teal-500/30"
-                    : "text-slate-400 hover:text-slate-200 border border-transparent"
-                }`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${graphView === "xirr" ? "bg-teal-500/20 text-teal-400 border border-teal-500/30" : "text-slate-400 hover:text-slate-200 border border-transparent"}`}
               >
                 XIRR Lollipop
               </button>
@@ -610,7 +598,7 @@ export default function AllocationAnalysisTab({
                         fontWeight="black"
                         fill="#ffffff"
                         opacity={opacity}
-                        className="pointer-events-none drop-shadow-[0_1.5px_2px_rgba(0,0,0,0.85)] font-sans"
+                        className="pointer-events-none drop-shadow-[0_1.5px_2px_rgba(0,0,0,0.85)]"
                       >
                         {shortName}
                       </text>
@@ -920,7 +908,7 @@ export default function AllocationAnalysisTab({
                 fontSize="11"
                 fontWeight="bold"
                 fill="#64748b"
-                className="font-sans"
+                className=""
               >
                 {entityLabel} Exposure
               </text>
@@ -1259,7 +1247,7 @@ export default function AllocationAnalysisTab({
                       fontWeight={isHovered ? "black" : "semibold"}
                       fill={isHovered ? "#f1f5f9" : "#64748b"}
                       opacity={hoveredPoint ? (isHovered ? 1.0 : 0.3) : 0.85}
-                      className="transition-all duration-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] font-sans"
+                      className="transition-all duration-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
                     >
                       {shortName}
                     </text>
@@ -1430,9 +1418,7 @@ export default function AllocationAnalysisTab({
                       {formatCurrency(amc.invested)}
                     </td>
                     <td
-                      className={`py-3 px-4 text-right font-semibold tabular-nums ${
-                        amc.gain >= 0 ? "text-emerald-400" : "text-rose-400"
-                      }`}
+                      className={`py-3 px-4 text-right font-semibold tabular-nums ${amc.gain >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                     >
                       {formatCurrency(amc.gain)}
                       <span className="text-[10px] ml-1.5 font-normal opacity-85">
@@ -1440,24 +1426,12 @@ export default function AllocationAnalysisTab({
                       </span>
                     </td>
                     <td
-                      className={`py-3 px-4 text-right font-extrabold tabular-nums ${
-                        amc.cagr >= 15
-                          ? "text-teal-400"
-                          : amc.cagr >= 10
-                            ? "text-amber-400"
-                            : "text-rose-400"
-                      }`}
+                      className={`py-3 px-4 text-right font-extrabold tabular-nums ${amc.cagr >= 15 ? "text-teal-400" : amc.cagr >= 10 ? "text-amber-400" : "text-rose-400"}`}
                     >
                       {amc.cagr.toFixed(2)}%
                     </td>
                     <td
-                      className={`py-3 px-4 text-right font-extrabold tabular-nums ${
-                        amc.xirr >= 15
-                          ? "text-emerald-400"
-                          : amc.xirr >= 10
-                            ? "text-amber-400"
-                            : "text-rose-400"
-                      }`}
+                      className={`py-3 px-4 text-right font-extrabold tabular-nums ${amc.xirr >= 15 ? "text-emerald-400" : amc.xirr >= 10 ? "text-amber-400" : "text-rose-400"}`}
                     >
                       {amc.xirr.toFixed(2)}%
                     </td>

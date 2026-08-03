@@ -16,6 +16,7 @@ export interface FundDetailsClientProps {
     units: number;
     nav: number;
     amount: number;
+    stampDuty?: number | null;
     sourceReportId: number | null;
   }>;
   metrics: {

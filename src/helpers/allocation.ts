@@ -126,61 +126,140 @@ export function getSubCategory(name: string, category: string): string {
   const cat = (category || "").toLowerCase();
   if (
     cat.includes("debt") ||
+    cat.includes("liquid") ||
+    cat.includes("income") ||
+    cat.includes("duration") ||
+    cat.includes("saving") ||
+    cat.includes("money market") ||
     n.includes("debt") ||
     n.includes("bond") ||
     n.includes("liquid") ||
     n.includes("gilt") ||
     n.includes("overnight") ||
-    n.includes("credit risk")
+    n.includes("credit risk") ||
+    n.includes("duration") ||
+    n.includes("ultra short") ||
+    n.includes("short term") ||
+    n.includes("income plan") ||
+    n.includes("st income") ||
+    n.includes("savings fund") ||
+    n.includes("saving fund") ||
+    n.includes("money market") ||
+    n.includes("treasury") ||
+    n.includes("floater")
   )
     return "Debt";
-  if (n.includes("multi asset") || n.includes("multi-asset"))
+  if (
+    n.includes("multi asset") ||
+    n.includes("multi-asset") ||
+    cat.includes("multi asset")
+  )
     return "Hybrid: Multi Asset";
-  if (n.includes("balanced advantage") || n.includes("dynamic asset"))
+  if (
+    n.includes("balanced advantage") ||
+    n.includes("dynamic asset") ||
+    cat.includes("balanced advantage")
+  )
     return "Hybrid: Balanced Advantage";
-  if (n.includes("aggressive hybrid") || n.includes("equity & debt"))
+  if (
+    n.includes("aggressive hybrid") ||
+    n.includes("equity & debt") ||
+    cat.includes("aggressive hybrid")
+  )
     return "Hybrid: Aggressive";
-  if (n.includes("hybrid") || n.includes("conservative hybrid"))
+  if (
+    n.includes("hybrid") ||
+    n.includes("conservative hybrid") ||
+    cat.includes("hybrid")
+  )
     return "Hybrid";
-  if (n.includes("long short") || n.includes("long-short"))
+  if (
+    n.includes("long short") ||
+    n.includes("long-short") ||
+    cat.includes("long-short")
+  )
     return cat.includes("equity") ? "SIF: Equity LS" : "SIF: Hybrid LS";
-  if (n.includes("flexi cap") || n.includes("flexicap"))
+  if (
+    n.includes("flexi cap") ||
+    n.includes("flexicap") ||
+    cat.includes("flexi")
+  )
     return "Equity: Flexi Cap";
   if (
     n.includes("large & mid") ||
     n.includes("large and mid") ||
-    n.includes("large & mid cap")
+    n.includes("large & mid cap") ||
+    cat.includes("large & mid") ||
+    cat.includes("large and mid")
   )
     return "Equity: Large & Mid Cap";
-  if (n.includes("multi cap") || n.includes("multicap"))
+  if (
+    n.includes("multi cap") ||
+    n.includes("multicap") ||
+    cat.includes("multi cap") ||
+    cat.includes("multicap")
+  )
     return "Equity: Multi Cap";
   if (n.includes("mid small") || n.includes("mid & small"))
     return "Equity: Mid Small Cap";
-  if (n.includes("mid cap") || n.includes("midcap")) return "Equity: Mid Cap";
-  if (n.includes("small cap") || n.includes("smallcap"))
+  if (
+    n.includes("mid cap") ||
+    n.includes("midcap") ||
+    cat.includes("mid cap") ||
+    cat.includes("midcap")
+  )
+    return "Equity: Mid Cap";
+  if (
+    n.includes("small cap") ||
+    n.includes("smallcap") ||
+    cat.includes("small cap") ||
+    cat.includes("smallcap")
+  )
     return "Equity: Small Cap";
   if (
     n.includes("large cap") ||
     n.includes("largecap") ||
-    n.includes("bluechip")
+    n.includes("bluechip") ||
+    cat.includes("large cap")
   )
     return "Equity: Large Cap";
-  if (n.includes("focused")) return "Equity: Focused";
-  if (n.includes("elss") || n.includes("tax saver") || n.includes("tax saving"))
+  if (n.includes("focused") || cat.includes("focused"))
+    return "Equity: Focused";
+  if (
+    n.includes("value") ||
+    cat.includes("value") ||
+    n.includes("contra") ||
+    cat.includes("contra")
+  )
+    return "Equity: Value";
+  if (
+    n.includes("elss") ||
+    n.includes("tax saver") ||
+    n.includes("tax saving") ||
+    cat.includes("elss")
+  )
     return "Equity: ELSS";
   if (
     n.includes("thematic") ||
     n.includes("opportunities") ||
-    n.includes("india opp")
+    n.includes("india opp") ||
+    cat.includes("thematic")
   )
     return "Equity: Thematic";
-  if (n.includes("sectoral") || n.includes("sector")) return "Equity: Sectoral";
-  if (n.includes("gold") || n.includes("precious")) return "Gold";
+  if (
+    n.includes("sectoral") ||
+    n.includes("sector") ||
+    cat.includes("sectoral")
+  )
+    return "Equity: Sectoral";
+  if (n.includes("gold") || n.includes("precious") || cat.includes("gold"))
+    return "Gold";
   if (
     n.includes("international") ||
     n.includes("global") ||
     n.includes("nasdaq") ||
-    n.includes("us ")
+    n.includes("us ") ||
+    cat.includes("international")
   )
     return "Global Equity";
   if (cat.includes("equity") || n.includes("equity")) return "Equity";
@@ -203,6 +282,8 @@ export function getCapRatios(subCat: string): {
       return { large: 0.55, mid: 0.4, small: 0.05 };
     case "Equity: Flexi Cap":
       return { large: 0.45, mid: 0.35, small: 0.2 };
+    case "Equity: Value":
+      return { large: 0.55, mid: 0.3, small: 0.15 };
     case "Equity: Multi Cap":
       return { large: 0.33, mid: 0.34, small: 0.33 };
     case "Equity: Mid Small Cap":
@@ -266,6 +347,42 @@ export function getOverlapSubCategory(name: string, category: string): string {
   const catLower = (category || "").toLowerCase();
 
   if (
+    catLower.includes("ultra short") ||
+    catLower.includes("short duration") ||
+    nameLower.includes("ultra short") ||
+    nameLower.includes("short duration")
+  ) {
+    return "Ultra Short Duration";
+  }
+
+  if (
+    catLower.includes("debt") ||
+    catLower.includes("liquid") ||
+    catLower.includes("income") ||
+    catLower.includes("duration") ||
+    catLower.includes("saving") ||
+    catLower.includes("money market") ||
+    nameLower.includes("debt") ||
+    nameLower.includes("bond") ||
+    nameLower.includes("liquid") ||
+    nameLower.includes("gilt") ||
+    nameLower.includes("overnight") ||
+    nameLower.includes("credit risk") ||
+    nameLower.includes("duration") ||
+    nameLower.includes("ultra short") ||
+    nameLower.includes("short term") ||
+    nameLower.includes("income plan") ||
+    nameLower.includes("st income") ||
+    nameLower.includes("savings fund") ||
+    nameLower.includes("saving fund") ||
+    nameLower.includes("money market") ||
+    nameLower.includes("treasury") ||
+    nameLower.includes("floater")
+  ) {
+    return "Debt & Liquid";
+  }
+
+  if (
     catLower.includes("ulip") ||
     catLower.includes("insurance") ||
     nameLower.includes("ulis") ||
@@ -303,6 +420,13 @@ export function getOverlapSubCategory(name: string, category: string): string {
   } else if (catLower.includes("focused") || nameLower.includes("focused")) {
     return "Focused Equity";
   } else if (
+    catLower.includes("value") ||
+    catLower.includes("contra") ||
+    nameLower.includes("value") ||
+    nameLower.includes("contra")
+  ) {
+    return "Value / Contra Equity";
+  } else if (
     catLower.includes("thematic") ||
     catLower.includes("opportunity") ||
     catLower.includes("opportunities") ||
@@ -322,8 +446,6 @@ export function getOverlapSubCategory(name: string, category: string): string {
     return "Large Cap";
   } else if (catLower.includes("small") || nameLower.includes("smallcap")) {
     return "Small Cap";
-  } else if (catLower.includes("debt") || catLower.includes("liquid")) {
-    return "Debt & Liquid";
   } else if (
     catLower.includes("hybrid") ||
     catLower.includes("balanced") ||

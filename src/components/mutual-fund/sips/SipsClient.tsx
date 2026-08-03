@@ -389,7 +389,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                       {sip.schemeName}
                                     </div>
                                   </td>
-                                  <td className="px-5 py-3 font-mono text-xs text-slate-400">
+                                  <td className="px-5 py-3 text-xs text-slate-400">
                                     {sip.folioNo}
                                   </td>
                                   <td className="px-5 py-3 text-right font-bold text-slate-100">
@@ -440,11 +440,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                   return (
                                     <td
                                       key={col}
-                                      className={`px-3 py-3 text-right text-xs font-bold ${
-                                        colTotal > 0
-                                          ? "text-teal-400"
-                                          : "text-slate-600"
-                                      }`}
+                                      className={`px-3 py-3 text-right text-xs font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
                                     >
                                       {colTotal > 0
                                         ? `₹${colTotal.toLocaleString("en-IN")}`
@@ -481,9 +477,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                         {col}
                       </div>
                       <div
-                        className={`text-sm font-bold ${
-                          colTotal > 0 ? "text-teal-400" : "text-slate-600"
-                        }`}
+                        className={`text-sm font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
                       >
                         {colTotal > 0 ? formatCurrency(colTotal) : "—"}
                       </div>

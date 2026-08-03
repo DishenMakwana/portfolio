@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import DonutChart from "@/components/shared/DonutChart";
 import PortfolioScoreCard from "@/components/shared/PortfolioScoreCard";
 import SummaryMetricCards from "@/components/shared/SummaryMetricCards";
-import { formatInrCompact } from "@/helpers/formatters";
+import { formatCurrency } from "@/helpers/formatters";
 import type { OverviewTabProps } from "@/types/insights";
 
 export default function OverviewTab({
@@ -42,7 +42,9 @@ export default function OverviewTab({
           <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-500 tracking-wider pb-2 mb-2 border-b border-slate-800/40">
             <span className="pl-4">Category / Fund Name</span>
             <div className="flex items-center gap-3 ml-3 shrink-0">
-              <span className="hidden sm:inline w-20 text-right">Amount</span>
+              <span className="hidden sm:inline w-28 lg:w-32 text-right">
+                Amount
+              </span>
               <span className="w-24 text-right">Absolute Return</span>
               <span className="w-16 text-right">Allocation</span>
             </div>
@@ -63,8 +65,8 @@ export default function OverviewTab({
                     </span>
                   </div>
                   <div className="flex items-center gap-3 ml-3 shrink-0">
-                    <span className="text-slate-500 hidden sm:inline w-20 text-right">
-                      {formatInrCompact(cat.current)}
+                    <span className="text-slate-500 hidden sm:inline w-28 lg:w-32 text-right font-medium tabular-nums">
+                      {formatCurrency(cat.current)}
                     </span>
                     <span
                       className={`font-semibold text-xs w-24 text-right ${
@@ -156,8 +158,8 @@ export default function OverviewTab({
             SIP Summary
           </h2>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-100">
-              {formatInrCompact(data.totals.totalMonthlySip)}
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-100">
+              {formatCurrency(data.totals.totalMonthlySip)}
             </span>
             <span className="text-slate-500 text-sm">/ month</span>
           </div>
@@ -184,7 +186,7 @@ export default function OverviewTab({
                         {stats.sipsCount} SIPs
                       </span>
                       <span className="font-semibold text-teal-300">
-                        {formatInrCompact(stats.totalAmount)}
+                        {formatCurrency(stats.totalAmount)}
                       </span>
                     </div>
                   </div>

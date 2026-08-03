@@ -53,6 +53,7 @@ export default function UploadTrackerControls({
             >
               {reportsList.map((r) => (
                 <option key={r.id} value={r.id}>
+                  #{r.id} -{" "}
                   {new Date(r.asOfDate).toLocaleDateString("en-IN", {
                     day: "2-digit",
                     month: "short",

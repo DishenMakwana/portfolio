@@ -37,19 +37,30 @@ export default function HoldingsTab({
     rawOrder === "asc" || rawOrder === "desc" ? rawOrder : "desc"
   ) as "asc" | "desc";
 
+  const initialStatus = searchParams.get("status") || "active";
+
   // Local Search & Filter State
   const [searchVal, setSearchVal] = useState(initialSearch); // For instant input typing
-  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [sortField, setSortField] = useState<HoldingsSortField>(initialSort);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
 
   // Helper to update query string parameters in the URL
   const updateUrl = (updates: Record<string, string | null>) => {
-    const current = new URLSearchParams(Array.from(searchParams.entries()));
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
     for (const [key, value] of Object.entries(updates)) {
-      if (value === null || value === "" || value === "All") {
+      if (
+        value === null ||
+        value === "" ||
+        value === "All" ||
+        (key === "status" && value === "active")
+      ) {
         current.delete(key);
       } else {
         current.set(key, value);
@@ -63,9 +74,9 @@ export default function HoldingsTab({
   useEffect(() => {
     const q = searchParams.get("q") || "";
     setSearchVal(q);
-    setSearchQuery(q);
-    setMemberFilter(searchParams.get("member") || initialMember);
+    setMemberFilter(searchParams.get("member") || "All");
     setPlanFilter(searchParams.get("plan") || "All");
+    setStatusFilter(searchParams.get("status") || "active");
     const rawS = searchParams.get("sort");
     setSortField(
       ((HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawS || "")
@@ -76,12 +87,13 @@ export default function HoldingsTab({
     setSortOrder(
       (rawO === "asc" || rawO === "desc" ? rawO : "desc") as "asc" | "desc"
     );
-  }, [searchParams, initialMember]);
+  }, [searchParams]);
 
   // Debounced search query update in URL
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchParams.get("q") !== searchVal) {
+      const currentUrlQ = searchParams.get("q") || "";
+      if (currentUrlQ !== searchVal) {
         updateUrl({ q: searchVal });
       }
     }, 300);
@@ -96,6 +108,11 @@ export default function HoldingsTab({
   const handlePlanChange = (value: string) => {
     setPlanFilter(value);
     updateUrl({ plan: value });
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    updateUrl({ status: value });
   };
 
   const handleSort = (field: typeof sortField) => {
@@ -118,12 +135,18 @@ export default function HoldingsTab({
     }
     return <ChevronDown size={12} className="inline ml-1 opacity-20" />;
   };
+
+  // Active holdings count (excluding fully redeemed/sold 0 balance folios)
+  const activeTotalCount = holdings.filter(
+    (h) => (h.balanceUnits ?? 0) > 0.0001
+  ).length;
+
   // Filter and Sort holdings
   const filtered = holdings
     .filter((h) => {
       const matchSearch =
-        h.schemeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.folioNo.includes(searchQuery);
+        h.schemeName.toLowerCase().includes(searchVal.toLowerCase()) ||
+        h.folioNo.includes(searchVal);
       const matchMember =
         memberFilter === "All" || h.memberName === memberFilter;
 
@@ -139,7 +162,16 @@ export default function HoldingsTab({
         matchPlan = isSifPlan;
       }
 
-      return matchSearch && matchMember && matchPlan;
+      // Folio Status check: Active vs Inactive (Redeemed/Sold)
+      const isActiveFolio = (h.balanceUnits ?? 0) > 0.0001;
+      let matchStatus = true;
+      if (statusFilter === "active") {
+        matchStatus = isActiveFolio;
+      } else if (statusFilter === "inactive") {
+        matchStatus = !isActiveFolio;
+      }
+
+      return matchSearch && matchMember && matchPlan && matchStatus;
     })
     .sort((a, b) => {
       const valA = a[sortField];
@@ -160,7 +192,7 @@ export default function HoldingsTab({
       transition={{ duration: 0.25 }}
     >
       {/* Filters Row */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
         {/* Search Bar */}
         <div className="relative flex-1 max-w-md">
           <input
@@ -176,27 +208,15 @@ export default function HoldingsTab({
           />
         </div>
 
-        {/* Filter dropdowns */}
-        <div className="flex flex-wrap items-center gap-4">
+        {/* Filter dropdowns stacked to the right side */}
+        <div className="flex flex-col md:items-end gap-2.5 ml-auto">
+          {/* Top Level: Holder */}
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-sm">Plan Type:</span>
-            <select
-              value={planFilter}
-              onChange={(e) => handlePlanChange(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
-            >
-              <option value="All">All Plans</option>
-              <option value="MF">Mutual Fund (MF)</option>
-              <option value="SIF">Specialized (SIF)</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-sm">Holder:</span>
+            <span className="text-slate-400 text-sm font-medium">Holder:</span>
             <select
               value={memberFilter}
               onChange={(e) => handleMemberChange(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer min-w-[200px]"
             >
               <option value="All">All family members</option>
               {memberSummaries.map((m) => (
@@ -206,11 +226,61 @@ export default function HoldingsTab({
               ))}
             </select>
           </div>
+
+          {/* Under Holder: Folio Status & Plan Type */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm font-medium">
+                Folio Status:
+              </span>
+              <select
+                value={statusFilter}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer font-medium"
+              >
+                <option value="active">Active Folios</option>
+                <option value="inactive">Inactive / Sold Folios</option>
+                <option value="all">All Folios</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-sm font-medium">
+                Plan Type:
+              </span>
+              <select
+                value={planFilter}
+                onChange={(e) => handlePlanChange(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+              >
+                <option value="All">All Plans</option>
+                <option value="MF">Mutual Fund (MF)</option>
+                <option value="SIF">Specialized (SIF)</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Table Container */}
       <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
+        {/* Table Top Bar with Fund Count */}
+        <div className="flex items-center justify-end px-4 py-3 bg-slate-950/80 border-b border-slate-850">
+          <span className="text-xs text-slate-400 font-medium">
+            Showing{" "}
+            <span className="text-slate-200 font-bold">{filtered.length}</span>{" "}
+            of{" "}
+            <span className="text-slate-200 font-bold">{activeTotalCount}</span>{" "}
+            active folios
+            {statusFilter !== "active" && (
+              <span className="text-slate-500 font-normal">
+                {" "}
+                ({holdings.length} total including inactive)
+              </span>
+            )}
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -289,6 +359,11 @@ export default function HoldingsTab({
                         <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
                           {h.category}
                         </span>
+                        {h.balanceUnits <= 0.0001 && (
+                          <span className="bg-amber-950/80 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">
+                            Inactive / Sold
+                          </span>
+                        )}
                         {isUnlistedStock(h.schemeName) && (
                           <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase animate-pulse">
                             Unlisted

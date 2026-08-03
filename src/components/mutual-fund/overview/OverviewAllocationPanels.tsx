@@ -170,18 +170,21 @@ export default function OverviewAllocationPanels({
               <IndianRupee size={14} className="text-amber-400" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-3">
             {/* LTCG */}
-            <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 space-y-1">
+            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-slate-800/80 space-y-1 min-w-0">
               <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                 LTCG &gt;1 yr
               </div>
-              <div className="text-lg font-extrabold text-slate-100 tabular-nums leading-tight">
+              <div
+                className="text-[11px] xs:text-xs sm:text-sm md:text-base xl:text-lg font-extrabold text-slate-100 tabular-nums leading-tight whitespace-nowrap tracking-tight overflow-hidden"
+                title={formatCurrency(ltcgGain)}
+              >
                 {formatCurrency(ltcgGain)}
               </div>
-              <div className="flex items-center gap-1 mt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                <span className="text-[10px] text-emerald-400 font-medium">
+              <div className="flex items-start gap-1 mt-1 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shrink-0 mt-1" />
+                <span className="text-[9px] sm:text-[10px] text-emerald-400 font-medium leading-tight">
                   Exempt up to ₹1.25L / person
                 </span>
               </div>
@@ -193,16 +196,19 @@ export default function OverviewAllocationPanels({
               </div>
             </div>
             {/* STCG */}
-            <div className="bg-slate-950/70 p-4 rounded-xl border border-amber-500/20 space-y-1">
+            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-amber-500/20 space-y-1 min-w-0">
               <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                 STCG ≤1 yr
               </div>
-              <div className="text-lg font-extrabold text-amber-400 tabular-nums leading-tight">
+              <div
+                className="text-[11px] xs:text-xs sm:text-sm md:text-base xl:text-lg font-extrabold text-amber-400 tabular-nums leading-tight whitespace-nowrap tracking-tight overflow-hidden"
+                title={formatCurrency(stcgGain)}
+              >
                 {formatCurrency(stcgGain)}
               </div>
-              <div className="flex items-center gap-1 mt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                <span className="text-[10px] text-amber-400 font-medium">
+              <div className="flex items-start gap-1 mt-1 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0 mt-1" />
+                <span className="text-[9px] sm:text-[10px] text-amber-400 font-medium leading-tight">
                   Flat 20% tax
                 </span>
               </div>
@@ -215,11 +221,14 @@ export default function OverviewAllocationPanels({
             </div>
           </div>
           {/* Total */}
-          <div className="flex items-center justify-between bg-slate-800/40 rounded-xl px-4 py-2.5 border border-slate-700/40">
-            <span className="text-xs text-slate-400 font-medium">
+          <div className="flex items-center justify-between bg-slate-800/40 rounded-xl px-4 py-2.5 border border-slate-700/40 min-w-0 gap-2">
+            <span className="text-xs text-slate-400 font-medium shrink-0">
               Total Gains
             </span>
-            <span className="text-sm font-extrabold text-slate-100 tabular-nums">
+            <span
+              className="text-sm sm:text-base font-extrabold text-slate-100 tabular-nums truncate tracking-tight text-right"
+              title={formatCurrency(ltcgGain + stcgGain)}
+            >
               {formatCurrency(ltcgGain + stcgGain)}
             </span>
           </div>

@@ -193,8 +193,8 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
             </h3>
             <p className="text-slate-400 text-sm mt-1">
               Link each fund to its{" "}
-              <span className="font-mono text-teal-400">api.mfapi.in</span>{" "}
-              scheme code for live NAV, XIRR, and Alpha calculations.
+              <span className="text-teal-400">api.mfapi.in</span> scheme code
+              for live NAV, XIRR, and Alpha calculations.
             </p>
           </div>
           <button
@@ -290,11 +290,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                     <button
                       key={f}
                       onClick={() => setAutoMapFilter(f)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${
-                        autoMapFilter === f
-                          ? "bg-teal-500 text-slate-950 border-teal-500"
-                          : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${autoMapFilter === f ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
                     >
                       {f === "all" && `All (${autoMapResults.length})`}
                       {f === "mapped" &&
@@ -342,7 +338,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                                   {meta.label}
                                 </span>
                                 {result.schemeCode && (
-                                  <span className="text-xs font-mono text-slate-400">
+                                  <span className="text-xs text-slate-400">
                                     Code:{" "}
                                     <span className="text-teal-400 font-bold">
                                       {result.schemeCode}
@@ -431,7 +427,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                                     <span className="text-xs text-slate-300">
                                       {match.schemeName}
                                     </span>
-                                    <span className="text-xs text-teal-400 font-mono font-bold ml-3 shrink-0">
+                                    <span className="text-xs text-teal-400 font-bold ml-3 shrink-0">
                                       {match.schemeCode}
                                     </span>
                                   </div>
@@ -460,11 +456,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
               <button
                 key={f}
                 onClick={() => setMappingFilter(f)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${
-                  mappingFilter === f
-                    ? "bg-teal-500 text-slate-950 border-teal-500"
-                    : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${mappingFilter === f ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
               >
                 {f === "all" && `All (${allSchemes.length})`}
                 {f === "mapped" && `Mapped (${mappedCount})`}
@@ -496,10 +488,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                     {scheme.schemeCodeApi ? (
                       <span className="flex items-center gap-1 text-emerald-400 font-semibold">
                         <ShieldCheck size={12} />
-                        Code:{" "}
-                        <span className="font-mono">
-                          {scheme.schemeCodeApi}
-                        </span>
+                        Code: <span className="">{scheme.schemeCodeApi}</span>
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-amber-500 font-semibold">
@@ -615,7 +604,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
                       <span className="font-medium text-slate-300 text-sm">
                         {res.schemeName}
                       </span>
-                      <span className="text-teal-400 font-mono text-xs ml-4 font-bold shrink-0">
+                      <span className="text-teal-400 text-xs ml-4 font-bold shrink-0">
                         #{res.schemeCode}
                       </span>
                     </div>

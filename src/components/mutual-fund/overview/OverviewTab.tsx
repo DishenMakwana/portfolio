@@ -58,11 +58,17 @@ export default function OverviewTab({
     );
   };
 
+  const activeHoldings = useMemo(() => {
+    return holdings.filter(
+      (h) => (h.currentValue ?? 0) > 0 && (h.balanceUnits ?? 0) > 0.0001
+    );
+  }, [holdings]);
+
   const portfolioCagr = useMemo(() => {
     if (totals.cagr !== undefined && totals.cagr !== null) {
       return totals.cagr;
     }
-    const withCagr = holdings.filter(
+    const withCagr = activeHoldings.filter(
       (h) => h.cagr !== undefined && h.cagr !== null
     );
     if (!withCagr.length || !totals.currentValue) return null;
@@ -71,23 +77,24 @@ export default function OverviewTab({
       0
     );
     return weightedSum / totals.currentValue;
-  }, [holdings, totals.cagr, totals.currentValue]);
+  }, [activeHoldings, totals.cagr, totals.currentValue]);
 
   const { topFund, worstFund } = useMemo(() => {
-    if (!holdings.length) return { topFund: undefined, worstFund: undefined };
-    const sorted = [...holdings].sort(
+    if (!activeHoldings.length)
+      return { topFund: undefined, worstFund: undefined };
+    const sorted = [...activeHoldings].sort(
       (a, b) => b.absoluteReturn - a.absoluteReturn
     );
     return {
       topFund: sorted[0],
       worstFund: sorted[sorted.length - 1],
     };
-  }, [holdings]);
+  }, [activeHoldings]);
 
   const taxEstimate = useMemo(() => {
     let ltcg = 0;
     let stcg = 0;
-    for (const h of holdings) {
+    for (const h of activeHoldings) {
       const gain = Math.max(h.gain, 0);
       if (h.holdingDays >= 365) {
         ltcg += gain;
@@ -100,15 +107,15 @@ export default function OverviewTab({
       stcgEstimate: stcg,
       totalTaxEstimate: Math.max(ltcg - 125000, 0) * 0.125 + stcg * 0.2,
     };
-  }, [holdings]);
+  }, [activeHoldings]);
 
   const diversityInsights = useMemo(() => {
     return {
       categoryCount: categoryAllocation.length,
       amcCount: amcAllocation.length,
-      schemeCount: holdings.length,
+      schemeCount: activeHoldings.length,
     };
-  }, [categoryAllocation, amcAllocation, holdings]);
+  }, [categoryAllocation, amcAllocation, activeHoldings]);
 
   const concentrationInsights = useMemo(() => {
     const totalVal = totals.currentValue || 1;
@@ -116,11 +123,13 @@ export default function OverviewTab({
     const topCatVal = categoryAllocation[0]?.value || 0;
     const topAmcName = amcAllocation[0]?.name || "—";
     const topAmcVal = amcAllocation[0]?.value || 0;
-    const weightedDays = holdings.reduce(
+    const weightedDays = activeHoldings.reduce(
       (acc, h) => acc + h.holdingDays * h.currentValue,
       0
     );
-    const avgDays = holdings.length ? Math.round(weightedDays / totalVal) : 0;
+    const avgDays = activeHoldings.length
+      ? Math.round(weightedDays / totalVal)
+      : 0;
 
     return {
       topCategory: topCatName,
@@ -129,7 +138,7 @@ export default function OverviewTab({
       amcPct: (topAmcVal / totalVal) * 100,
       avgDays,
     };
-  }, [totals.currentValue, categoryAllocation, amcAllocation, holdings]);
+  }, [totals.currentValue, categoryAllocation, amcAllocation, activeHoldings]);
 
   const benchmarkLabel = "UTI Nifty 50 Index Direct";
   const mfCagrDelta = metricDeltas.cagr;

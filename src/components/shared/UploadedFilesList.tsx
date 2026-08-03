@@ -19,7 +19,13 @@ export default function UploadedFilesList({
     const query = searchQuery.toLowerCase();
     const formattedDate = formatDate(report.asOfDate).toLowerCase();
     const filename = report.filename.toLowerCase();
-    return formattedDate.includes(query) || filename.includes(query);
+    const reportIdStr = report.id.toString();
+    return (
+      formattedDate.includes(query) ||
+      filename.includes(query) ||
+      reportIdStr.includes(query) ||
+      `#${reportIdStr}`.includes(query)
+    );
   });
 
   return (
@@ -33,7 +39,7 @@ export default function UploadedFilesList({
           />
           <input
             type="text"
-            placeholder="Search uploaded files by date or name..."
+            placeholder="Search uploaded files by date, name, or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950/80 border border-slate-800/80 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition font-medium"
@@ -61,6 +67,9 @@ export default function UploadedFilesList({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black text-slate-100 whitespace-nowrap">
+                      <span className="text-teal-400 font-extrabold mr-1.5">
+                        #{report.id}
+                      </span>
                       {formatDate(report.asOfDate)}
                     </span>
                     <span

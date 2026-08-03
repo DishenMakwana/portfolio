@@ -60,9 +60,7 @@ export default function DonutChart({ slices }: DonutChartProps) {
             strokeLinecap="round"
             onMouseEnter={() => setHoveredSlice(p)}
             onMouseLeave={() => setHoveredSlice(null)}
-            className={`cursor-pointer transition-[stroke-width,opacity] duration-200 drop-shadow-[0_0_6px_rgba(0,0,0,0.35)] ${
-              opacity === 1 ? "opacity-100" : "opacity-[0.45]"
-            }`}
+            className={`cursor-pointer transition-[stroke-width,opacity] duration-200 drop-shadow-[0_0_6px_rgba(0,0,0,0.35)] ${opacity === 1 ? "opacity-100" : "opacity-[0.45]"}`}
           />
         );
       })}
@@ -70,7 +68,7 @@ export default function DonutChart({ slices }: DonutChartProps) {
         x={cx}
         y={cy - 6}
         textAnchor="middle"
-        className="fill-slate-200 text-xs font-bold font-sans"
+        className="fill-slate-200 text-xs font-bold"
         fontSize="10"
       >
         {hoveredSlice ? hoveredSlice.label : "Allocation"}
@@ -79,7 +77,7 @@ export default function DonutChart({ slices }: DonutChartProps) {
         x={cx}
         y={cy + 8}
         textAnchor="middle"
-        className="fill-teal-400 font-extrabold font-sans"
+        className="fill-teal-400 font-extrabold"
         fontSize="9"
       >
         {hoveredSlice

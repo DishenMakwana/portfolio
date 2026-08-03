@@ -21,7 +21,7 @@ import { ParsedSipMandate, SaveSipMandatesResult } from "@/types/sips";
 /**
  * Subtract days from YYYY-MM-DD date string
  */
-function subDays(dateStr: string, days: number): string {
+export function subDays(dateStr: string, days: number): string {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) {
     return dateStr;
@@ -34,17 +34,20 @@ function subDays(dateStr: string, days: number): string {
  * Safe delete report and all associated child rows
  */
 export async function deleteReport(reportId: number): Promise<void> {
-  // 0. Delete member report CAGRs referencing this report
-  await db
-    .delete(memberReportCagrs)
-    .where(eq(memberReportCagrs.reportId, reportId));
-  // 1. Delete holdings snapshots referencing this report
-  await db
-    .delete(holdingsSnapshot)
-    .where(eq(holdingsSnapshot.reportId, reportId));
-  // 2. Delete the report row
+  // Execute independent child table deletions concurrently in parallel
+  await Promise.all([
+    db
+      .delete(memberReportCagrs)
+      .where(eq(memberReportCagrs.reportId, reportId)),
+    db.delete(holdingsSnapshot).where(eq(holdingsSnapshot.reportId, reportId)),
+    db
+      .update(transactions)
+      .set({ sourceReportId: null })
+      .where(eq(transactions.sourceReportId, reportId)),
+  ]);
+  // Delete the report row
   await db.delete(reports).where(eq(reports.id, reportId));
-  // 3. Re-sync transaction deltas incrementally without wiping existing transactions
+  // Re-sync transaction deltas incrementally without wiping existing transactions
   await rebuildAllTransactions();
 }
 
@@ -82,9 +85,17 @@ export async function saveReportSnapshot(
   // 3. Process family members, schemes and snapshots
   for (const item of parsedHoldings) {
     // 3.1 Get or Create Family Member
-    let member = await db.query.familyMembers.findFirst({
-      where: eq(familyMembers.name, item.memberName),
-    });
+    let member = item.memberPan
+      ? await db.query.familyMembers.findFirst({
+          where: eq(familyMembers.pan, item.memberPan),
+        })
+      : null;
+
+    if (!member) {
+      member = await db.query.familyMembers.findFirst({
+        where: eq(familyMembers.name, item.memberName),
+      });
+    }
 
     if (!member) {
       const [inserted] = await db
@@ -188,274 +199,13 @@ export async function saveReportSnapshot(
 }
 
 /**
- * Incrementally synchronizes transaction deltas based on report snapshots.
- * Preserves all existing granular transactions in the database and only adds NEW transactions if snapshot unit deltas are detected.
+ * Synchronizes transaction records without auto-generating synthetic fake transactions.
+ * Authentic transaction data comes from statement imports (SOA/CAS) and must not be overwritten or synthesized.
  */
 export async function rebuildAllTransactions(): Promise<void> {
-  // Get all reports in chronological order
-  const allReports = await db.query.reports.findMany({
-    orderBy: [asc(reports.asOfDate)],
-  });
-
-  if (allReports.length === 0) return;
-
-  // Fetch all existing transactions in database once for fast lookup
-  const existingTxs = await db.query.transactions.findMany();
-
-  for (let rIndex = 0; rIndex < allReports.length; rIndex++) {
-    const currentReport = allReports[rIndex];
-    const currentHoldings = await db.query.holdingsSnapshot.findMany({
-      where: eq(holdingsSnapshot.reportId, currentReport.id),
-    });
-
-    if (rIndex === 0) {
-      // First Report: Reconstruct initial buys only if no existing transactions exist for this holding
-      for (const holding of currentHoldings) {
-        const matchingTxs = existingTxs.filter(
-          (tx) =>
-            tx.memberId === holding.memberId &&
-            tx.schemeId === holding.schemeId &&
-            (tx.folioNo === holding.folioNo ||
-              (!tx.folioNo && !holding.folioNo))
-        );
-
-        const totalAllTxsUnits = matchingTxs.reduce((sum, tx) => {
-          return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
-        }, 0);
-
-        // If existing transactions already equal or exceed holding units, do NOT add a dummy buy
-        if (
-          Math.abs(totalAllTxsUnits - holding.balanceUnits) < 0.01 ||
-          totalAllTxsUnits > holding.balanceUnits
-        ) {
-          continue;
-        }
-
-        const diffUnits = holding.balanceUnits - currentNetUnits;
-        const purchaseDate = subDays(
-          currentReport.asOfDate,
-          holding.holdingDays
-        );
-
-        const exists = matchingTxs.some(
-          (tx) =>
-            tx.date === purchaseDate &&
-            tx.type === "BUY" &&
-            Math.abs(tx.units - diffUnits) < 0.001
-        );
-
-        if (!exists) {
-          const [inserted] = await db
-            .insert(transactions)
-            .values({
-              memberId: holding.memberId,
-              schemeId: holding.schemeId,
-              folioNo: holding.folioNo,
-              date: purchaseDate,
-              type: "BUY",
-              units: diffUnits,
-              nav: holding.purchaseNav,
-              amount: holding.purchaseValue,
-              sourceReportId: currentReport.id,
-            })
-            .returning();
-          existingTxs.push(inserted);
-        }
-      }
-    } else {
-      // Subsequent Reports: Check unit deltas against previous report or existing database transactions
-      const prevReport = allReports[rIndex - 1];
-      const prevHoldings = await db.query.holdingsSnapshot.findMany({
-        where: eq(holdingsSnapshot.reportId, prevReport.id),
-      });
-
-      const prevMap = new Map<string, typeof holdingsSnapshot.$inferSelect>();
-      for (const ph of prevHoldings) {
-        const key = `${ph.memberId}_${ph.schemeId}_${ph.folioNo}`;
-        prevMap.set(key, ph);
-      }
-
-      const processedKeys = new Set<string>();
-
-      for (const holding of currentHoldings) {
-        const key = `${holding.memberId}_${holding.schemeId}_${holding.folioNo}`;
-        processedKeys.add(key);
-
-        const matchingTxs = existingTxs.filter(
-          (tx) =>
-            tx.memberId === holding.memberId &&
-            tx.schemeId === holding.schemeId &&
-            (tx.folioNo === holding.folioNo ||
-              (!tx.folioNo && !holding.folioNo))
-        );
-
-        const currentNetUnits = matchingTxs.reduce((sum, tx) => {
-          return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
-        }, 0);
-
-        const prevHolding = prevMap.get(key);
-
-        if (prevHolding) {
-          const diffUnits = holding.balanceUnits - prevHolding.balanceUnits;
-
-          if (diffUnits > 0.001) {
-            if (currentNetUnits >= holding.balanceUnits - 0.001) {
-              continue;
-            }
-
-            const unitsToAdd = holding.balanceUnits - currentNetUnits;
-            const diffAmount =
-              holding.purchaseValue - prevHolding.purchaseValue;
-            const amount =
-              diffAmount > 0 ? diffAmount : unitsToAdd * holding.purchaseNav;
-            const nav = amount / unitsToAdd;
-
-            const exists = matchingTxs.some(
-              (tx) =>
-                tx.date === currentReport.asOfDate &&
-                tx.type === "BUY" &&
-                Math.abs(tx.units - unitsToAdd) < 0.001
-            );
-
-            if (!exists) {
-              const [inserted] = await db
-                .insert(transactions)
-                .values({
-                  memberId: holding.memberId,
-                  schemeId: holding.schemeId,
-                  folioNo: holding.folioNo,
-                  date: currentReport.asOfDate,
-                  type: "BUY",
-                  units: unitsToAdd,
-                  nav,
-                  amount,
-                  sourceReportId: currentReport.id,
-                })
-                .returning();
-              existingTxs.push(inserted);
-            }
-          } else if (diffUnits < -0.001) {
-            if (currentNetUnits <= holding.balanceUnits + 0.001) {
-              continue;
-            }
-
-            const unitsSold = currentNetUnits - holding.balanceUnits;
-            const amount = unitsSold * holding.currentNav;
-
-            const exists = matchingTxs.some(
-              (tx) =>
-                tx.date === currentReport.asOfDate &&
-                tx.type === "SELL" &&
-                Math.abs(tx.units - unitsSold) < 0.001
-            );
-
-            if (!exists) {
-              const [inserted] = await db
-                .insert(transactions)
-                .values({
-                  memberId: holding.memberId,
-                  schemeId: holding.schemeId,
-                  folioNo: holding.folioNo,
-                  date: currentReport.asOfDate,
-                  type: "SELL",
-                  units: unitsSold,
-                  nav: holding.currentNav,
-                  amount,
-                  sourceReportId: currentReport.id,
-                })
-                .returning();
-              existingTxs.push(inserted);
-            }
-          }
-        } else {
-          // New Scheme / Folio added in this report snapshot
-          if (currentNetUnits >= holding.balanceUnits - 0.001) {
-            continue;
-          }
-
-          const unitsToAdd = holding.balanceUnits - currentNetUnits;
-          const purchaseDate = subDays(
-            currentReport.asOfDate,
-            holding.holdingDays
-          );
-
-          const exists = matchingTxs.some(
-            (tx) =>
-              tx.date === purchaseDate &&
-              tx.type === "BUY" &&
-              Math.abs(tx.units - unitsToAdd) < 0.001
-          );
-
-          if (!exists) {
-            const [inserted] = await db
-              .insert(transactions)
-              .values({
-                memberId: holding.memberId,
-                schemeId: holding.schemeId,
-                folioNo: holding.folioNo,
-                date: purchaseDate,
-                type: "BUY",
-                units: unitsToAdd,
-                nav: holding.purchaseNav,
-                amount: holding.purchaseValue,
-                sourceReportId: currentReport.id,
-              })
-              .returning();
-            existingTxs.push(inserted);
-          }
-        }
-      }
-
-      // Check for fully redeemed funds (existed in prev, but not in current)
-      for (const prevHolding of prevHoldings) {
-        const key = `${prevHolding.memberId}_${prevHolding.schemeId}_${prevHolding.folioNo}`;
-        if (!processedKeys.has(key)) {
-          const matchingTxs = existingTxs.filter(
-            (tx) =>
-              tx.memberId === prevHolding.memberId &&
-              tx.schemeId === prevHolding.schemeId &&
-              (tx.folioNo === prevHolding.folioNo ||
-                (!tx.folioNo && !prevHolding.folioNo)) &&
-              tx.date <= currentReport.asOfDate
-          );
-
-          const currentNetUnits = matchingTxs.reduce((sum, tx) => {
-            return tx.type === "BUY" ? sum + tx.units : sum - tx.units;
-          }, 0);
-
-          if (currentNetUnits > 0.001) {
-            const unitsSold = currentNetUnits;
-            const amount = unitsSold * prevHolding.currentNav;
-
-            const exists = matchingTxs.some(
-              (tx) =>
-                tx.date === currentReport.asOfDate &&
-                tx.type === "SELL" &&
-                Math.abs(tx.units - unitsSold) < 0.001
-            );
-
-            if (!exists) {
-              const [inserted] = await db
-                .insert(transactions)
-                .values({
-                  memberId: prevHolding.memberId,
-                  schemeId: prevHolding.schemeId,
-                  folioNo: prevHolding.folioNo,
-                  date: currentReport.asOfDate,
-                  type: "SELL",
-                  units: unitsSold,
-                  nav: prevHolding.currentNav,
-                  amount,
-                  sourceReportId: currentReport.id,
-                })
-                .returning();
-              existingTxs.push(inserted);
-            }
-          }
-        }
-      }
-    }
-  }
+  // Authentic transactions are maintained directly via SOA statement imports.
+  // We do not auto-generate synthetic/fake BUY or SELL transactions from valuation snapshot deltas.
+  return;
 }
 
 /**
@@ -520,6 +270,33 @@ export async function getSchemes() {
   return await db.query.schemes.findMany({
     orderBy: [asc(schemes.name)],
   });
+}
+
+/**
+ * Get all transactions with scheme name and member name
+ */
+export async function getAllTransactions() {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      schemeName: schemes.name,
+      folioNo: transactions.folioNo,
+      memberName: familyMembers.name,
+      type: transactions.type,
+      transactionType: transactions.transactionType,
+      units: transactions.units,
+      nav: transactions.nav,
+      amount: transactions.amount,
+      stampDuty: transactions.stampDuty,
+      stt: transactions.stt,
+    })
+    .from(transactions)
+    .innerJoin(schemes, eq(transactions.schemeId, schemes.id))
+    .innerJoin(familyMembers, eq(transactions.memberId, familyMembers.id))
+    .orderBy(desc(transactions.date), asc(familyMembers.name));
+
+  return rows;
 }
 
 /**

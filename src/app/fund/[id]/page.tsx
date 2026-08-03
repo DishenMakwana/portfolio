@@ -244,8 +244,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     isMsfl && holding.holdingType !== "equity"
       ? "120716"
       : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
-  const benchmarkFundName = await getBenchmarkFundNameForCode(benchmarkCode);
-  const benchmarkName = await getBenchmarkNameForCode(benchmarkCode);
+
+  const [benchmarkFundName, benchmarkName] = await Promise.all([
+    getBenchmarkFundNameForCode(benchmarkCode),
+    getBenchmarkNameForCode(benchmarkCode),
+  ]);
 
   // 2. Fetch transaction history and NAV histories in parallel
   let zTxsPromise = Promise.resolve<any[]>([]);
@@ -304,6 +307,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
                 units: transactions.units,
                 nav: transactions.nav,
                 amount: transactions.amount,
+                stampDuty: transactions.stampDuty,
               })
               .from(transactions)
               .where(
