@@ -10,33 +10,41 @@ import { parseHistoryDate } from "./dates";
  * Formats a number as an Indian Rupee currency string using Intl.NumberFormat.
  * Example: 1234567 → "₹12,34,567"
  */
-export function formatCurrency(val: number): string {
+export function formatCurrency(val: number, decimals = 2): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(val);
 }
 
 /**
- * Formats a number in Indian locale with no decimal places.
+ * Formats a number in Indian locale with at least 2 decimal places.
  * Returns "—" when value is zero.
- * Example: 1234567 → "12,34,567" | 0 → "—"
+ * Example: 1234567.89 → "12,34,567.89" | 0 → "—"
  */
-export function formatIndianNumber(val: number): string {
+export function formatIndianNumber(val: number, decimals = 2): string {
   return val === 0
     ? "—"
-    : val.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+    : val.toLocaleString("en-IN", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
 }
 
 /**
  * Formats a number as a compact Indian Rupee amount with Cr / L suffix.
- * Example: 10000000 → "₹1.00 Cr" | 100000 → "₹1.00 L"
+ * Handles negative values and optional explicit plus sign prefix.
+ * Example: 10000000 → "₹1.00 Cr" | -1995682.01 → "-₹19.96 L" | (4362456.55, true) → "+₹43.62 L"
  */
-export function formatInrCompact(val: number): string {
-  if (val >= 1_00_00_000) return `₹${(val / 1_00_00_000).toFixed(2)}\u00A0Cr`;
-  if (val >= 1_00_000) return `₹${(val / 1_00_000).toFixed(2)}\u00A0L`;
-  return `₹${val.toLocaleString("en-IN")}`;
+export function formatInrCompact(val: number, showSign = false): string {
+  const abs = Math.abs(val);
+  const sign = val < 0 ? "-" : showSign && val > 0 ? "+" : "";
+  if (abs >= 1_00_00_000)
+    return `${sign}₹${(abs / 1_00_00_000).toFixed(2)}\u00A0Cr`;
+  if (abs >= 1_00_000) return `${sign}₹${(abs / 1_00_000).toFixed(2)}\u00A0L`;
+  return `${sign}${formatCurrency(abs, 2)}`;
 }
 
 // ─── Percent Formatters ───────────────────────────────────────────────────────
@@ -146,10 +154,11 @@ export function formatUploadedAt(dateStr: string): string {
 /**
  * Formats a number as an Indian Rupee currency string with customizable decimal places.
  */
-export function formatInr(val: number, decimals = 0): string {
+export function formatInr(val: number, decimals = 2): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
+    minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(val);
 }

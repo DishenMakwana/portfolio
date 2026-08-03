@@ -481,13 +481,21 @@ export async function getDashboardDataAction(
                 `${previousReport.id}_${memberHoldings[0].memberId}`
               )
             : null;
-        const cagr =
-          storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
+        const activeMemberHoldings = memberHoldings.filter(
+          (h) => (h.balanceUnits ?? 0) > 0.0001 && h.currentValue > 0
+        );
+        const isMemberActive =
+          activeMemberHoldings.length > 0 && currentValue > 0;
+
+        const cagr = isMemberActive
+          ? storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
             ? storedMemberCagrVal
             : memberHoldings.reduce(
                 (acc, h) => acc + h.cagr * h.purchaseValue,
                 0
-              ) / (invested || 1);
+              ) / (invested || 1)
+          : 0;
+
         const memberTxs = getPortfolioTransactions((tx) => {
           const dbHolding = memberHoldings.find(
             (h) => h.schemeId === tx.schemeId
@@ -498,9 +506,9 @@ export async function getDashboardDataAction(
             tx.date <= previousReport.asOfDate
           );
         });
-        let xirr = cagr;
+        let xirr = 0;
         let alpha = 0;
-        if (memberTxs.length >= 1) {
+        if (isMemberActive && memberTxs.length >= 1) {
           const metrics = await calculateAlpha(
             memberTxs,
             previousReport.asOfDate,
@@ -517,6 +525,15 @@ export async function getDashboardDataAction(
           invested,
           currentValue,
         });
+        if (memberHoldings[0]?.memberId) {
+          previousMemberMetrics.set(`id_${memberHoldings[0].memberId}`, {
+            xirr,
+            cagr,
+            alpha,
+            invested,
+            currentValue,
+          });
+        }
       })
     );
   }
@@ -567,6 +584,12 @@ export async function getDashboardDataAction(
       );
       const gain = currentValue - invested;
 
+      const activeMemberHoldings = memberHoldings.filter(
+        (h) => (h.balanceUnits ?? 0) > 0.0001 && h.currentValue > 0
+      );
+      const isMemberActive =
+        activeMemberHoldings.length > 0 && currentValue > 0;
+
       const storedMemberCagrVal =
         memberHoldings.length > 0
           ? memberCagrMap.get(
@@ -574,13 +597,14 @@ export async function getDashboardDataAction(
             )
           : null;
 
-      const cagr =
-        storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
+      const cagr = isMemberActive
+        ? storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
           ? storedMemberCagrVal
           : memberHoldings.reduce(
               (acc, h) => acc + h.cagr * h.purchaseValue,
               0
-            ) / (invested || 1);
+            ) / (invested || 1)
+        : 0;
 
       // Calculate Member XIRR
       const memberTxs = getPortfolioTransactions((tx) => {
@@ -590,9 +614,9 @@ export async function getDashboardDataAction(
         return !!dbHolding && tx.memberId === dbHolding.memberId;
       });
 
-      let mXirr = cagr;
+      let mXirr = 0;
       let mAlpha = 0;
-      if (memberTxs.length >= 1) {
+      if (isMemberActive && memberTxs.length >= 1) {
         const memberMetrics = await calculateAlpha(
           memberTxs,
           selectedReport.asOfDate,
@@ -603,7 +627,10 @@ export async function getDashboardDataAction(
       }
 
       const pan = memberHoldings[0]?.memberPan || null;
-      const previousMember = previousMemberMetrics.get(name);
+      const memberId = memberHoldings[0]?.memberId;
+      const previousMember =
+        (memberId ? previousMemberMetrics.get(`id_${memberId}`) : null) ||
+        previousMemberMetrics.get(name);
       const profile = dbMembersMap.get(name);
 
       return {
@@ -689,6 +716,8 @@ export async function getDashboardDataAction(
   const amcMap = new Map<string, number>();
 
   for (const h of holdings) {
+    if ((h.balanceUnits ?? 0) <= 0.0001) continue;
+
     // Category allocation
     categoryMap.set(
       h.category,
@@ -704,13 +733,12 @@ export async function getDashboardDataAction(
     amcMap.set(amcName, (amcMap.get(amcName) || 0) + h.currentValue);
   }
 
-  const categoryAllocation = Array.from(categoryMap.entries()).map(
-    ([name, value]) => ({ name, value })
-  );
-  const capAllocation = Array.from(capMap.entries()).map(([name, value]) => ({
-    name,
-    value,
-  }));
+  const categoryAllocation = Array.from(categoryMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const capAllocation = Array.from(capMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
   const amcAllocation = Array.from(amcMap.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
@@ -912,4 +940,12 @@ export async function globalRefreshAction(): Promise<ActionResult> {
       err instanceof Error ? err.message : "Global refresh failed";
     return { success: false, error: errorMsg };
   }
+}
+
+/**
+ * Fetch Financial Year Tracker data for selected FY or default
+ */
+export async function getFyTrackerDataAction(selectedFyLabel?: string) {
+  const { getFyTrackerData } = await import("@/lib/insightsService");
+  return getFyTrackerData(selectedFyLabel);
 }

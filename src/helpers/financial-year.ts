@@ -162,6 +162,23 @@ export function calculateFinancialYearSnapshot(
       netAdditions[assetClass];
   }
 
+  const absReturns = createEmptyFinancialYearBalances();
+  for (const assetClass of ASSET_CLASSES) {
+    const capital = openingBalances[assetClass] + purchases[assetClass];
+    absReturns[assetClass] =
+      capital > 0 ? (netGains[assetClass] / capital) * 100 : 0;
+  }
+  const totalCapital =
+    openingBalances.equity +
+    openingBalances.hybrid +
+    openingBalances.debtOthers +
+    purchases.equity +
+    purchases.hybrid +
+    purchases.debtOthers;
+  const totalNetGains = netGains.equity + netGains.hybrid + netGains.debtOthers;
+  const totalAbsReturn =
+    totalCapital > 0 ? (totalNetGains / totalCapital) * 100 : 0;
+
   const rows: FinancialYearSnapshotRow[] = [
     makeBalanceRow("Opening Balance", openingBalances),
     makeBalanceRow("Purchase", purchases),
@@ -172,6 +189,7 @@ export function calculateFinancialYearSnapshot(
     makeBalanceRow("Net Addition", netAdditions),
     makeBalanceRow("Closing Balance", closingBalances),
     makeBalanceRow("Net Gain", netGains),
+    makeReturnRow("Abs Return (%)", absReturns, totalAbsReturn),
     makeReturnRow(
       "XIRR (%)",
       calculateClassXirr(
@@ -202,14 +220,20 @@ function makeBalanceRow(
 
 function makeReturnRow(
   label: string,
-  returns: FinancialYearBalances
+  returns: FinancialYearBalances,
+  totalValue?: number
 ): FinancialYearSnapshotRow {
+  const tot = totalValue !== undefined ? totalValue : returns.debtOthers;
   return {
-    ...makeBalanceRow(label, returns),
+    label,
+    equity: returns.equity,
+    hybrid: returns.hybrid,
+    debtOthers: returns.debtOthers,
+    total: tot,
     equityXirr: returns.equity,
     hybridXirr: returns.hybrid,
     debtOthersXirr: returns.debtOthers,
-    totalXirr: returns.debtOthers,
+    totalXirr: tot,
   };
 }
 
@@ -276,4 +300,65 @@ function calculateClassXirr(
   returns.debtOthers = calculateXIRR(totalCashFlows);
 
   return returns;
+}
+
+export function calculateCagr(
+  startValuation: number,
+  endValuation: number,
+  startDateStr: string,
+  endDateStr: string
+): number {
+  if (startValuation <= 0 || endValuation <= 0) return 0;
+  const start = new Date(startDateStr).getTime();
+  const end = new Date(endDateStr).getTime();
+  const years = (end - start) / (365.25 * 24 * 60 * 60 * 1000);
+  if (years <= 0) return 0;
+  const cagr = (Math.pow(endValuation / startValuation, 1 / years) - 1) * 100;
+  return isNaN(cagr) || !isFinite(cagr) ? 0 : cagr;
+}
+
+export function getAvailableFinancialYears(
+  txDates: string[],
+  reportDate: string
+): Array<{
+  label: string;
+  startYear: number;
+  startDate: string;
+  endDate: string;
+}> {
+  const yearsSet = new Set<number>();
+
+  for (const dStr of txDates) {
+    if (!dStr) continue;
+    const [yText, mText] = dStr.split("-");
+    const yearNum = Number(yText);
+    const monthNum = Number(mText);
+    if (!isNaN(yearNum) && !isNaN(monthNum)) {
+      const fyStartYear = monthNum < 4 ? yearNum - 1 : yearNum;
+      yearsSet.add(fyStartYear);
+    }
+  }
+
+  const [repY, repM] = reportDate.split("-");
+  const repYear = Number(repY);
+  const repMonth = Number(repM);
+  if (!isNaN(repYear) && !isNaN(repMonth)) {
+    const repFyStartYear = repMonth < 4 ? repYear - 1 : repYear;
+    yearsSet.add(repFyStartYear);
+  }
+
+  const sortedFyStartYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+  return sortedFyStartYears.map((startYear) => {
+    const label = `FY ${startYear}-${String(startYear + 1).slice(-2)}`;
+    const startDate = `${startYear}-04-01`;
+    const fyEndDefault = `${startYear + 1}-03-31`;
+    const endDate = reportDate < fyEndDefault ? reportDate : fyEndDefault;
+    return {
+      label,
+      startYear,
+      startDate,
+      endDate,
+    };
+  });
 }

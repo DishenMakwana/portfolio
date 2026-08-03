@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useState, Suspense } from "react";
 import {
   LayoutDashboard,
@@ -13,7 +13,9 @@ import {
   TrendingUp,
   Repeat2,
   PieChart,
+  ArrowLeftRight,
   CalendarDays,
+  CalendarRange,
   Coins,
   Briefcase,
   Lightbulb,
@@ -25,6 +27,8 @@ const NAV_ITEMS = [
   { href: "/holdings", label: "Holdings", icon: Table2 },
   { href: "/sips", label: "My SIPs", icon: Repeat2 },
   { href: "/allocation", label: "Asset Allocation", icon: PieChart },
+  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/fy-tracker", label: "FY Investment Tracker", icon: CalendarRange },
   { href: "/uploads", label: "Upload Tracker", icon: CalendarDays },
   { href: "/bullion", label: "Gold & Silver", icon: Coins },
   { href: "/mapping", label: "Fund Mapping", icon: GitMerge },
@@ -36,12 +40,17 @@ const NAV_ITEMS = [
 function SidebarNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const reportId = searchParams.get("reportId");
 
   return (
     <nav className="flex-1 space-y-2 px-4 py-8">
       {NAV_ITEMS.map((item) => {
         const active = pathname === item.href;
+        const targetHref = reportId
+          ? `${item.href}?reportId=${reportId}`
+          : item.href;
+
         return (
           <Link
             key={item.href}
@@ -50,6 +59,12 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
                 ? { pathname: item.href, query: { reportId } }
                 : item.href
             }
+            prefetch={true}
+            onMouseEnter={() => {
+              try {
+                router.prefetch(targetHref);
+              } catch {}
+            }}
             title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined}
             className={`group relative flex h-11 items-center gap-3.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${

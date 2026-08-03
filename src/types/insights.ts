@@ -121,6 +121,48 @@ export interface FinancialYearSnapshot {
   rows: FinancialYearSnapshotRow[];
 }
 
+export interface FyOption {
+  label: string;
+  startYear: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface FyOverviewSummary {
+  previouslyInvested: number;
+  fyInvested: number;
+  fySold: number;
+  netAddition: number;
+  closingValuation: number;
+  netGain: number;
+  absReturn: number;
+  xirr: number;
+  cagr: number;
+}
+
+export interface FyMultiYearComparisonRow {
+  fyLabel: string;
+  startDate: string;
+  endDate: string;
+  openingInvested: number;
+  fyInvested: number;
+  fySold: number;
+  closingValuation: number;
+  netGain: number;
+  absReturn: number;
+  xirr: number;
+  cagr: number;
+}
+
+export interface FyTrackerData {
+  reportDate: string;
+  availableFys: FyOption[];
+  selectedFy: FyOption;
+  summary: FyOverviewSummary;
+  snapshot: FinancialYearSnapshot;
+  comparisonRows: FyMultiYearComparisonRow[];
+}
+
 export interface FinancialYearTransaction {
   date: string;
   type: "BUY" | "SELL";
@@ -131,7 +173,6 @@ export interface FinancialYearTransaction {
 
 export type Tab =
   | "overview"
-  | "fy-snapshot"
   | "funds"
   | "members"
   | "sip"
@@ -233,10 +274,6 @@ export interface OverviewTabProps {
   getXirrGrade: (value: number) => OverviewScoreGrade;
 }
 
-export interface FinancialYearSnapshotTabProps {
-  snapshot: FinancialYearSnapshot;
-}
-
 export interface AnalysisTabProps {
   analysisData: AmcPoint[];
   niftyBenchmark: number;
@@ -309,6 +346,7 @@ export interface ReverseInsightsData {
 export interface ActionsTabProps {
   scaleUpFunds: SchemeItem[];
   watchlistFunds: SchemeItem[];
+  zeroValueFunds?: SchemeItem[];
   actionMonths: string[];
   reverseInsights: ReverseInsightsData;
 }

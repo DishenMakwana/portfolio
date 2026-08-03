@@ -9,7 +9,6 @@ import {
   BarChart3,
   Users,
   CalendarRange,
-  CalendarDays,
   Zap,
   Layers,
   LineChart,
@@ -23,7 +22,6 @@ import {
   getOverlapSubCategory,
 } from "@/helpers/allocation";
 import OverviewTab from "@/components/mutual-fund/insights/tabs/OverviewTab";
-import FinancialYearSnapshotTab from "@/components/mutual-fund/insights/tabs/FinancialYearSnapshotTab";
 import FundsTab from "@/components/mutual-fund/insights/tabs/FundsTab";
 import MembersTab from "@/components/mutual-fund/insights/tabs/MembersTab";
 import SipPlannerTab from "@/components/mutual-fund/insights/tabs/SipPlannerTab";
@@ -74,7 +72,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     tabParam &&
     [
       "overview",
-      "fy-snapshot",
       "funds",
       "members",
       "sip",
@@ -112,7 +109,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
 
   const TABS: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
     { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "fy-snapshot", label: "FY Snapshot", icon: CalendarDays },
     { id: "funds", label: "Funds", icon: TrendingUp },
     { id: "members", label: "Members", icon: Users },
     { id: "sip", label: "SIP Planner", icon: CalendarRange },
@@ -615,8 +611,15 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   ];
 
   // Action items
-  const scaleUpFunds = data.schemes.filter((s) => s.avgCagr >= 15).slice(0, 5);
-  const watchlistFunds = data.schemes.filter((s) => s.avgCagr < 8);
+  const scaleUpFunds = data.schemes
+    .filter((s) => s.current > 0 && s.avgCagr >= 15)
+    .slice(0, 5);
+  const watchlistFunds = data.schemes.filter(
+    (s) => s.current > 0 && s.avgCagr < 8
+  );
+  const zeroValueFunds = data.schemes.filter(
+    (s) => s.current <= 0 || s.invested <= 0
+  );
 
   const actionMonths = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(2026, 6 + i, 1); // Jul 2026 → Jun 2027
@@ -706,13 +709,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
             />
           )}
 
-          {/* ── FY SNAPSHOT ──────────────────────────────────────────────────── */}
-          {activeTab === "fy-snapshot" && (
-            <FinancialYearSnapshotTab
-              snapshot={data.currentFinancialYearSnapshot}
-            />
-          )}
-
           {/* ── FUNDS ─────────────────────────────────────────────────────────── */}
           {activeTab === "funds" && (
             <FundsTab
@@ -770,6 +766,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
             <ActionsTab
               scaleUpFunds={scaleUpFunds}
               watchlistFunds={watchlistFunds}
+              zeroValueFunds={zeroValueFunds}
               actionMonths={actionMonths}
               reverseInsights={reverseInsights}
             />

@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { eq, desc, lte, lt, inArray } from "drizzle-orm";
 import { getBenchmarkHistory, calculateAlpha } from "@/lib/alpha";
+import { calculateXIRR } from "@/lib/xirr";
 import {
   calculateFinancialYearSnapshot,
   createEmptyFinancialYearBalances,
@@ -24,12 +25,15 @@ import {
   getMonthStartFromLabel,
   isIncludedInMutualFundSnapshot,
   getFinancialYearStart,
+  getAvailableFinancialYears,
 } from "@/helpers/financial-year";
 import type {
   BenchmarkReturns,
   FinancialYearTransaction,
   InsightsData,
   SoldHoldingItem,
+  FyTrackerData,
+  FyMultiYearComparisonRow,
 } from "@/types/insights";
 
 // ─── Benchmark helper ──────────────────────────────────────────────────────────
@@ -780,5 +784,295 @@ export async function getInsightsData(): Promise<InsightsData> {
       averagePrice: h.averagePrice,
       currentPrice: h.currentPrice,
     })),
+  };
+}
+
+export async function getFyTrackerData(
+  selectedFyLabel?: string
+): Promise<FyTrackerData> {
+  const latestReport = await db
+    .select({
+      id: reports.id,
+      asOfDate: reports.asOfDate,
+    })
+    .from(reports)
+    .orderBy(desc(reports.id))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!latestReport) {
+    throw new Error("No reports found in the database.");
+  }
+
+  const reportDate = latestReport.asOfDate;
+  const reportId = latestReport.id;
+
+  const [holdings, rawTxs] = await Promise.all([
+    db
+      .select({
+        id: holdingsSnapshot.id,
+        schemeId: holdingsSnapshot.schemeId,
+        memberId: holdingsSnapshot.memberId,
+        folioNo: holdingsSnapshot.folioNo,
+        balanceUnits: holdingsSnapshot.balanceUnits,
+        purchaseNav: holdingsSnapshot.purchaseNav,
+        currentValue: holdingsSnapshot.currentValue,
+        purchaseValue: holdingsSnapshot.purchaseValue,
+        schemeCodeApi: schemes.schemeCodeApi,
+        schemeCategory: schemes.category,
+        schemeName: schemes.name,
+      })
+      .from(holdingsSnapshot)
+      .innerJoin(schemes, eq(holdingsSnapshot.schemeId, schemes.id))
+      .where(eq(holdingsSnapshot.reportId, reportId)),
+    db
+      .select({
+        id: transactions.id,
+        schemeId: transactions.schemeId,
+        memberId: transactions.memberId,
+        folioNo: transactions.folioNo,
+        date: transactions.date,
+        type: transactions.type,
+        units: transactions.units,
+        amount: transactions.amount,
+        schemeCategory: schemes.category,
+        schemeName: schemes.name,
+      })
+      .from(transactions)
+      .leftJoin(schemes, eq(transactions.schemeId, schemes.id))
+      .where(lte(transactions.date, reportDate))
+      .orderBy(desc(transactions.date)),
+  ]);
+
+  const txDates = rawTxs.map((t) => t.date);
+  const availableFys = getAvailableFinancialYears(txDates, reportDate);
+
+  const selectedFy =
+    availableFys.find((f) => f.label === selectedFyLabel) || availableFys[0];
+
+  // Scheme NAV history cache
+  const schemeCodes = Array.from(
+    new Set(
+      holdings
+        .map((h) => h.schemeCodeApi)
+        .filter((code): code is string => Boolean(code))
+    )
+  );
+  const navRows =
+    schemeCodes.length > 0
+      ? await db
+          .select({
+            schemeCode: schemeNavHistory.schemeCode,
+            date: schemeNavHistory.date,
+            nav: schemeNavHistory.nav,
+          })
+          .from(schemeNavHistory)
+          .where(inArray(schemeNavHistory.schemeCode, schemeCodes))
+      : [];
+
+  const navMap = new Map<string, Array<{ date: string; nav: number }>>();
+  for (const r of navRows) {
+    let list = navMap.get(r.schemeCode);
+    if (!list) {
+      list = [];
+      navMap.set(r.schemeCode, list);
+    }
+    list.push({ date: r.date, nav: r.nav });
+  }
+
+  // Dynamic Valuation & Balance calculator at any target date T
+  const computeValuationAtDate = (targetDate: string) => {
+    const balances = createEmptyFinancialYearBalances();
+    let totalVal = 0;
+
+    for (const h of holdings) {
+      if (!isIncludedInMutualFundSnapshot(h.schemeCategory, h.schemeName))
+        continue;
+
+      if (targetDate >= reportDate) {
+        const assetClass = getFinancialYearAssetClass(
+          h.schemeCategory,
+          h.schemeName
+        );
+        balances[assetClass] += h.currentValue;
+        totalVal += h.currentValue;
+        continue;
+      }
+
+      const txsAfterTarget = rawTxs.filter(
+        (t) =>
+          t.schemeId === h.schemeId &&
+          t.memberId === h.memberId &&
+          t.folioNo === h.folioNo &&
+          t.date >= targetDate
+      );
+
+      let unitsAtTarget = h.balanceUnits;
+      for (const t of txsAfterTarget) {
+        if (t.type === "BUY") unitsAtTarget -= t.units;
+        else if (t.type === "SELL") unitsAtTarget += t.units;
+      }
+
+      if (unitsAtTarget <= 0.001) continue;
+
+      let navAtTarget = h.purchaseNav;
+      if (h.schemeCodeApi && navMap.has(h.schemeCodeApi)) {
+        const foundNav = findNavAtOrBefore(
+          navMap.get(h.schemeCodeApi)!,
+          targetDate
+        );
+        if (foundNav && foundNav > 0) navAtTarget = foundNav;
+      }
+
+      const valAtTarget = unitsAtTarget * navAtTarget;
+      const assetClass = getFinancialYearAssetClass(
+        h.schemeCategory,
+        h.schemeName
+      );
+      balances[assetClass] += valAtTarget;
+      totalVal += valAtTarget;
+    }
+
+    return { balances, totalVal };
+  };
+
+  // 1. Calculate opening & closing balances & valuation dynamically
+  const { balances: openingBalances, totalVal: openingValuation } =
+    computeValuationAtDate(selectedFy.startDate);
+
+  const { balances: closingBalances, totalVal: closingValuation } =
+    computeValuationAtDate(selectedFy.endDate);
+
+  // 2. Pre-FY cumulative invested capital
+  const preFyTxs = rawTxs.filter((t) => t.date < selectedFy.startDate);
+  const previouslyInvested = preFyTxs.reduce((sum, t) => {
+    return sum + (t.type === "BUY" ? t.amount : -t.amount);
+  }, 0);
+
+  // 3. FY transactions
+  const fyTxs = rawTxs.filter(
+    (t) => t.date >= selectedFy.startDate && t.date <= selectedFy.endDate
+  );
+
+  let fyInvested = 0;
+  let fySold = 0;
+  for (const t of fyTxs) {
+    if (t.type === "BUY") fyInvested += t.amount;
+    else if (t.type === "SELL") fySold += t.amount;
+  }
+  const netAddition = fyInvested - fySold;
+  const netGain = closingValuation - (openingValuation + netAddition);
+  const capitalInvested = openingValuation + fyInvested;
+
+  // 4. Calculate Absolute Return (%) & CAGR (%)
+  const absReturn = capitalInvested > 0 ? (netGain / capitalInvested) * 100 : 0;
+
+  const startT = new Date(selectedFy.startDate).getTime();
+  const endT = new Date(selectedFy.endDate).getTime();
+  const years = (endT - startT) / (365.25 * 86400 * 1000);
+  const cagr =
+    years > 0 && capitalInvested > 0
+      ? (Math.pow((closingValuation + fySold) / capitalInvested, 1 / years) -
+          1) *
+        100
+      : 0;
+
+  // 5. Generate Snapshot Rows with Abs Return & XIRR
+  const fySnapshotTxs: FinancialYearTransaction[] = fyTxs.map((t) => ({
+    date: t.date,
+    type: t.type === "SELL" ? "SELL" : "BUY",
+    amount: t.amount,
+    category: t.schemeCategory || "",
+    schemeName: t.schemeName || "",
+  }));
+
+  const snapshot = calculateFinancialYearSnapshot(
+    selectedFy.endDate,
+    openingBalances,
+    closingBalances,
+    fySnapshotTxs
+  );
+
+  const xirrRow = snapshot.rows.find((r) => r.label === "XIRR (%)");
+  const xirr = xirrRow?.totalXirr || 0;
+
+  // 6. Build Multi-Year Comparison Rows for all FYs
+  const comparisonRows: FyMultiYearComparisonRow[] = [];
+  for (const fy of availableFys) {
+    const fySubTxs = rawTxs.filter(
+      (t) => t.date >= fy.startDate && t.date <= fy.endDate
+    );
+    let fyBuy = 0;
+    let fySell = 0;
+    for (const t of fySubTxs) {
+      if (t.type === "BUY") fyBuy += t.amount;
+      else if (t.type === "SELL") fySell += t.amount;
+    }
+
+    const openInvested = rawTxs
+      .filter((t) => t.date < fy.startDate)
+      .reduce((s, t) => s + (t.type === "BUY" ? t.amount : -t.amount), 0);
+
+    const { totalVal: openVal } = computeValuationAtDate(fy.startDate);
+    const { totalVal: closeVal } = computeValuationAtDate(fy.endDate);
+
+    const gain = closeVal - (openVal + (fyBuy - fySell));
+    const cap = openVal + fyBuy;
+    const fyAbs = cap > 0 ? (gain / cap) * 100 : 0;
+
+    const fyStartT = new Date(fy.startDate).getTime();
+    const fyEndT = new Date(fy.endDate).getTime();
+    const fyYears = (fyEndT - fyStartT) / (365.25 * 86400 * 1000);
+    const fyCagr =
+      fyYears > 0 && cap > 0
+        ? (Math.pow((closeVal + fySell) / cap, 1 / fyYears) - 1) * 100
+        : 0;
+
+    // FY XIRR
+    const fyCashFlows = [];
+    if (openVal > 0)
+      fyCashFlows.push({ amount: -openVal, date: new Date(fy.startDate) });
+    for (const t of fySubTxs) {
+      fyCashFlows.push({
+        amount: t.type === "BUY" ? -t.amount : t.amount,
+        date: new Date(t.date),
+      });
+    }
+    if (closeVal > 0)
+      fyCashFlows.push({ amount: closeVal, date: new Date(fy.endDate) });
+    const fyXirr = calculateXIRR(fyCashFlows);
+
+    comparisonRows.push({
+      fyLabel: fy.label,
+      startDate: fy.startDate,
+      endDate: fy.endDate,
+      openingInvested: Math.round(openInvested * 100) / 100,
+      fyInvested: Math.round(fyBuy * 100) / 100,
+      fySold: Math.round(fySell * 100) / 100,
+      closingValuation: Math.round(closeVal * 100) / 100,
+      netGain: Math.round(gain * 100) / 100,
+      absReturn: Math.round(fyAbs * 100) / 100,
+      xirr: Math.round(fyXirr * 100) / 100,
+      cagr: Math.round(fyCagr * 100) / 100,
+    });
+  }
+
+  return {
+    reportDate,
+    availableFys,
+    selectedFy,
+    summary: {
+      previouslyInvested: Math.round(previouslyInvested * 100) / 100,
+      fyInvested: Math.round(fyInvested * 100) / 100,
+      fySold: Math.round(fySold * 100) / 100,
+      netAddition: Math.round(netAddition * 100) / 100,
+      closingValuation: Math.round(closingValuation * 100) / 100,
+      netGain: Math.round(netGain * 100) / 100,
+      absReturn: Math.round(absReturn * 100) / 100,
+      xirr: Math.round(xirr * 100) / 100,
+      cagr: Math.round(cagr * 100) / 100,
+    },
+    snapshot,
+    comparisonRows,
   };
 }
