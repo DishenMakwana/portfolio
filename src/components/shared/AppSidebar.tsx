@@ -19,6 +19,7 @@ import {
   Coins,
   Briefcase,
   Lightbulb,
+  Rocket,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/family", label: "Family Portfolio", icon: Users },
   { href: "/holdings", label: "Holdings", icon: Table2 },
   { href: "/sips", label: "My SIPs", icon: Repeat2 },
+  { href: "/future-projection", label: "Future Projection", icon: Rocket },
   { href: "/allocation", label: "Asset Allocation", icon: PieChart },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/fy-tracker", label: "FY Investment Tracker", icon: CalendarRange },
@@ -44,7 +46,7 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
   const reportId = searchParams.get("reportId");
 
   return (
-    <nav className="flex-1 space-y-2 px-4 py-8">
+    <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-3 scrollbar-none">
       {NAV_ITEMS.map((item) => {
         const active = pathname === item.href;
         const targetHref = reportId
@@ -67,14 +69,14 @@ function SidebarNav({ collapsed }: { collapsed: boolean }) {
             }}
             title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined}
-            className={`group relative flex h-11 items-center gap-3.5 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+            className={`group relative flex h-9 items-center gap-3 rounded-lg border text-[13px] font-semibold transition-all duration-150 ${
               active
-                ? "bg-teal-500/10 text-teal-400 border-teal-500/30 shadow-[0_0_15px_-3px_rgba(20,184,166,0.1)]"
+                ? "bg-teal-500/10 text-teal-400 border-teal-500/30 shadow-[0_0_12px_-3px_rgba(20,184,166,0.15)]"
                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border-transparent"
-            } ${collapsed ? "justify-center px-0" : "px-4"}`}
+            } ${collapsed ? "justify-center px-0" : "px-3"}`}
           >
             <item.icon
-              size={20}
+              size={18}
               className={`shrink-0 ${
                 active
                   ? "text-teal-400"
@@ -98,7 +100,7 @@ export default function AppSidebar() {
   return (
     <aside
       className={`sticky top-0 z-20 flex h-screen shrink-0 flex-col bg-slate-900/90 backdrop-blur-xl border-r border-slate-800/80 transition-[width] duration-300 ease-out ${
-        collapsed ? "w-20" : "w-72"
+        collapsed ? "w-16" : "w-64"
       }`}
     >
       <button
@@ -107,32 +109,32 @@ export default function AppSidebar() {
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         aria-expanded={!collapsed}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute right-0 top-6 z-30 flex h-9 w-9 translate-x-1/2 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 shadow-lg shadow-slate-950/30 transition hover:border-teal-500/50 hover:bg-slate-700 hover:text-teal-300 cursor-pointer"
+        className="absolute right-0 top-4 z-30 flex h-7 w-7 translate-x-1/2 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 shadow-md shadow-slate-950/30 transition hover:border-teal-500/50 hover:bg-slate-700 hover:text-teal-300 cursor-pointer"
       >
-        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
       </button>
 
       <div
-        className={`flex min-h-28 items-center gap-4 border-b border-slate-800/60 px-6 ${
+        className={`flex h-16 min-h-16 items-center gap-3 border-b border-slate-800/60 px-4 ${
           collapsed ? "justify-center" : ""
         }`}
       >
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shrink-0 shadow-lg">
-          <TrendingUp size={24} className="text-slate-950" />
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shrink-0 shadow-md">
+          <TrendingUp size={18} className="text-slate-950" />
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-xl font-extrabold text-slate-100 leading-tight">
+            <div className="text-base font-extrabold text-slate-100 leading-tight">
               Family
             </div>
-            <div className="text-sm text-slate-500">Portfolio</div>
+            <div className="text-xs text-slate-500">Portfolio</div>
           </div>
         )}
       </div>
 
       <Suspense
         fallback={
-          <div className="flex-1 space-y-2 px-4 py-8 animate-pulse bg-slate-900/20" />
+          <div className="flex-1 space-y-1 px-3 py-3 animate-pulse bg-slate-900/20" />
         }
       >
         <SidebarNav collapsed={collapsed} />
