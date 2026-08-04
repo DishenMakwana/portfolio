@@ -275,6 +275,28 @@ export default function ZerodhaCagrLeaderboardChart({
             <stop offset="100%" stopColor="#b45309" />
           </linearGradient>
         </defs>
+        {/* Axis Titles */}
+        <text
+          x={totalW / 2}
+          y={padY + chartH + 45}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="bold"
+          fill="#94a3b8"
+        >
+          Stock / ETF Holding
+        </text>
+        <text
+          transform={`rotate(-90 ${15} ${padY + chartH / 2})`}
+          x={15}
+          y={padY + chartH / 2}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="bold"
+          fill="#94a3b8"
+        >
+          CAGR Return (%)
+        </text>
       </svg>
     </div>
   );

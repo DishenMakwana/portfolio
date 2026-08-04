@@ -146,9 +146,12 @@ export default function AllocationAnalysisTab({
   const padRight = 65;
   const padTop = 45;
   const padBottom = 55;
+  // Extra bottom padding for the bar chart to accommodate rotated labels
+  const padBottomAbs = 80;
 
   const width = chartW - padLeft - padRight;
   const height = chartH - padTop - padBottom;
+  const heightAbs = chartH - padTop - padBottomAbs;
 
   // --- Math for CAGR Bubble Chart ---
   const maxDays = Math.max(...analysisData.map((d) => d.avgHoldingDays), 365);
@@ -170,10 +173,13 @@ export default function AllocationAnalysisTab({
   const getYVal = (val: number) =>
     padTop + height - ((val - minYVal) / (maxYVal - minYVal)) * height;
 
-  const xTicks: number[] = [];
+  const xTicksRaw: number[] = [];
   for (let d = 182.5; d <= maxX; d += 182.5) {
-    xTicks.push(d);
+    xTicksRaw.push(d);
   }
+  // Skip every other tick when there are more than 10 to avoid overlap
+  const xTicks =
+    xTicksRaw.length > 10 ? xTicksRaw.filter((_, i) => i % 2 === 0) : xTicksRaw;
 
   const yTicksVal: number[] = [];
   const yStep = maxYVal - minYVal > 30 ? 10 : 5;
@@ -206,7 +212,7 @@ export default function AllocationAnalysisTab({
   const maxYLeft = Math.ceil(maxAbsReturn / 10) * 10;
   const minYLeft = minAbsReturn < 0 ? Math.floor(minAbsReturn / 10) * 10 : 0;
   const getYLeft = (val: number) =>
-    padTop + height - ((val - minYLeft) / (maxYLeft - minYLeft)) * height;
+    padTop + heightAbs - ((val - minYLeft) / (maxYLeft - minYLeft)) * heightAbs;
 
   const maxHoldingDays = Math.max(
     ...analysisWithReturns.map((d) => d.avgHoldingDays),
@@ -214,7 +220,7 @@ export default function AllocationAnalysisTab({
   );
   const maxYRight = Math.ceil(maxHoldingDays / 182.5) * 182.5;
   const getYRight = (val: number) =>
-    padTop + height - (val / maxYRight) * height;
+    padTop + heightAbs - (val / maxYRight) * heightAbs;
 
   const stepXAbs = width / (analysisWithReturns.length || 1);
   const getXAbs = (index: number) => padLeft + stepXAbs * index + stepXAbs / 2;
@@ -743,7 +749,7 @@ export default function AllocationAnalysisTab({
                 x1={padLeft}
                 y1={padTop}
                 x2={padLeft}
-                y2={chartH - padBottom}
+                y2={chartH - padBottomAbs}
                 stroke="#334155"
                 strokeWidth="1.5"
               />
@@ -751,24 +757,24 @@ export default function AllocationAnalysisTab({
                 x1={chartW - padRight}
                 y1={padTop}
                 x2={chartW - padRight}
-                y2={chartH - padBottom}
+                y2={chartH - padBottomAbs}
                 stroke="#f59e0b"
                 strokeWidth="1.5"
                 strokeOpacity="0.4"
               />
               <line
                 x1={padLeft}
-                y1={chartH - padBottom}
+                y1={chartH - padBottomAbs}
                 x2={chartW - padRight}
-                y2={chartH - padBottom}
+                y2={chartH - padBottomAbs}
                 stroke="#334155"
                 strokeWidth="1.5"
               />
 
               <text
-                transform={`rotate(-90 ${15} ${padTop + height / 2})`}
+                transform={`rotate(-90 ${15} ${padTop + heightAbs / 2})`}
                 x={15}
-                y={padTop + height / 2}
+                y={padTop + heightAbs / 2}
                 textAnchor="middle"
                 fontSize="11"
                 fontWeight="bold"
@@ -777,9 +783,9 @@ export default function AllocationAnalysisTab({
                 Absolute Return (%)
               </text>
               <text
-                transform={`rotate(90 ${chartW - 15} ${padTop + height / 2})`}
+                transform={`rotate(90 ${chartW - 15} ${padTop + heightAbs / 2})`}
                 x={chartW - 15}
-                y={padTop + height / 2}
+                y={padTop + heightAbs / 2}
                 textAnchor="middle"
                 fontSize="11"
                 fontWeight="bold"
@@ -887,12 +893,13 @@ export default function AllocationAnalysisTab({
                   <g key={`x-lbl-${amc.name}`}>
                     <text
                       x={x}
-                      y={chartH - padBottom + 20}
-                      textAnchor="middle"
-                      fontSize="9.5"
+                      y={chartH - padBottomAbs + 16}
+                      textAnchor="end"
+                      fontSize="9"
                       fontWeight={isHovered ? "bold" : "normal"}
                       fill={isHovered ? "#2dd4bf" : "#64748b"}
                       className="transition-colors duration-150"
+                      transform={`rotate(-40, ${x}, ${chartH - padBottomAbs + 16})`}
                     >
                       {shortName}
                     </text>

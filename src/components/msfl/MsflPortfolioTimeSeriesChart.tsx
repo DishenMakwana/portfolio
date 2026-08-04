@@ -7,6 +7,7 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 import { TrendingUp, Calendar } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
@@ -82,11 +83,11 @@ export default function MsflPortfolioTimeSeriesChart({
       </div>
 
       {/* Chart */}
-      <div className="h-[260px] w-full pt-2">
+      <div className="h-[290px] w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={formattedChartData}
-            margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+            margin={{ top: 15, right: 20, left: 10, bottom: 25 }}
           >
             <defs>
               <linearGradient
@@ -110,14 +111,37 @@ export default function MsflPortfolioTimeSeriesChart({
               fontSize={11}
               tickLine={false}
               axisLine={false}
-            />
+              height={40}
+            >
+              <Label
+                value="Snapshot Date"
+                offset={-5}
+                position="insideBottom"
+                fill="#94a3b8"
+                fontSize={11}
+                fontWeight={700}
+              />
+            </XAxis>
             <YAxis
               stroke="#64748b"
               fontSize={11}
               tickLine={false}
               axisLine={false}
               tickFormatter={(val) => `₹${(val / 1000).toFixed(0)}k`}
-            />
+              width={65}
+            >
+              <Label
+                value="Portfolio Valuation (₹)"
+                angle={-90}
+                position="insideLeft"
+                style={{
+                  textAnchor: "middle",
+                  fill: "#94a3b8",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              />
+            </YAxis>
             <Tooltip
               content={({ active, payload }) => {
                 if (!active || !payload || !payload.length) return null;

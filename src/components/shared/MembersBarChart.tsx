@@ -5,6 +5,7 @@ import type {
   HoveredMemberCagrPoint,
   MembersBarChartProps,
 } from "@/types/insights";
+import { getMemberShortName } from "@/helpers/formatters";
 
 export default function MembersBarChart({
   memberCagrs,
@@ -100,7 +101,7 @@ export default function MembersBarChart({
           const rectH = isNegative ? valY - zeroY : zeroY - valY;
 
           const isTop = i === 0;
-          const shortName = m.memberName.split(" ")[0];
+          const shortName = getMemberShortName(m.memberName);
 
           const isHovered = hoveredBar?.fullName === m.memberName;
 
@@ -251,6 +252,28 @@ export default function MembersBarChart({
             <stop offset="100%" stopColor="#ef4444" />
           </linearGradient>
         </defs>
+        {/* Axis Titles */}
+        <text
+          x={totalW / 2}
+          y={padY + chartH + 42}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="bold"
+          fill="#94a3b8"
+        >
+          Family Member
+        </text>
+        <text
+          transform={`rotate(-90 ${15} ${padY + chartH / 2})`}
+          x={15}
+          y={padY + chartH / 2}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="bold"
+          fill="#94a3b8"
+        >
+          Weighted CAGR (%)
+        </text>
       </svg>
     </div>
   );

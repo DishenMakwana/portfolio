@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
+  Label,
 } from "recharts";
 import { BarChart2, Activity, Target } from "lucide-react";
 import { motion } from "framer-motion";
@@ -501,7 +502,7 @@ export default function ZerodhaOverviewTab({
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={data.timelineData}
-                    margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                    margin={{ top: 10, right: 10, left: 10, bottom: 30 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis
@@ -509,7 +510,18 @@ export default function ZerodhaOverviewTab({
                       stroke="#475569"
                       fontSize={11}
                       tickLine={false}
-                    />
+                      height={45}
+                      tick={{ dy: 2 }}
+                    >
+                      <Label
+                        value="Date"
+                        position="insideBottom"
+                        offset={0}
+                        fill="#94a3b8"
+                        fontSize={11}
+                        fontWeight={700}
+                      />
+                    </XAxis>
                     <YAxis
                       stroke="#475569"
                       fontSize={11}
@@ -518,7 +530,20 @@ export default function ZerodhaOverviewTab({
                       tickFormatter={(tick) =>
                         `${Number(tick).toLocaleString()}`
                       }
-                    />
+                      width={75}
+                    >
+                      <Label
+                        value="Portfolio Value (₹)"
+                        angle={-90}
+                        position="insideLeft"
+                        style={{
+                          textAnchor: "middle",
+                          fill: "#94a3b8",
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      />
+                    </YAxis>
                     <Tooltip content={<CustomPerformanceTooltip />} />
                     <Line
                       type="monotone"

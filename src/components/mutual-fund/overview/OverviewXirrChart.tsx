@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 import { Activity, BarChart2 } from "lucide-react";
 import { formatPercent } from "@/helpers/formatters";
@@ -81,7 +82,7 @@ export default function OverviewXirrChart({
           </div>
         </div>
       </div>
-      <div className="h-72 w-full">
+      <div className="h-80 w-full">
         {timelineData.length < 2 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3">
             <BarChart2 size={40} className="opacity-25" />
@@ -93,7 +94,7 @@ export default function OverviewXirrChart({
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={timelineData}
-              margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+              margin={{ top: 15, right: 20, left: 10, bottom: 30 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
@@ -101,14 +102,38 @@ export default function OverviewXirrChart({
                 stroke="#475569"
                 fontSize={11}
                 tickLine={false}
-              />
+                height={45}
+                tick={{ dy: 2 }}
+              >
+                <Label
+                  value="Snapshot Date"
+                  position="insideBottom"
+                  offset={0}
+                  fill="#94a3b8"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </XAxis>
               <YAxis
                 stroke="#475569"
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(tick) => `${Number(tick).toFixed(0)}%`}
-              />
+                width={55}
+              >
+                <Label
+                  value="XIRR Return (%)"
+                  angle={-90}
+                  position="insideLeft"
+                  style={{
+                    textAnchor: "middle",
+                    fill: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              </YAxis>
               <Tooltip content={<CustomXirrTooltip />} />
               <Line
                 type="monotone"

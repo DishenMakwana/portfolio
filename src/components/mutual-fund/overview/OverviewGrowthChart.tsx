@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 import { TrendingUp, BarChart2 } from "lucide-react";
 import { formatCurrency } from "@/helpers/formatters";
@@ -77,7 +78,7 @@ export default function OverviewGrowthChart({
           </div>
         </div>
       </div>
-      <div className="h-72 w-full">
+      <div className="h-80 w-full">
         {timelineData.length < 2 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3">
             <BarChart2 size={40} className="opacity-25" />
@@ -89,7 +90,7 @@ export default function OverviewGrowthChart({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={timelineData}
-              margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+              margin={{ top: 15, right: 20, left: 15, bottom: 30 }}
             >
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -107,7 +108,18 @@ export default function OverviewGrowthChart({
                 stroke="#475569"
                 fontSize={11}
                 tickLine={false}
-              />
+                height={45}
+                tick={{ dy: 2 }}
+              >
+                <Label
+                  value="Snapshot Date"
+                  position="insideBottom"
+                  offset={0}
+                  fill="#94a3b8"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </XAxis>
               <YAxis
                 stroke="#475569"
                 fontSize={11}
@@ -120,7 +132,20 @@ export default function OverviewGrowthChart({
                     maximumFractionDigits: 1,
                   }).format(tick)
                 }
-              />
+                width={65}
+              >
+                <Label
+                  value="Portfolio Valuation (₹)"
+                  angle={-90}
+                  position="insideLeft"
+                  style={{
+                    textAnchor: "middle",
+                    fill: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              </YAxis>
               <Tooltip content={<CustomAreaTooltip />} />
               <Area
                 type="monotone"

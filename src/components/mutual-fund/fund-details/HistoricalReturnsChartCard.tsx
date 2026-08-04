@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ReferenceDot,
+  Label,
 } from "recharts";
 import { TrendingUp, AlertTriangle, Calendar, Layers } from "lucide-react";
 import { formatNullableDate } from "@/helpers/formatters";
@@ -537,7 +538,7 @@ export default function HistoricalReturnsChartCard({
 
       {/* Chart Viewport */}
       {filteredChartData.length > 0 || isLoadingChart ? (
-        <div className="h-80 w-full relative">
+        <div className="h-84 w-full relative">
           {isLoadingChart && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm rounded-xl">
               <div className="flex items-center gap-3">
@@ -551,7 +552,7 @@ export default function HistoricalReturnsChartCard({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={filteredChartData}
-              margin={{ top: 15, right: 10, left: 5, bottom: 0 }}
+              margin={{ top: 15, right: 15, left: 10, bottom: 30 }}
             >
               <defs>
                 <linearGradient id="colorFund" x1="0" y1="0" x2="0" y2="1">
@@ -581,10 +582,20 @@ export default function HistoricalReturnsChartCard({
                   });
                 }}
                 stroke="#64748b"
-                tick={{ fill: "#64748b", fontSize: 11 }}
-              />
+                tick={{ fill: "#64748b", fontSize: 11, dy: 3 }}
+                height={45}
+              >
+                <Label
+                  value="Date"
+                  position="insideBottom"
+                  offset={0}
+                  fill="#94a3b8"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </XAxis>
               <YAxis
-                width={52}
+                width={60}
                 dx={-4}
                 stroke="#64748b"
                 tick={{ fill: "#64748b", fontSize: 11 }}
@@ -592,7 +603,19 @@ export default function HistoricalReturnsChartCard({
                   if (Math.abs(val) >= 100) return `${val.toFixed(0)}%`;
                   return `${val.toFixed(1)}%`;
                 }}
-              />
+              >
+                <Label
+                  value="Return (%)"
+                  angle={-90}
+                  position="insideLeft"
+                  style={{
+                    textAnchor: "middle",
+                    fill: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              </YAxis>
               <Tooltip
                 content={
                   <CustomChartTooltip

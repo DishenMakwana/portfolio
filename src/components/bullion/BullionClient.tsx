@@ -12,6 +12,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Label,
 } from "recharts";
 import {
   TrendingUp,
@@ -623,7 +624,7 @@ export default function BullionClient({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
-              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 10, bottom: 30 }}
             >
               <defs>
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
@@ -640,9 +641,18 @@ export default function BullionClient({
                 dataKey="date"
                 stroke="#64748b"
                 fontSize={11}
-                tickLine={false}
-                axisLine={false}
-              />
+                height={45}
+                tick={{ dy: 2 }}
+              >
+                <Label
+                  value="Date"
+                  position="insideBottom"
+                  offset={0}
+                  fill="#94a3b8"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </XAxis>
               <YAxis
                 stroke="#64748b"
                 fontSize={11}
@@ -650,7 +660,20 @@ export default function BullionClient({
                 axisLine={false}
                 domain={["auto", "auto"]}
                 tickFormatter={(value) => `₹${value}`}
-              />
+                width={65}
+              >
+                <Label
+                  value="Price (₹)"
+                  angle={-90}
+                  position="insideLeft"
+                  style={{
+                    textAnchor: "middle",
+                    fill: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              </YAxis>
               <Tooltip content={<CustomChartTooltip />} />
               <Area
                 type="monotone"
