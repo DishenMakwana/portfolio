@@ -6,6 +6,7 @@ import {
   doublePrecision,
   unique,
   index,
+  timestamp,
 } from "drizzle-orm/pg-core";
 
 // Define dynamic schema name based on environment variable
@@ -19,6 +20,11 @@ export const reports = mySchema.table("reports", {
   filename: text("filename").notNull(),
   cagr: doublePrecision("cagr"), // Store parsed Grand Total CAGR
   casId: text("cas_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 
 export const familyMembers = mySchema.table("family_members", {
@@ -44,6 +50,11 @@ export const familyMembers = mySchema.table("family_members", {
   linkedBankName: text("linked_bank_name"),
   linkedBankIfsc: text("linked_bank_ifsc"),
   linkedBankAccountNo: text("linked_bank_account_no"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 
 export const memberReportCagrs = mySchema.table(
@@ -57,6 +68,11 @@ export const memberReportCagrs = mySchema.table(
       onDelete: "cascade",
     }),
     cagr: doublePrecision("cagr").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("member_report_cagrs_report_id_idx").on(table.reportId),
@@ -72,6 +88,11 @@ export const schemes = mySchema.table(
     category: text("category").notNull(),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [index("schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
 );
@@ -106,6 +127,11 @@ export const holdingsSnapshot = mySchema.table(
     rta: text("rta"),
     isin: text("isin"),
     annualisedReturn: doublePrecision("annualised_return"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("holdings_snapshot_report_id_idx").on(table.reportId),
@@ -128,8 +154,13 @@ export const transactions = mySchema.table(
     nav: doublePrecision("nav").notNull(),
     amount: doublePrecision("amount").notNull(),
     stampDuty: doublePrecision("stamp_duty"),
-    stt: doublePrecision("stt"),
+    stt: doublePrecision("stt").default(0),
     sourceReportId: integer("source_report_id").references(() => reports.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("transactions_member_id_idx").on(table.memberId),
@@ -161,6 +192,11 @@ export const sipMandates = mySchema.table(
     isActive: integer("is_active").default(1), // 1=active 0=paused
     uploadedAt: text("uploaded_at").notNull(),
     sourceFile: text("source_file"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("sip_mandates_member_id_idx").on(table.memberId),
@@ -179,6 +215,11 @@ export const sipTransactions = mySchema.table(
     amount: doublePrecision("amount").notNull(),
     uploadedAt: text("uploaded_at").notNull(),
     sourceFile: text("source_file"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     unique("sip_mandate_month_unique").on(table.sipMandateId, table.month),
@@ -199,6 +240,11 @@ export const schemeNavCacheMeta = mySchema.table("scheme_nav_cache_meta", {
   corpusCr: doublePrecision("corpus_cr"),
   expenseRatio: doublePrecision("expense_ratio"),
   exitLoad: text("exit_load"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 
 export const schemeNavHistory = mySchema.table(
@@ -209,6 +255,11 @@ export const schemeNavHistory = mySchema.table(
     date: text("date").notNull(), // stored in DD-MM-YYYY format to match API
     nav: doublePrecision("nav").notNull(),
     fetchedAt: text("fetched_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     unique("scheme_nav_history_code_date_uq").on(table.schemeCode, table.date),
@@ -221,6 +272,11 @@ export const zerodhaReports = mySchema.table("zerodha_reports", {
   asOfDate: text("as_of_date").notNull(),
   uploadedAt: text("uploaded_at").notNull(),
   filename: text("filename").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 
 export const zerodhaHoldings = mySchema.table(
@@ -247,6 +303,11 @@ export const zerodhaHoldings = mySchema.table(
     lockinQuantity: doublePrecision("lockin_quantity"),
     lockinDate: text("lockin_date"),
     balanceDescription: text("balance_description"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("zerodha_holdings_report_id_idx").on(table.reportId),
@@ -267,6 +328,11 @@ export const zerodhaSchemes = mySchema.table(
     instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("zerodha_schemes_scheme_code_api_idx").on(table.schemeCodeApi),
@@ -288,6 +354,11 @@ export const zerodhaSchemeNavCacheMeta = mySchema.table(
     corpusCr: doublePrecision("corpus_cr"),
     expenseRatio: doublePrecision("expense_ratio"),
     exitLoad: text("exit_load"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   }
 );
 
@@ -299,6 +370,11 @@ export const zerodhaSchemeNavHistory = mySchema.table(
     date: text("date").notNull(),
     nav: doublePrecision("nav").notNull(),
     fetchedAt: text("fetched_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     unique("zerodha_scheme_nav_history_code_date_uq").on(
@@ -329,6 +405,11 @@ export const zerodhaTransactions = mySchema.table(
     broker: text("broker"),
     assetType: text("asset_type").default("mutual_fund"),
     uploadedAt: text("uploaded_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("zerodha_transactions_member_id_idx").on(table.memberId),
@@ -352,6 +433,11 @@ export const benchmarkNavCacheMeta = mySchema.table(
     corpusCr: doublePrecision("corpus_cr"),
     expenseRatio: doublePrecision("expense_ratio"),
     exitLoad: text("exit_load"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   }
 );
 
@@ -363,6 +449,11 @@ export const benchmarkNavHistory = mySchema.table(
     date: text("date").notNull(),
     nav: doublePrecision("nav").notNull(),
     fetchedAt: text("fetched_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     unique("benchmark_nav_history_code_date_uq").on(
@@ -378,6 +469,11 @@ export const msflReports = mySchema.table("msfl_reports", {
   asOfDate: text("as_of_date").notNull(),
   uploadedAt: text("uploaded_at").notNull(),
   filename: text("filename").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
 
 export const msflHoldings = mySchema.table(
@@ -399,6 +495,11 @@ export const msflHoldings = mySchema.table(
     unrealizedPnlPct: doublePrecision("unrealized_pnl_pct").notNull(),
     faceValue: doublePrecision("face_value"),
     tradingStatus: text("trading_status"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("msfl_holdings_report_id_idx").on(table.reportId),
@@ -419,6 +520,11 @@ export const msflSchemes = mySchema.table(
     instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [index("msfl_schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
 );
@@ -438,6 +544,11 @@ export const msflSchemeNavCacheMeta = mySchema.table(
     corpusCr: doublePrecision("corpus_cr"),
     expenseRatio: doublePrecision("expense_ratio"),
     exitLoad: text("exit_load"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   }
 );
 
@@ -449,6 +560,11 @@ export const msflSchemeNavHistory = mySchema.table(
     date: text("date").notNull(),
     nav: doublePrecision("nav").notNull(),
     fetchedAt: text("fetched_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     unique("msfl_scheme_nav_history_code_date_uq").on(
@@ -477,4 +593,9 @@ export const benchmarkRules = mySchema.table("benchmark_rules", {
     .default(0)
     .notNull(),
   allocationOther: doublePrecision("allocation_other").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
 });
