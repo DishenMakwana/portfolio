@@ -19,6 +19,7 @@ import {
   TrendingDown,
   Receipt,
   Coins,
+  Scale,
 } from "lucide-react";
 import {
   formatNullableDate,
@@ -140,25 +141,18 @@ export default function FactsheetPanels({
     return filteredTransactions.slice(start, start + pageSize);
   }, [filteredTransactions, currentPage, pageSize]);
 
-  const isFullySold = useMemo(() => {
-    return (
-      (holding.balanceUnits ?? 0) <= 0.0001 ||
-      (holding.currentValue ?? 0) <= 0 ||
-      !!holding.comments?.toLowerCase().includes("sold") ||
-      !!holding.comments?.toLowerCase().includes("redeemed")
-    );
-  }, [holding.balanceUnits, holding.currentValue, holding.comments]);
-
   // Summary totals for Buy, Sell, Stamp Duty & Realised PnL
   const txSummary = useMemo(() => {
     let buySum = 0;
     let sellSum = 0;
     let stampDutySum = 0;
+    let sttSum = 0;
 
     transactions.forEach((tx) => {
       const type = (tx.type || "").toUpperCase();
       const amt = tx.amount || 0;
       const stamp = (tx as any).stampDuty || 0;
+      const stt = (tx as any).stt || 0;
 
       if (type === "BUY" || type === "PURCHASE" || type === "SIP") {
         buySum += amt;
@@ -166,17 +160,33 @@ export default function FactsheetPanels({
         sellSum += amt;
       }
       stampDutySum += stamp;
+      sttSum += stt;
     });
 
-    const realisedProfit = sellSum - buySum;
+    const netCapitalDeployed = buySum - sellSum;
+    const totalDutyAndTax = stampDutySum + sttSum;
+    const realizedCapitalGains =
+      sellSum > 0
+        ? Math.max(
+            0,
+            (holding.purchaseValue || 0) - netCapitalDeployed - totalDutyAndTax
+          )
+        : 0;
+    const finalTotalValuation =
+      netCapitalDeployed + realizedCapitalGains + totalDutyAndTax;
 
     return {
       buySum,
       sellSum,
+      netCapitalDeployed,
       stampDutySum,
-      realisedProfit,
+      sttSum,
+      totalDutyAndTax,
+      realisedProfit: sellSum - buySum,
+      realizedCapitalGains,
+      finalTotalValuation,
     };
-  }, [transactions]);
+  }, [transactions, holding.purchaseValue]);
 
   const handleFYChange = (fy: string) => {
     setSelectedFY(fy);
@@ -895,101 +905,124 @@ export default function FactsheetPanels({
       </div>
 
       {/* TRANSACTION METRIC CARDS */}
-      <div
-        className={`grid grid-cols-1 gap-4 lg:gap-6 ${
-          isFullySold ? "sm:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"
-        }`}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
         {/* Card 1: Total Buy Value */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+        <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+          <div className="flex items-center justify-between gap-1.5 h-8">
+            <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
               Total Fund Buy
             </span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-inner">
-              <TrendingUp size={20} />
+            <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 shadow-inner">
+              <TrendingUp size={15} />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-emerald-400 tracking-tight">
+          <div className="mt-3">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-blue-400 tracking-tight whitespace-nowrap">
               {formatCurrency(txSummary.buySum)}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold">
-              Total purchases & SIP inflows
+            <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+              Purchases & SIP inflows
             </div>
           </div>
         </div>
 
         {/* Card 2: Total Sell Value */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+        <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+          <div className="flex items-center justify-between gap-1.5 h-8">
+            <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
               Total Fund Sell
             </span>
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shadow-inner">
-              <TrendingDown size={20} />
+            <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 shadow-inner">
+              <TrendingDown size={15} />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-rose-400 tracking-tight">
+          <div className="mt-3">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-rose-400 tracking-tight whitespace-nowrap">
               {formatCurrency(txSummary.sellSum)}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold">
-              Total redemptions & sales
+            <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+              Redemptions & sales
             </div>
           </div>
         </div>
 
-        {/* Card 3: Realised P&L (ONLY SHOWN FOR INACTIVE / FULLY SOLD FUNDS) */}
-        {isFullySold && (
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-                Realised P&L
-              </span>
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${
-                  txSummary.realisedProfit >= 0
-                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                    : "bg-rose-500/10 border border-rose-500/20 text-rose-400"
-                }`}
-              >
-                <Coins size={20} />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div
-                className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tight ${
-                  txSummary.realisedProfit >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                }`}
-              >
-                {formatCurrency(txSummary.realisedProfit)}
-              </div>
-              <div className="text-xs text-slate-500 mt-1 font-semibold">
-                Total Sell minus Total Buy
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Card 4: Stamp Duty Paid */}
-        <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
-              Stamp Duty Paid
+        {/* Card 3: Realized Capital Gains */}
+        <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+          <div className="flex items-center justify-between gap-1.5 h-8">
+            <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+              Realized Gains
             </span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
-              <Receipt size={20} />
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 shadow-inner">
+              <Coins size={15} />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-xl sm:text-2xl lg:text-3xl font-black text-amber-400 tracking-tight">
-              {formatCurrency(txSummary.stampDutySum)}
+          <div className="mt-3">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-purple-400 tracking-tight whitespace-nowrap">
+              {formatCurrency(txSummary.realizedCapitalGains)}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold">
-              Govt stamp duty collected to date
+            <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+              Profit from past sales
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Dynamic Stamp Duty & STT Card */}
+        {(() => {
+          const hasStamp = txSummary.stampDutySum > 0;
+          const hasStt = txSummary.sttSum > 0;
+
+          let title = "Stamp Duty Paid";
+          let subtext = "Govt stamp duty tax";
+
+          if (hasStamp && hasStt) {
+            title = "Stamp & STT Paid";
+            subtext = `Stamp & STT charges`;
+          } else if (hasStt && !hasStamp) {
+            title = "STT Paid";
+            subtext = "Securities Tax (STT)";
+          } else if (hasStamp && !hasStt) {
+            title = "Stamp Duty Paid";
+            subtext = "Govt stamp duty tax";
+          }
+
+          return (
+            <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+              <div className="flex items-center justify-between gap-1.5 h-8">
+                <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+                  {title}
+                </span>
+                <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 shadow-inner">
+                  <Receipt size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="text-sm sm:text-base lg:text-lg font-black text-amber-400 tracking-tight whitespace-nowrap">
+                  {formatCurrency(txSummary.totalDutyAndTax)}
+                </div>
+                <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+                  {subtext}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Card 5: CAS Purchase Value (Final Total Card) */}
+        <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+          <div className="flex items-center justify-between gap-1.5 h-8">
+            <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+              CAS Purchase Val
+            </span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-inner">
+              <Scale size={15} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-400 tracking-tight whitespace-nowrap">
+              {formatCurrency(txSummary.finalTotalValuation)}
+            </div>
+            <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+              Buy - Sell + Gains + Tax
             </div>
           </div>
         </div>

@@ -28,6 +28,7 @@ import {
   Tooltip,
   ComposedChart,
   Line,
+  Label,
 } from "recharts";
 import { formatCurrency, formatDate } from "@/helpers/formatters";
 import { getOverlapSubCategory } from "@/helpers/allocation";
@@ -746,11 +747,11 @@ export default function SoldFundsTab({
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-96 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={leaderboardChartData}
-                margin={{ top: 10, right: 10, left: 10, bottom: 25 }}
+                margin={{ top: 15, right: 15, left: 10, bottom: 60 }}
               >
                 <defs>
                   <linearGradient
@@ -772,19 +773,42 @@ export default function SoldFundsTab({
                 <XAxis
                   dataKey="name"
                   stroke="#64748b"
-                  fontSize={10}
+                  fontSize={9}
                   tickLine={false}
                   interval={0}
-                  angle={-15}
+                  angle={-45}
                   textAnchor="end"
-                />
+                  height={80}
+                >
+                  <Label
+                    value="Scheme Name"
+                    offset={-5}
+                    position="insideBottom"
+                    fill="#94a3b8"
+                    fontSize={10}
+                    fontWeight={700}
+                  />
+                </XAxis>
                 <YAxis
                   stroke="#64748b"
                   fontSize={10}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-                />
+                  width={60}
+                >
+                  <Label
+                    value="Realised Profit (₹)"
+                    angle={-90}
+                    position="insideLeft"
+                    style={{
+                      textAnchor: "middle",
+                      fill: "#94a3b8",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                </YAxis>
                 <Tooltip
                   content={<CustomLeaderboardTooltip />}
                   cursor={{ fill: "rgba(30, 41, 59, 0.4)", rx: 6, ry: 6 }}
@@ -820,11 +844,11 @@ export default function SoldFundsTab({
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-96 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={categoryChartData}
-                margin={{ top: 10, right: 10, left: 10, bottom: 25 }}
+                margin={{ top: 15, right: 20, left: 10, bottom: 60 }}
               >
                 <defs>
                   <linearGradient id="catBarGrad" x1="0" y1="0" x2="0" y2="1">
@@ -840,12 +864,22 @@ export default function SoldFundsTab({
                 <XAxis
                   dataKey="category"
                   stroke="#64748b"
-                  fontSize={10}
+                  fontSize={9}
                   tickLine={false}
                   interval={0}
-                  angle={-15}
+                  angle={-45}
                   textAnchor="end"
-                />
+                  height={80}
+                >
+                  <Label
+                    value="Category"
+                    offset={-5}
+                    position="insideBottom"
+                    fill="#94a3b8"
+                    fontSize={10}
+                    fontWeight={700}
+                  />
+                </XAxis>
                 <YAxis
                   yAxisId="left"
                   stroke="#64748b"
@@ -853,7 +887,20 @@ export default function SoldFundsTab({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-                />
+                  width={60}
+                >
+                  <Label
+                    value="Net Profit (₹)"
+                    angle={-90}
+                    position="insideLeft"
+                    style={{
+                      textAnchor: "middle",
+                      fill: "#94a3b8",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                </YAxis>
                 <YAxis
                   yAxisId="right"
                   orientation="right"
@@ -862,7 +909,20 @@ export default function SoldFundsTab({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `${v}%`}
-                />
+                  width={50}
+                >
+                  <Label
+                    value="Return %"
+                    angle={90}
+                    position="insideRight"
+                    style={{
+                      textAnchor: "middle",
+                      fill: "#f59e0b",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                </YAxis>
                 <Tooltip
                   content={<CustomCategoryTooltip />}
                   cursor={{ fill: "rgba(30, 41, 59, 0.4)", rx: 6, ry: 6 }}
@@ -1045,11 +1105,11 @@ export default function SoldFundsTab({
           </div>
 
           {/* Deep-Dive Chart */}
-          <div className="h-80 w-full pt-2">
+          <div className="h-96 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={ultraShortChartData}
-                margin={{ top: 15, right: 15, left: 15, bottom: 40 }}
+                margin={{ top: 15, right: 15, left: 15, bottom: 60 }}
               >
                 <defs>
                   <linearGradient
@@ -1071,12 +1131,22 @@ export default function SoldFundsTab({
                 <XAxis
                   dataKey="shortName"
                   stroke="#64748b"
-                  fontSize={10}
+                  fontSize={9}
                   tickLine={false}
                   interval={0}
-                  angle={-25}
+                  angle={-45}
                   textAnchor="end"
-                />
+                  height={80}
+                >
+                  <Label
+                    value="Scheme Name"
+                    offset={-5}
+                    position="insideBottom"
+                    fill="#94a3b8"
+                    fontSize={10}
+                    fontWeight={700}
+                  />
+                </XAxis>
                 <YAxis
                   yAxisId="cagrAxis"
                   stroke="#06b6d4"
@@ -1084,7 +1154,20 @@ export default function SoldFundsTab({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `${v}%`}
-                />
+                  width={50}
+                >
+                  <Label
+                    value="CAGR %"
+                    angle={-90}
+                    position="insideLeft"
+                    style={{
+                      textAnchor: "middle",
+                      fill: "#06b6d4",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                </YAxis>
                 <YAxis
                   yAxisId="profitAxis"
                   orientation="right"
@@ -1093,7 +1176,20 @@ export default function SoldFundsTab({
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-                />
+                  width={60}
+                >
+                  <Label
+                    value="Net Profit (₹)"
+                    angle={90}
+                    position="insideRight"
+                    style={{
+                      textAnchor: "middle",
+                      fill: "#f59e0b",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                </YAxis>
                 <Tooltip
                   content={<CustomUltraShortTooltip />}
                   cursor={{ fill: "rgba(6, 182, 212, 0.15)", rx: 6, ry: 6 }}

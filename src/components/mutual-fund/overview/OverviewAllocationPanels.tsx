@@ -172,12 +172,12 @@ export default function OverviewAllocationPanels({
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-3">
             {/* LTCG */}
-            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-slate-800/80 space-y-1 min-w-0">
+            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-slate-800/80 space-y-1 min-w-0 overflow-hidden">
               <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                 LTCG &gt;1 yr
               </div>
               <div
-                className="text-[11px] xs:text-xs sm:text-sm md:text-base xl:text-lg font-extrabold text-slate-100 tabular-nums leading-tight whitespace-nowrap tracking-tight overflow-hidden"
+                className="text-xs sm:text-sm md:text-base font-extrabold text-slate-100 tabular-nums leading-tight truncate tracking-tight"
                 title={formatCurrency(ltcgGain)}
               >
                 {formatCurrency(ltcgGain)}
@@ -188,7 +188,7 @@ export default function OverviewAllocationPanels({
                   Exempt up to ₹1.25L / person
                 </span>
               </div>
-              <div className="text-[10px] text-slate-500 font-medium">
+              <div className="text-[10px] text-slate-500 font-medium truncate">
                 Taxable:{" "}
                 <span className="text-slate-300">
                   {formatCurrency(taxableLtcg)}
@@ -196,12 +196,12 @@ export default function OverviewAllocationPanels({
               </div>
             </div>
             {/* STCG */}
-            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-amber-500/20 space-y-1 min-w-0">
+            <div className="bg-slate-950/70 p-3 sm:p-4 rounded-xl border border-amber-500/20 space-y-1 min-w-0 overflow-hidden">
               <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                 STCG ≤1 yr
               </div>
               <div
-                className="text-[11px] xs:text-xs sm:text-sm md:text-base xl:text-lg font-extrabold text-amber-400 tabular-nums leading-tight whitespace-nowrap tracking-tight overflow-hidden"
+                className="text-xs sm:text-sm md:text-base font-extrabold text-amber-400 tabular-nums leading-tight truncate tracking-tight"
                 title={formatCurrency(stcgGain)}
               >
                 {formatCurrency(stcgGain)}
@@ -212,7 +212,7 @@ export default function OverviewAllocationPanels({
                   Flat 20% tax
                 </span>
               </div>
-              <div className="text-[10px] text-slate-500 font-medium">
+              <div className="text-[10px] text-slate-500 font-medium truncate">
                 Tax est:{" "}
                 <span className="text-amber-300/80">
                   {formatCurrency(stcgGain * 0.2)}
@@ -221,12 +221,12 @@ export default function OverviewAllocationPanels({
             </div>
           </div>
           {/* Total */}
-          <div className="flex items-center justify-between bg-slate-800/40 rounded-xl px-4 py-2.5 border border-slate-700/40 min-w-0 gap-2">
+          <div className="flex items-center justify-between bg-slate-800/40 rounded-xl px-4 py-2.5 border border-slate-700/40 min-w-0 gap-2 overflow-hidden">
             <span className="text-xs text-slate-400 font-medium shrink-0">
               Total Gains
             </span>
             <span
-              className="text-sm sm:text-base font-extrabold text-slate-100 tabular-nums truncate tracking-tight text-right"
+              className="text-xs sm:text-sm md:text-base font-extrabold text-slate-100 tabular-nums truncate tracking-tight text-right"
               title={formatCurrency(ltcgGain + stcgGain)}
             >
               {formatCurrency(ltcgGain + stcgGain)}

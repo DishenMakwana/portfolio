@@ -33,7 +33,7 @@ export default function ZerodhaBenchmarkCards({
   const activeBenchmarkLabel =
     benchmarkLabel ||
     (title === "Stocks XIRR"
-      ? "NSE Nifty 500 TRI"
+      ? "UTI Nifty 50 Index Fund Direct Growth"
       : "UTI Nifty 50 Index Direct");
 
   return (

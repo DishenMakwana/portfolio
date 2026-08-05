@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import MembersBarChart from "@/components/shared/MembersBarChart";
 import type { MembersTabProps } from "@/types/insights";
+import { getMemberShortName } from "@/helpers/formatters";
 
 export default function MembersTab({
   memberCagrs,
@@ -42,7 +43,7 @@ export default function MembersTab({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-base font-bold text-slate-100 leading-tight truncate">
-                    {medal} {member.memberName.split(" ")[0]}
+                    {medal} {getMemberShortName(member.memberName)}
                   </p>
                   <p className="text-xs text-slate-500 leading-normal break-words">
                     {member.memberName}

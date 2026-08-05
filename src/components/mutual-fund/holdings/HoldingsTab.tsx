@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, ChevronUp, ChevronDown, Filter } from "lucide-react";
 import {
   formatCurrency,
   formatPercent,
   formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
+import {
+  matchCategoryFilter,
+  getCategoryOptions,
+} from "@/helpers/holdingsCategory";
 import { isUnlistedStock } from "@/lib/stockApi";
 import { HOLDINGS_SORT_FIELDS } from "@/types/holdings";
 import type { HoldingsSortField, HoldingsTabProps } from "@/types/holdings";
@@ -26,6 +30,7 @@ export default function HoldingsTab({
   const initialSearch = searchParams.get("q") || "";
   const initialMemberParam = searchParams.get("member") || initialMember;
   const initialPlan = searchParams.get("plan") || "All";
+  const initialCategory = searchParams.get("category") || "All";
   const rawSort = searchParams.get("sort");
   const initialSort = (
     (HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawSort || "")
@@ -43,9 +48,16 @@ export default function HoldingsTab({
   const [searchVal, setSearchVal] = useState(initialSearch); // For instant input typing
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [sortField, setSortField] = useState<HoldingsSortField>(initialSort);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
+
+  // Dynamic Category Options
+  const categoryOptions = useMemo(
+    () => getCategoryOptions(holdings.map((h) => h.category)),
+    [holdings]
+  );
 
   // Helper to update query string parameters in the URL
   const updateUrl = (updates: Record<string, string | null>) => {
@@ -76,6 +88,7 @@ export default function HoldingsTab({
     setSearchVal(q);
     setMemberFilter(searchParams.get("member") || "All");
     setPlanFilter(searchParams.get("plan") || "All");
+    setCategoryFilter(searchParams.get("category") || "All");
     setStatusFilter(searchParams.get("status") || "active");
     const rawS = searchParams.get("sort");
     setSortField(
@@ -108,6 +121,11 @@ export default function HoldingsTab({
   const handlePlanChange = (value: string) => {
     setPlanFilter(value);
     updateUrl({ plan: value });
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryFilter(value);
+    updateUrl({ category: value });
   };
 
   const handleStatusChange = (value: string) => {
@@ -144,9 +162,13 @@ export default function HoldingsTab({
   // Filter and Sort holdings
   const filtered = holdings
     .filter((h) => {
+      const searchLower = searchVal.trim().toLowerCase();
+      const cleanFolio = (h.folioNo || "").replace(/^'/, "").toLowerCase();
       const matchSearch =
-        h.schemeName.toLowerCase().includes(searchVal.toLowerCase()) ||
-        h.folioNo.includes(searchVal);
+        !searchLower ||
+        h.schemeName.toLowerCase().includes(searchLower) ||
+        (h.memberName || "").toLowerCase().includes(searchLower) ||
+        cleanFolio.includes(searchLower);
       const matchMember =
         memberFilter === "All" || h.memberName === memberFilter;
 
@@ -171,7 +193,12 @@ export default function HoldingsTab({
         matchStatus = !isActiveFolio;
       }
 
-      return matchSearch && matchMember && matchPlan && matchStatus;
+      // Category check
+      const matchCategory = matchCategoryFilter(h.category, categoryFilter);
+
+      return (
+        matchSearch && matchMember && matchPlan && matchStatus && matchCategory
+      );
     })
     .sort((a, b) => {
       const valA = a[sortField];
@@ -192,71 +219,149 @@ export default function HoldingsTab({
       transition={{ duration: 0.25 }}
     >
       {/* Filters Row */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-lg">
+          <Search
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            size={18}
+          />
           <input
             type="text"
-            placeholder="Search schemes or folio numbers..."
+            placeholder="Search scheme, folio or applicant..."
             value={searchVal}
             onChange={(e) => setSearchVal(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-          <Search
-            className="absolute left-3.5 top-2.5 text-slate-500"
-            size={18}
+            className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 shadow-inner transition-all"
           />
         </div>
 
-        {/* Filter dropdowns stacked to the right side */}
-        <div className="flex flex-col md:items-end gap-2.5 ml-auto">
-          {/* Top Level: Holder */}
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-sm font-medium">Holder:</span>
-            <select
-              value={memberFilter}
-              onChange={(e) => handleMemberChange(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer min-w-[200px]"
-            >
-              <option value="All">All family members</option>
-              {memberSummaries.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Under Holder: Folio Status & Plan Type */}
-          <div className="flex flex-wrap items-center justify-end gap-3">
+        {/* Filter dropdowns aligned in a clean 2-row grid */}
+        <div className="flex flex-col gap-2.5 ml-auto">
+          {/* Row 1: APPLICANT & CATEGORY */}
+          <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-5">
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm font-medium">
-                Folio Status:
+              <Filter size={15} className="text-emerald-400 shrink-0" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
+                APPLICANT:
               </span>
-              <select
-                value={statusFilter}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer font-medium"
-              >
-                <option value="active">Active Folios</option>
-                <option value="inactive">Inactive / Sold Folios</option>
-                <option value="all">All Folios</option>
-              </select>
+              <div className="relative inline-block w-[180px] sm:w-[210px]">
+                <select
+                  value={memberFilter}
+                  onChange={(e) => handleMemberChange(e.target.value)}
+                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
+                >
+                  <option value="All" className="bg-slate-900 text-slate-200">
+                    All Applicants
+                  </option>
+                  {memberSummaries.map((m) => (
+                    <option
+                      key={m.name}
+                      value={m.name}
+                      className="bg-slate-900 text-slate-200"
+                    >
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-slate-400 text-sm font-medium">
-                Plan Type:
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
+                CATEGORY:
               </span>
-              <select
-                value={planFilter}
-                onChange={(e) => handlePlanChange(e.target.value)}
-                className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
-              >
-                <option value="All">All Plans</option>
-                <option value="MF">Mutual Fund (MF)</option>
-                <option value="SIF">Specialized (SIF)</option>
-              </select>
+              <div className="relative inline-block w-[180px] sm:w-[210px]">
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
+                >
+                  <option value="All" className="bg-slate-900 text-slate-200">
+                    All Categories
+                  </option>
+                  {categoryOptions.map((cat) => (
+                    <option
+                      key={cat}
+                      value={cat}
+                      className="bg-slate-900 text-slate-200"
+                    >
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: TYPE & FOLIO STATUS */}
+          <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-5">
+            <div className="flex items-center gap-2">
+              <div className="w-[15px] shrink-0" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
+                TYPE:
+              </span>
+              <div className="relative inline-block w-[180px] sm:w-[210px]">
+                <select
+                  value={planFilter}
+                  onChange={(e) => handlePlanChange(e.target.value)}
+                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
+                >
+                  <option value="All" className="bg-slate-900 text-slate-200">
+                    All Types
+                  </option>
+                  <option value="MF" className="bg-slate-900 text-slate-200">
+                    Mutual Fund (MF)
+                  </option>
+                  <option value="SIF" className="bg-slate-900 text-slate-200">
+                    Specialized (SIF)
+                  </option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
+                STATUS:
+              </span>
+              <div className="relative inline-block w-[180px] sm:w-[210px]">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
+                >
+                  <option
+                    value="active"
+                    className="bg-slate-900 text-slate-200"
+                  >
+                    Active Folios
+                  </option>
+                  <option
+                    value="inactive"
+                    className="bg-slate-900 text-slate-200"
+                  >
+                    Inactive / Sold
+                  </option>
+                  <option value="all" className="bg-slate-900 text-slate-200">
+                    All Folios
+                  </option>
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -355,10 +460,15 @@ export default function HoldingsTab({
                       <div className="font-bold text-slate-100">
                         {h.schemeName}
                       </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-1">
                         <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
                           {h.category}
                         </span>
+                        {h.folioNo && (
+                          <span className="bg-cyan-950/80 text-cyan-300 border border-cyan-800/50 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-tight">
+                            Folio: {h.folioNo.replace(/^'/, "")}
+                          </span>
+                        )}
                         {h.balanceUnits <= 0.0001 && (
                           <span className="bg-amber-950/80 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">
                             Inactive / Sold
@@ -369,7 +479,9 @@ export default function HoldingsTab({
                             Unlisted
                           </span>
                         )}
-                        <span>• Units: {h.balanceUnits.toFixed(3)}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span>Units: {h.balanceUnits.toFixed(3)}</span>
                         <span>• NAV: ₹{h.currentNav.toFixed(2)}</span>
                       </div>
                     </td>

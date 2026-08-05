@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -12,7 +12,18 @@ import {
   History,
   Shield,
   IndianRupee,
+  TrendingUp,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Label,
+} from "recharts";
 import { formatCurrency, formatInrCompact } from "@/helpers/formatters";
 import type { FyTrackerData } from "@/types/insights";
 import { getFyTrackerDataAction } from "@/actions/portfolio";
@@ -21,8 +32,78 @@ interface FyTrackerClientProps {
   initialData: FyTrackerData;
 }
 
+interface CustomFyTrendTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+    dataKey: string;
+    payload: {
+      fyLabel: string;
+      portfolio: number;
+      benchmark: number;
+      alpha: number;
+    };
+  }>;
+  label?: string;
+  metric: "xirr" | "cagr";
+}
+
+function CustomFyTrendTooltip({
+  active,
+  payload,
+  label,
+  metric,
+}: CustomFyTrendTooltipProps): React.JSX.Element | null {
+  if (active && payload && payload.length) {
+    const dataPoint = payload[0].payload;
+    const isAlphaPositive = dataPoint.alpha >= 0;
+
+    return (
+      <div className="bg-slate-900/95 border border-slate-800 rounded-xl p-4 shadow-2xl backdrop-blur-md min-w-[220px]">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2.5">
+          <p className="text-xs font-extrabold text-slate-200">{label}</p>
+          <span
+            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+              isAlphaPositive
+                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                : "bg-rose-500/15 text-rose-400 border-rose-500/30"
+            }`}
+          >
+            Alpha: {isAlphaPositive ? "+" : ""}
+            {dataPoint.alpha.toFixed(2)}%
+          </span>
+        </div>
+        <div className="space-y-1.5 text-xs">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-400 font-medium flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              My Investment {metric.toUpperCase()}:
+            </span>
+            <span className="font-extrabold text-emerald-400">
+              {dataPoint.portfolio.toFixed(2)}%
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-400 font-medium flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+              Nifty 50 Benchmark:
+            </span>
+            <span className="font-bold text-blue-400">
+              {dataPoint.benchmark.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
   const [data, setData] = useState<FyTrackerData>(initialData);
+  const [metric, setMetric] = useState<"xirr" | "cagr">("xirr");
   const [isPending, startTransition] = useTransition();
 
   const handleFyChange = (label: string) => {
@@ -42,6 +123,25 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
   const hasDebtOthersActivity = snapshotRows.some(
     (row) => row.debtOthers !== 0
   );
+
+  const chartData = useMemo(() => {
+    // Filter from FY 2017-18 onwards (startDate >= 2017-04-01) and sort ascending by startDate
+    const filteredRows = [...comparisonRows]
+      .filter((r) => r.startDate >= "2017-04-01")
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+    return filteredRows.map((r) => {
+      const portfolioVal = metric === "xirr" ? r.xirr : r.cagr;
+      const benchmarkVal =
+        metric === "xirr" ? r.benchmarkXirr : r.benchmarkCagr;
+      return {
+        fyLabel: r.fyLabel,
+        portfolio: portfolioVal,
+        benchmark: benchmarkVal,
+        alpha: Math.round((portfolioVal - benchmarkVal) * 100) / 100,
+      };
+    });
+  }, [comparisonRows, metric]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -242,6 +342,166 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
             <span>CAGR: {summary.cagr.toFixed(2)}%</span>
           </div>
         </motion.div>
+      </div>
+
+      {/* ─── FY Performance Trend Line Chart ─── */}
+      <div className="rounded-2xl border border-teal-500/20 bg-slate-900/70 backdrop-blur-md p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-100">
+                Financial Year Return Trend ({metric.toUpperCase()})
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Historical portfolio {metric.toUpperCase()} vs UTI Nifty 50
+                Benchmark across financial years
+              </p>
+            </div>
+          </div>
+
+          {/* Metric Toggle Buttons (Matching Screenshot Reference UI) */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-800/80 gap-1 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setMetric("xirr")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold tracking-wide transition-all cursor-pointer ${
+                metric === "xirr"
+                  ? "bg-emerald-600/90 text-emerald-100 shadow-md border border-emerald-500/30"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              XIRR View
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("cagr")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold tracking-wide transition-all cursor-pointer ${
+                metric === "cagr"
+                  ? "bg-emerald-600/90 text-emerald-100 shadow-md border border-emerald-500/30"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              CAGR View
+            </button>
+          </div>
+        </div>
+
+        {/* Legend Summary */}
+        <div className="flex items-center justify-between flex-wrap gap-4 text-xs font-medium px-2">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="w-3.5 h-1.5 rounded-full bg-emerald-400 inline-block shadow-sm" />
+              <span className="text-slate-300 font-semibold">
+                My Investment {metric.toUpperCase()}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3.5 h-1.5 rounded-full bg-blue-400 inline-block shadow-sm border border-blue-500/40" />
+              <span className="text-slate-400">
+                Nifty 50 Benchmark {metric.toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <div className="text-slate-400 text-[11px]">
+            Data points:{" "}
+            <span className="text-slate-200 font-bold">
+              {comparisonRows.length} Financial Years
+            </span>
+          </div>
+        </div>
+
+        {/* Line Chart */}
+        <div className="h-84 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={chartData}
+              margin={{ top: 15, right: 25, left: 10, bottom: 30 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis
+                dataKey="fyLabel"
+                stroke="#64748b"
+                fontSize={11}
+                tickLine={false}
+                axisLine={{ stroke: "#334155" }}
+                height={45}
+                tick={{ dy: 2 }}
+              >
+                <Label
+                  value="Financial Year"
+                  position="insideBottom"
+                  offset={0}
+                  fill="#94a3b8"
+                  fontSize={11}
+                  fontWeight={700}
+                />
+              </XAxis>
+              <YAxis
+                stroke="#64748b"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(val) => `${Number(val).toFixed(0)}%`}
+                width={50}
+              >
+                <Label
+                  value={`${metric.toUpperCase()} Return Rate (%)`}
+                  angle={-90}
+                  position="insideLeft"
+                  style={{
+                    textAnchor: "middle",
+                    fill: "#94a3b8",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                />
+              </YAxis>
+              <Tooltip content={<CustomFyTrendTooltip metric={metric} />} />
+              <Line
+                type="linear"
+                dataKey="portfolio"
+                name={`My Investment ${metric.toUpperCase()}`}
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{
+                  r: 5,
+                  fill: "#10b981",
+                  stroke: "#0f172a",
+                  strokeWidth: 2,
+                }}
+                activeDot={{
+                  r: 7,
+                  fill: "#34d399",
+                  stroke: "#0f172a",
+                  strokeWidth: 2,
+                }}
+              />
+              <Line
+                type="linear"
+                dataKey="benchmark"
+                name={`Nifty 50 Benchmark ${metric.toUpperCase()}`}
+                stroke="#3b82f6"
+                strokeWidth={2.5}
+                strokeDasharray="5 5"
+                dot={{
+                  r: 4,
+                  fill: "#3b82f6",
+                  stroke: "#0f172a",
+                  strokeWidth: 2,
+                }}
+                activeDot={{
+                  r: 6,
+                  fill: "#60a5fa",
+                  stroke: "#0f172a",
+                  strokeWidth: 2,
+                }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* ─── Financial Year Movement & Asset Class Table ─── */}
