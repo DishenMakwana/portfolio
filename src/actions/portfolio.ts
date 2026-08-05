@@ -33,6 +33,7 @@ import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
 import { parseSipExcel } from "@/lib/sipParser";
 import { getBullionData } from "@/lib/bullionService";
 import { getAmcName, getSubCategory } from "@/helpers/allocation";
+import { getFyTrackerData } from "@/lib/insightsService";
 import { db } from "@/db/db";
 import {
   transactions as txTable,
@@ -946,6 +947,5 @@ export async function globalRefreshAction(): Promise<ActionResult> {
  * Fetch Financial Year Tracker data for selected FY or default
  */
 export async function getFyTrackerDataAction(selectedFyLabel?: string) {
-  const { getFyTrackerData } = await import("@/lib/insightsService");
   return getFyTrackerData(selectedFyLabel);
 }
