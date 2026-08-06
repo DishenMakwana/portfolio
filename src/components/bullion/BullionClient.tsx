@@ -1,7 +1,7 @@
 "use client";
 
 import { formatInr } from "@/helpers/formatters";
-import { getAdjustedBullionPrice } from "@/helpers/bullion";
+import { getAdjustedBullionPrice, CITIES } from "@/helpers/bullion";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -40,7 +40,6 @@ import {
   TIMEFRAMES,
   Timeframe,
 } from "@/types/bullion";
-import { CITIES } from "@/lib/bullionService";
 
 export default function BullionClient({
   initialRates,
@@ -212,7 +211,9 @@ export default function BullionClient({
     if (res.success && res.data) {
       setRates(res.data.rates);
       setChartDataState(res.data.chartData);
-      if (res.data.isThrottled) {
+      if (res.data.isStale) {
+        showToast("Live prices unavailable; showing saved prices");
+      } else if (res.data.isThrottled) {
         showToast("Prices are already up to date (refreshed recently)");
       } else {
         showToast("Prices refreshed successfully!");

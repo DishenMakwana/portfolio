@@ -95,3 +95,12 @@ export const TIMEFRAMES = {
 } as const;
 
 export type Timeframe = (typeof TIMEFRAMES)[keyof typeof TIMEFRAMES];
+
+export interface BullionHistoryDbRecord {
+  id?: number;
+  date: string;
+  timestamp: number;
+  goldPrice: number;
+  silverPrice: number;
+  platinumPrice: number;
+}
