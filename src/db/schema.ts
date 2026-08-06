@@ -599,3 +599,24 @@ export const benchmarkRules = mySchema.table("benchmark_rules", {
     .$onUpdate(() => new Date())
     .notNull(),
 });
+
+export const bullionHistory = mySchema.table(
+  "bullion_history",
+  {
+    id: serial("id").primaryKey(),
+    date: text("date").notNull(),
+    timestamp: doublePrecision("timestamp").notNull(),
+    goldPrice: doublePrecision("gold_price").notNull(),
+    silverPrice: doublePrecision("silver_price").notNull(),
+    platinumPrice: doublePrecision("platinum_price").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("bullion_history_date_uq").on(table.date),
+    index("bullion_history_date_idx").on(table.date),
+  ]
+);
