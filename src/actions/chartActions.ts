@@ -28,6 +28,9 @@ function timeframeToMonths(tf: FundTimeframe): number | null {
     case "5y":
       return 60;
     case "all":
+    case "invDate":
+    case "custom":
+    default:
       return null; // no limit
   }
 }

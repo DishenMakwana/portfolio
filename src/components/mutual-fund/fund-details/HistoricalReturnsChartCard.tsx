@@ -13,7 +13,15 @@ import {
   ReferenceDot,
   Label,
 } from "recharts";
-import { TrendingUp, AlertTriangle, Calendar, Layers } from "lucide-react";
+import {
+  TrendingUp,
+  AlertTriangle,
+  Calendar,
+  Layers,
+  Sparkles,
+  X,
+  Check,
+} from "lucide-react";
 import { formatNullableDate } from "@/helpers/formatters";
 import { parseToLocalMidnight } from "@/helpers/dates";
 import {
@@ -115,6 +123,88 @@ function CustomChartTooltip({
   );
 }
 
+const HighLabelBadge = (props: {
+  viewBox?: { x?: number; y?: number };
+  value?: string;
+}) => {
+  const { viewBox, value } = props;
+  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
+    return null;
+  const { x, y } = viewBox;
+
+  const isNearRightEdge = x > 620;
+  const rectX = isNearRightEdge ? -108 : -54;
+  const textX = isNearRightEdge ? -54 : 0;
+
+  return (
+    <g transform={`translate(${x}, ${y - 14})`}>
+      <rect
+        x={rectX}
+        y={-18}
+        width={108}
+        height={22}
+        rx={6}
+        fill="#047857"
+        stroke="#34d399"
+        strokeWidth={1.5}
+        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+      />
+      <text
+        x={textX}
+        y={-6}
+        fill="#ecfdf5"
+        fontSize={11}
+        fontWeight="800"
+        textAnchor="middle"
+        dominantBaseline="middle"
+      >
+        {value}
+      </text>
+    </g>
+  );
+};
+
+const LowLabelBadge = (props: {
+  viewBox?: { x?: number; y?: number };
+  value?: string;
+}) => {
+  const { viewBox, value } = props;
+  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
+    return null;
+  const { x, y } = viewBox;
+
+  const isNearRightEdge = x > 620;
+  const rectX = isNearRightEdge ? -100 : -50;
+  const textX = isNearRightEdge ? -50 : 0;
+
+  return (
+    <g transform={`translate(${x}, ${y + 14})`}>
+      <rect
+        x={rectX}
+        y={-4}
+        width={100}
+        height={22}
+        rx={6}
+        fill="#be123c"
+        stroke="#f43f5e"
+        strokeWidth={1.5}
+        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+      />
+      <text
+        x={textX}
+        y={8}
+        fill="#fff1f2"
+        fontSize={11}
+        fontWeight="800"
+        textAnchor="middle"
+        dominantBaseline="middle"
+      >
+        {value}
+      </text>
+    </g>
+  );
+};
+
 export default function HistoricalReturnsChartCard({
   holding,
   transactions,
@@ -132,6 +222,21 @@ export default function HistoricalReturnsChartCard({
   const [timeframe, setTimeframe] = useState<FundTimeframe>("1y");
   const [showHighLow, setShowHighLow] = useState<boolean>(false);
   const [isLoadingChart, setIsLoadingChart] = useState<boolean>(false);
+
+  // Custom Date Range filter states
+  const [customFromDate, setCustomFromDate] = useState<string>("");
+  const [customToDate, setCustomToDate] = useState<string>("");
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] =
+    useState<boolean>(false);
+
+  // Earliest transaction date for "Since 1st Tx" (Inv Date) filter
+  const earliestTxDateStr = useMemo(() => {
+    if (!transactions || transactions.length === 0) return null;
+    return transactions.reduce(
+      (earliest, tx) => (tx.date < earliest ? tx.date : earliest),
+      transactions[0].date
+    );
+  }, [transactions]);
 
   // Active chart data: starts with server-provided 1Y data
   const [activeChartData, setActiveChartData] =
@@ -217,6 +322,91 @@ export default function HistoricalReturnsChartCard({
     [transactions]
   );
 
+  // Helper: fetch full historical data if not in cache
+  const ensureAllDataFetched = useCallback(async (): Promise<
+    FactsheetChartPoint[]
+  > => {
+    const cachedAll = chartCache.current.get("all");
+    if (cachedAll) return cachedAll;
+
+    setIsLoadingChart(true);
+    try {
+      const result = await fetchChartData(
+        schemeCodeApi,
+        benchmarkCode,
+        holding.asOfDate || new Date().toISOString().split("T")[0],
+        "all",
+        mappedTxs,
+        holdingType,
+        source
+      );
+      chartCache.current.set("all", result.chartData);
+      return result.chartData;
+    } catch (err) {
+      console.error("Failed to fetch full chart data:", err);
+      return activeChartData;
+    } finally {
+      setIsLoadingChart(false);
+    }
+  }, [
+    schemeCodeApi,
+    benchmarkCode,
+    holding.asOfDate,
+    mappedTxs,
+    holdingType,
+    source,
+    activeChartData,
+  ]);
+
+  // Helper: slice full dataset by custom date range and re-index returns from 0% at start date
+  const sliceByDateRange = useCallback(
+    (
+      fullData: FactsheetChartPoint[],
+      fromDateStr: string,
+      toDateStr: string
+    ): FactsheetChartPoint[] => {
+      if (!fullData.length) return [];
+
+      const fromTime = parseToLocalMidnight(fromDateStr).getTime();
+      const toTime = parseToLocalMidnight(toDateStr).getTime() + 86400000;
+
+      const sliced = fullData.filter(
+        (pt) => pt.timestamp >= fromTime && pt.timestamp <= toTime
+      );
+
+      if (sliced.length < 2) return fullData;
+
+      // Re-index from 0% at start of custom range
+      const baseFundNav = sliced[0].fundNav;
+      const firstBenchPt = sliced.find(
+        (pt) =>
+          pt.benchNav !== null && pt.benchNav !== undefined && pt.benchNav > 0
+      );
+      const baseBenchNav = firstBenchPt ? firstBenchPt.benchNav : null;
+
+      return sliced.map((pt) => {
+        const fundReturn =
+          baseFundNav > 0
+            ? ((pt.fundNav - baseFundNav) / baseFundNav) * 100
+            : 0;
+
+        let benchReturn: number | null = null;
+        if (
+          baseBenchNav &&
+          baseBenchNav > 0 &&
+          pt.benchNav &&
+          firstBenchPt &&
+          pt.timestamp >= firstBenchPt.timestamp
+        ) {
+          benchReturn = ((pt.benchNav - baseBenchNav) / baseBenchNav) * 100;
+        }
+
+        return { ...pt, fundReturn, benchReturn };
+      });
+    },
+    []
+  );
+
   const handleTimeframeChange = useCallback(
     async (tf: FundTimeframe) => {
       setTimeframe(tf);
@@ -274,6 +464,44 @@ export default function HistoricalReturnsChartCard({
     ]
   );
 
+  // Handler for "Since 1st Tx" (Inv Date) filter button
+  const handleInvDateClick = useCallback(async () => {
+    if (!earliestTxDateStr) return;
+    const toDate = holding.asOfDate || new Date().toISOString().split("T")[0];
+    setTimeframe("invDate");
+    setCustomFromDate(earliestTxDateStr);
+    setCustomToDate(toDate);
+    setIsCustomDatePickerOpen(false);
+
+    const allData = await ensureAllDataFetched();
+    const sliced = sliceByDateRange(allData, earliestTxDateStr, toDate);
+    setActiveChartData(sliced);
+  }, [
+    earliestTxDateStr,
+    holding.asOfDate,
+    ensureAllDataFetched,
+    sliceByDateRange,
+  ]);
+
+  // Handler for applying Custom Date Range Filter
+  const handleApplyCustomRange = useCallback(
+    async (fromStr?: string, toStr?: string) => {
+      const targetFrom = fromStr || customFromDate;
+      const targetTo = toStr || customToDate;
+      if (!targetFrom || !targetTo) return;
+
+      setTimeframe("custom");
+      setCustomFromDate(targetFrom);
+      setCustomToDate(targetTo);
+      setIsCustomDatePickerOpen(false);
+
+      const allData = await ensureAllDataFetched();
+      const sliced = sliceByDateRange(allData, targetFrom, targetTo);
+      setActiveChartData(sliced);
+    },
+    [customFromDate, customToDate, ensureAllDataFetched, sliceByDateRange]
+  );
+
   // The active data is already pre-indexed by the server, so filteredChartData = activeChartData.
   // For the initial 1y render, the server data is used directly.
   const filteredChartData = activeChartData;
@@ -295,6 +523,30 @@ export default function HistoricalReturnsChartCard({
     }
 
     return { highPt, lowPt };
+  }, [filteredChartData]);
+
+  // Y-Axis domain with 15% top & bottom headroom padding so High/Low badges never get cut off
+  const yDomain = useMemo(() => {
+    if (!filteredChartData.length) return ["auto", "auto"];
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const pt of filteredChartData) {
+      if (pt.fundReturn < min) min = pt.fundReturn;
+      if (pt.fundReturn > max) max = pt.fundReturn;
+      if (pt.benchReturn !== null && pt.benchReturn !== undefined) {
+        if (pt.benchReturn < min) min = pt.benchReturn;
+        if (pt.benchReturn > max) max = pt.benchReturn;
+      }
+    }
+
+    if (!isFinite(min) || !isFinite(max)) return ["auto", "auto"];
+
+    const range = max - min || 10;
+    const padding = Math.max(range * 0.15, 5);
+
+    return [Math.floor(min - padding), Math.ceil(max + padding)];
   }, [filteredChartData]);
 
   // Adaptive X-Axis Ticks: Generate clean date ticks based on selected timeframe
@@ -475,19 +727,152 @@ export default function HistoricalReturnsChartCard({
             <span>Historical Returns Analysis (%)</span>
           </h3>
 
-          {/* Timeframe Filter Buttons & High/Low Toggle */}
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          {/* Timeframe Filter Buttons, Inv Date & Custom Date Range Filter */}
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap relative">
             <div className="flex items-center bg-slate-950/80 border border-slate-800/80 p-1 rounded-xl shadow-inner gap-1">
               {(["3m", "6m", "1y", "3y", "5y", "all"] as FundTimeframe[]).map(
                 (tf) => (
                   <button
                     key={tf}
-                    onClick={() => handleTimeframeChange(tf)}
+                    onClick={() => {
+                      setIsCustomDatePickerOpen(false);
+                      handleTimeframeChange(tf);
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${timeframe === tf ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105" : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"}`}
                   >
                     {tf}
                   </button>
                 )
+              )}
+
+              {/* Inv Date Button (Starts graph from 1st Tx to Current Date!) */}
+              {earliestTxDateStr && (
+                <button
+                  onClick={handleInvDateClick}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition duration-200 cursor-pointer flex items-center gap-1.5 ${timeframe === "invDate" ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/50 scale-105 font-black" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"}`}
+                  title={`Start graph from first transaction date (${earliestTxDateStr})`}
+                >
+                  <Sparkles size={12} className="animate-pulse" />
+                  <span>Since 1st Tx</span>
+                </button>
+              )}
+            </div>
+
+            {/* Custom Date Range Filter (Dribbble/Pinterest Inspired Glass Popover) */}
+            <div className="relative">
+              <button
+                onClick={() => setIsCustomDatePickerOpen((prev) => !prev)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${timeframe === "custom" || timeframe === "invDate" ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-teal-950/40" : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"}`}
+              >
+                <Calendar
+                  size={13}
+                  className={
+                    timeframe === "custom" || timeframe === "invDate"
+                      ? "text-teal-400"
+                      : ""
+                  }
+                />
+                <span>
+                  {timeframe === "custom" && customFromDate && customToDate
+                    ? `${customFromDate} - ${customToDate}`
+                    : timeframe === "invDate" && customFromDate
+                      ? `1st Tx (${customFromDate})`
+                      : "Custom Date"}
+                </span>
+              </button>
+
+              {/* Dribbble-style Popover */}
+              {isCustomDatePickerOpen && (
+                <div className="absolute right-0 top-full mt-2.5 z-50 bg-slate-900/95 border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl w-72 flex flex-col gap-3.5 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <span className="font-extrabold text-slate-100 flex items-center gap-1.5">
+                      <Calendar size={14} className="text-teal-400" />
+                      Custom Date Filter
+                    </span>
+                    <button
+                      onClick={() => setIsCustomDatePickerOpen(false)}
+                      className="text-slate-500 hover:text-slate-300 p-0.5 rounded-md hover:bg-slate-800/60 transition"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider block mb-1">
+                        From Date
+                      </label>
+                      <input
+                        type="date"
+                        value={customFromDate}
+                        onChange={(e) => setCustomFromDate(e.target.value)}
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-teal-500 transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider block mb-1">
+                        To Date
+                      </label>
+                      <input
+                        type="date"
+                        value={customToDate}
+                        onChange={(e) => setCustomToDate(e.target.value)}
+                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-teal-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="border-t border-slate-800/80 pt-2.5 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">
+                      Quick Presets
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {earliestTxDateStr && (
+                        <button
+                          onClick={() => {
+                            const todayStr =
+                              holding.asOfDate ||
+                              new Date().toISOString().split("T")[0];
+                            setCustomFromDate(earliestTxDateStr);
+                            setCustomToDate(todayStr);
+                            handleApplyCustomRange(earliestTxDateStr, todayStr);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 rounded-lg text-[11px] font-bold hover:bg-emerald-900/60 transition"
+                        >
+                          Since 1st Tx ({earliestTxDateStr})
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          const todayStr =
+                            holding.asOfDate ||
+                            new Date().toISOString().split("T")[0];
+                          const ytdStr = `${new Date().getFullYear()}-01-01`;
+                          setCustomFromDate(ytdStr);
+                          setCustomToDate(todayStr);
+                          handleApplyCustomRange(ytdStr, todayStr);
+                        }}
+                        className="px-2.5 py-1 bg-slate-800/60 text-slate-300 border border-slate-700/50 rounded-lg text-[11px] font-bold hover:bg-slate-700/60 transition"
+                      >
+                        YTD (Jan 1)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Apply Button */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                    <button
+                      onClick={() => handleApplyCustomRange()}
+                      disabled={!customFromDate || !customToDate}
+                      className="flex-1 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-950 font-black py-1.5 px-3 rounded-xl transition duration-200 text-xs shadow-md shadow-teal-950/40 flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Check size={13} />
+                      <span>Apply Range</span>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -595,6 +980,7 @@ export default function HistoricalReturnsChartCard({
                 />
               </XAxis>
               <YAxis
+                domain={yDomain}
                 width={60}
                 dx={-4}
                 stroke="#64748b"
@@ -651,7 +1037,7 @@ export default function HistoricalReturnsChartCard({
                   x={ep.timestamp}
                   stroke={ep.txType === "BUY" ? "#14b8a6" : "#f43f5e"}
                   strokeDasharray="3 3"
-                  opacity={0.4}
+                  opacity={0.3}
                 />
               ))}
               {entryPoints.map((ep, idx) => (
@@ -659,18 +1045,23 @@ export default function HistoricalReturnsChartCard({
                   key={`entry-dot-${idx}`}
                   x={ep.timestamp}
                   y={ep.fundReturn}
-                  r={6}
+                  r={entryPoints.length > 8 ? 3.5 : 5}
                   fill={ep.txType === "BUY" ? "#14b8a6" : "#f43f5e"}
                   stroke="#0f172a"
-                  strokeWidth={2}
-                  label={{
-                    value: ep.label,
-                    position: idx % 2 === 0 ? "top" : "bottom",
-                    fill: ep.txType === "BUY" ? "#34d399" : "#fb7185",
-                    fontSize: 10,
-                    fontWeight: "bold",
-                    offset: 10,
-                  }}
+                  strokeWidth={1.5}
+                  opacity={entryPoints.length > 8 ? 0.7 : 1}
+                  label={
+                    entryPoints.length <= 8
+                      ? {
+                          value: ep.label,
+                          position: idx % 2 === 0 ? "top" : "bottom",
+                          fill: ep.txType === "BUY" ? "#34d399" : "#fb7185",
+                          fontSize: 10,
+                          fontWeight: "bold",
+                          offset: 8,
+                        }
+                      : undefined
+                  }
                 />
               ))}
 
@@ -682,30 +1073,27 @@ export default function HistoricalReturnsChartCard({
                     stroke="#10b981"
                     strokeDasharray="3 3"
                     strokeWidth={1.5}
-                    opacity={0.5}
+                    opacity={0.6}
                   />
                   <ReferenceLine
                     y={periodHighLow.highPt.fundReturn}
                     stroke="#10b981"
                     strokeDasharray="3 3"
                     strokeWidth={1.5}
-                    opacity={0.5}
+                    opacity={0.6}
                   />
                   <ReferenceDot
                     x={periodHighLow.highPt.timestamp}
                     y={periodHighLow.highPt.fundReturn}
-                    r={7}
+                    r={8}
                     fill="#10b981"
-                    stroke="#0f172a"
+                    stroke="#022c22"
                     strokeWidth={2.5}
-                    label={{
-                      value: `High: +${periodHighLow.highPt.fundReturn.toFixed(1)}%`,
-                      position: "top",
-                      fill: "#34d399",
-                      fontSize: 11,
-                      fontWeight: "bold",
-                      offset: 12,
-                    }}
+                    label={
+                      <HighLabelBadge
+                        value={`High: +${periodHighLow.highPt.fundReturn.toFixed(1)}%`}
+                      />
+                    }
                   />
 
                   {/* Period Low Reference Lines */}
@@ -714,32 +1102,29 @@ export default function HistoricalReturnsChartCard({
                     stroke="#f43f5e"
                     strokeDasharray="3 3"
                     strokeWidth={1.5}
-                    opacity={0.5}
+                    opacity={0.6}
                   />
                   <ReferenceLine
                     y={periodHighLow.lowPt.fundReturn}
                     stroke="#f43f5e"
                     strokeDasharray="3 3"
                     strokeWidth={1.5}
-                    opacity={0.5}
+                    opacity={0.6}
                   />
                   {periodHighLow.lowPt.timestamp !==
                     periodHighLow.highPt.timestamp && (
                     <ReferenceDot
                       x={periodHighLow.lowPt.timestamp}
                       y={periodHighLow.lowPt.fundReturn}
-                      r={7}
+                      r={8}
                       fill="#f43f5e"
-                      stroke="#0f172a"
+                      stroke="#4c0519"
                       strokeWidth={2.5}
-                      label={{
-                        value: `Low: ${periodHighLow.lowPt.fundReturn >= 0 ? "+" : ""}${periodHighLow.lowPt.fundReturn.toFixed(1)}%`,
-                        position: "bottom",
-                        fill: "#fb7185",
-                        fontSize: 11,
-                        fontWeight: "bold",
-                        offset: 12,
-                      }}
+                      label={
+                        <LowLabelBadge
+                          value={`Low: ${periodHighLow.lowPt.fundReturn >= 0 ? "+" : ""}${periodHighLow.lowPt.fundReturn.toFixed(1)}%`}
+                        />
+                      }
                     />
                   )}
                 </>

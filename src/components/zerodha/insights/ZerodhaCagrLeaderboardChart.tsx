@@ -111,7 +111,7 @@ export default function ZerodhaCagrLeaderboardChart({
           fill="#f59e0b"
           fontWeight="bold"
         >
-          Nifty {benchmark.toFixed(1)}%
+          Nifty {benchmark.toFixed(2)}%
         </text>
 
         {/* Bars */}
@@ -179,7 +179,7 @@ export default function ZerodhaCagrLeaderboardChart({
                     : "opacity-100"
                 }`}
               >
-                {m.cagr.toFixed(1)}%
+                {m.cagr.toFixed(2)}%
               </text>
               <text
                 x={x + barW / 2}
