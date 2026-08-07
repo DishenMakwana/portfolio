@@ -468,6 +468,10 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   }, [data.schemes, filterCategory, sort]);
 
   const niftyBenchmark = data.benchmarkReturns.cagr3Y ?? 12;
+  // For the Members leaderboard CAGR filter: point-to-point Nifty CAGR from
+  // the family's first investment date to today (not a fixed 3Y window).
+  const membersBenchmarkCagr =
+    data.totals.benchmarkCagrSinceInception ?? niftyBenchmark;
 
   const top5Schemes = useMemo(
     () =>
@@ -747,7 +751,8 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
           {activeTab === "members" && (
             <MembersTab
               memberCagrs={data.memberCagrs}
-              niftyBenchmark={niftyBenchmark}
+              niftyBenchmark={membersBenchmarkCagr}
+              benchmarkXirr={benchmarkXirr}
             />
           )}
 

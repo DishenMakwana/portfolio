@@ -43,6 +43,7 @@ export interface InsightsData {
     memberCount: number;
     portfolioXirr: number;
     benchmarkXirr: number;
+    benchmarkCagrSinceInception: number;
     alpha: number;
   };
   memberCagrs: Array<{ memberName: string; cagr: number }>;
@@ -152,6 +153,8 @@ export interface FyMultiYearComparisonRow {
   absReturn: number;
   xirr: number;
   cagr: number;
+  benchmarkXirr: number;
+  benchmarkCagr: number;
 }
 
 export interface FyTrackerData {
@@ -298,6 +301,7 @@ export interface SipPlannerTabProps {
 export interface MembersTabProps {
   memberCagrs: MemberCagrPoint[];
   niftyBenchmark: number;
+  benchmarkXirr: number;
 }
 
 export interface SchemeItem {
@@ -387,6 +391,11 @@ export interface DonutChartProps {
 export interface MemberCagrPoint {
   memberName: string;
   cagr: number;
+  xirr?: number;
+  absReturn?: number;
+  invested?: number;
+  currentValue?: number;
+  gain?: number;
 }
 
 export interface MembersBarChartProps {
