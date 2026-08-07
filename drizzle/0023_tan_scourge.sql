@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio"."zerodha_transactions" ADD COLUMN "stamp_duty" double precision DEFAULT 0;

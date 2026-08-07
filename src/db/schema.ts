@@ -402,6 +402,7 @@ export const zerodhaTransactions = mySchema.table(
     units: doublePrecision("units").notNull(),
     nav: doublePrecision("nav").notNull(),
     amount: doublePrecision("amount").notNull(),
+    stampDuty: doublePrecision("stamp_duty").default(0),
     broker: text("broker"),
     assetType: text("asset_type").default("mutual_fund"),
     uploadedAt: text("uploaded_at").notNull(),
