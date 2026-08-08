@@ -19,6 +19,7 @@ import {
 import { eq, and, lte, desc, inArray } from "drizzle-orm";
 import {
   calculateAlpha,
+  isBuyTransactionType,
   getSchemeHistoryForDbCode,
   getBenchmarkHistory,
   calculateVolatilityMeasures,
@@ -44,11 +45,18 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   const { id } = await params;
   const isMsfl = id.startsWith("msfl_");
   const isZerodha = id.startsWith("z_");
-  const holdingId = isMsfl
-    ? parseInt(id.substring(5), 10)
+  const isSold = id.startsWith("sold_");
+  const isNegative = id.startsWith("-");
+  const rawId = isMsfl
+    ? id.substring(5)
     : isZerodha
-      ? parseInt(id.substring(2), 10)
-      : parseInt(id, 10);
+      ? id.substring(2)
+      : isSold
+        ? id.substring(5).replace(/^-/, "")
+        : isNegative
+          ? id.substring(1)
+          : id;
+  const holdingId = Math.abs(parseInt(rawId, 10));
 
   if (isNaN(holdingId)) {
     notFound();
@@ -234,6 +242,124 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       )
       .where(eq(holdingsSnapshot.id, holdingId))
       .then((res) => res[0]);
+
+    if (!holding) {
+      const targetTx = await db.query.transactions.findFirst({
+        where: eq(transactions.id, Math.abs(holdingId)),
+      });
+
+      if (targetTx) {
+        const [scheme, member, latestReport] = await Promise.all([
+          targetTx.schemeId
+            ? db.query.schemes.findFirst({
+                where: eq(schemes.id, targetTx.schemeId),
+              })
+            : Promise.resolve(null),
+          targetTx.memberId
+            ? db.query.familyMembers.findFirst({
+                where: eq(familyMembers.id, targetTx.memberId),
+              })
+            : null,
+          db.query.reports.findFirst({
+            orderBy: [desc(reports.asOfDate)],
+          }),
+        ]);
+
+        if (scheme && latestReport) {
+          const navMeta = scheme.schemeCodeApi
+            ? await db.query.schemeNavCacheMeta.findFirst({
+                where: eq(schemeNavCacheMeta.schemeCode, scheme.schemeCodeApi),
+              })
+            : null;
+
+          holding = {
+            id: holdingId,
+            schemeId: scheme.id,
+            memberId: member ? member.id : null,
+            schemeName: scheme.name,
+            category: scheme.category,
+            schemeCodeApi: scheme.schemeCodeApi,
+            isin: navMeta?.isinGrowth || null,
+            folioNo: targetTx.folioNo || "",
+            balanceUnits: 0,
+            purchaseNav: 0,
+            purchaseValue: 0,
+            currentNav: 0,
+            currentValue: 0,
+            dividend: 0,
+            gain: 0,
+            holdingDays: 0,
+            absoluteReturn: 0,
+            cagr: 0,
+            comments: null,
+            memberName: member ? member.name : "Family Member",
+            memberPan: member ? member.pan : null,
+            asOfDate: latestReport.asOfDate,
+            reportId: latestReport.id,
+          };
+        }
+      } else {
+        // Fallback: Check if holdingId is a direct scheme ID (e.g. /fund/sold_13 or /fund/sold_22)
+        const targetScheme = await db.query.schemes.findFirst({
+          where: eq(schemes.id, Math.abs(holdingId)),
+        });
+
+        if (targetScheme) {
+          const tx = await db.query.transactions.findFirst({
+            where: eq(transactions.schemeId, targetScheme.id),
+            orderBy: [desc(transactions.date)],
+          });
+
+          const member =
+            tx && tx.memberId
+              ? await db.query.familyMembers.findFirst({
+                  where: eq(familyMembers.id, tx.memberId),
+                })
+              : null;
+
+          const latestReport = await db.query.reports.findFirst({
+            orderBy: [desc(reports.asOfDate)],
+          });
+
+          if (latestReport) {
+            const navMeta = targetScheme.schemeCodeApi
+              ? await db.query.schemeNavCacheMeta.findFirst({
+                  where: eq(
+                    schemeNavCacheMeta.schemeCode,
+                    targetScheme.schemeCodeApi
+                  ),
+                })
+              : null;
+
+            holding = {
+              id: holdingId,
+              schemeId: targetScheme.id,
+              memberId: member ? member.id : null,
+              schemeName: targetScheme.name,
+              category: targetScheme.category,
+              schemeCodeApi: targetScheme.schemeCodeApi,
+              isin: navMeta?.isinGrowth || null,
+              folioNo: tx?.folioNo || "",
+              balanceUnits: 0,
+              purchaseNav: 0,
+              purchaseValue: 0,
+              currentNav: 0,
+              currentValue: 0,
+              dividend: 0,
+              gain: 0,
+              holdingDays: 0,
+              absoluteReturn: 0,
+              cagr: 0,
+              comments: null,
+              memberName: member ? member.name : "Family Member",
+              memberPan: member ? member.pan : null,
+              asOfDate: latestReport.asOfDate,
+              reportId: latestReport.id,
+            };
+          }
+        }
+      }
+    }
   }
 
   if (!holding || !holding.asOfDate) {
@@ -275,6 +401,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           units: zerodhaTransactions.units,
           nav: zerodhaTransactions.nav,
           amount: zerodhaTransactions.amount,
+          stampDuty: zerodhaTransactions.stampDuty,
           assetType: zerodhaTransactions.assetType,
           broker: zerodhaTransactions.broker,
         })
@@ -294,31 +421,51 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       ? Promise.resolve([])
       : isZerodha
         ? zTxsPromise
-        : !holding.schemeId || !holding.memberId
+        : !holding.schemeId || !holding.memberId || !holding.asOfDate
           ? Promise.resolve([])
-          : db
-              .select({
-                id: transactions.id,
-                memberId: transactions.memberId,
-                schemeId: transactions.schemeId,
-                folioNo: transactions.folioNo,
-                date: transactions.date,
-                type: transactions.type,
-                units: transactions.units,
-                nav: transactions.nav,
-                amount: transactions.amount,
-                stampDuty: transactions.stampDuty,
-              })
-              .from(transactions)
-              .where(
-                and(
-                  eq(transactions.schemeId, holding.schemeId),
-                  eq(transactions.memberId, holding.memberId),
-                  eq(transactions.folioNo, holding.folioNo || ""),
-                  lte(transactions.date, holding.asOfDate)
+          : (async () => {
+              const schemeId = holding.schemeId!;
+              const memberId = holding.memberId!;
+              const asOfDate = holding.asOfDate!;
+              const allSchemeTxs = await db
+                .select({
+                  id: transactions.id,
+                  memberId: transactions.memberId,
+                  schemeId: transactions.schemeId,
+                  folioNo: transactions.folioNo,
+                  date: transactions.date,
+                  type: transactions.type,
+                  transactionType: transactions.transactionType,
+                  units: transactions.units,
+                  nav: transactions.nav,
+                  amount: transactions.amount,
+                  stampDuty: transactions.stampDuty,
+                })
+                .from(transactions)
+                .where(
+                  and(
+                    eq(transactions.schemeId, schemeId),
+                    eq(transactions.memberId, memberId),
+                    lte(transactions.date, asOfDate)
+                  )
                 )
-              )
-              .orderBy(desc(transactions.date), desc(transactions.id)),
+                .orderBy(desc(transactions.date), desc(transactions.id));
+
+              let filteredTxs = holding.folioNo
+                ? allSchemeTxs.filter(
+                    (tx) =>
+                      !tx.folioNo ||
+                      tx.folioNo === holding.folioNo ||
+                      holding.folioNo!.includes(tx.folioNo)
+                  )
+                : allSchemeTxs;
+
+              if (filteredTxs.length === 0) {
+                filteredTxs = allSchemeTxs;
+              }
+
+              return filteredTxs;
+            })(),
     holding.schemeCodeApi
       ? isMsfl
         ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
@@ -334,7 +481,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   // 3. Format transactions for XIRR/Alpha calculation
   // For Zerodha or MSFL holdings where no BUY transaction exists (e.g., IPO Allotments),
   // generate a synthetic BUY transaction from average purchase price and quantity.
-  const hasBuyTx = fundTxs.some((tx: any) => tx.type === "BUY");
+  const hasBuyTx = fundTxs.some((tx: any) => isBuyTransactionType(tx.type));
   if ((isZerodha || isMsfl) && !hasBuyTx && holding.purchaseNav > 0) {
     let ipoDate = holding.asOfDate;
     if (fundDetails?.data && fundDetails.data.length > 0) {
@@ -368,6 +515,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       units: ipoUnits,
       nav: holding.purchaseNav,
       amount: ipoAmount,
+      stampDuty: 0,
       broker: isZerodha ? "Zerodha (IPO Allotment)" : "MSFL (IPO Allotment)",
       assetType: holding.holdingType || "equity",
       uploadedAt: new Date().toISOString(),
@@ -378,11 +526,13 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     (tx: {
       date: string;
       type: string;
+      transactionType?: string | null;
       amount: number;
       units: number | null;
     }) => ({
       date: tx.date,
       type: tx.type as "BUY" | "SELL",
+      transactionType: tx.transactionType || tx.type,
       amount: tx.amount,
       units: tx.units ?? undefined,
     })
@@ -534,6 +684,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       : {
           alpha: metrics.alpha,
           sharpe: 0,
+          sortino: 0,
           mean: 0,
           beta: 1.0,
           stdDev: 0,

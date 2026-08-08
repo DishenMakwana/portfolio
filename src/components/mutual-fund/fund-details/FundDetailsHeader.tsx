@@ -37,35 +37,36 @@ export default function FundDetailsHeader({
               </span>
             )}
           </div>
-          <div className="text-slate-400 mt-1.5 text-xs sm:text-sm font-medium flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <span>
+          <div className="text-slate-400 mt-1.5 text-xs sm:text-sm font-medium space-y-1">
+            <div>
               Holder:{" "}
               <strong className="text-slate-300">
                 {holding.memberName || "Unknown Holder"}
               </strong>
-            </span>
-            {!isStock && holding.folioNo && (
-              <>
-                <span className="text-slate-700 font-extrabold">•</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {!isStock && holding.folioNo && (
                 <span>
                   Folio:{" "}
                   <span className="text-slate-300 font-bold">
                     {holding.folioNo}
                   </span>
                 </span>
-              </>
-            )}
-            {holding.isin && (
-              <>
-                <span className="text-slate-700 font-extrabold">•</span>
-                <span>
-                  ISIN:{" "}
-                  <span className="text-slate-300 font-bold">
-                    {holding.isin}
+              )}
+              {holding.isin && (
+                <>
+                  {!isStock && holding.folioNo && (
+                    <span className="text-slate-700 font-extrabold">•</span>
+                  )}
+                  <span>
+                    ISIN:{" "}
+                    <span className="text-slate-300 font-bold">
+                      {holding.isin}
+                    </span>
                   </span>
-                </span>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

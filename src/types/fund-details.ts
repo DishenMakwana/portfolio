@@ -106,7 +106,8 @@ export interface EntryPointMarker {
   txType: "BUY" | "SELL";
 }
 
-export type FundTimeframe = "3m" | "6m" | "1y" | "3y" | "5y" | "all";
+export type FundTimeframe =
+  "3m" | "6m" | "1y" | "3y" | "5y" | "all" | "invDate" | "custom";
 
 export interface FundDetailsHeaderProps {
   holding: HoldingDetails;

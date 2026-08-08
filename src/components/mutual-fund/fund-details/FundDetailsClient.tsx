@@ -55,6 +55,7 @@ export default function FundDetailsClient({
   const currentVolatilityStats = volatilityStats || {
     alpha: metrics.alpha,
     sharpe: 0,
+    sortino: 0,
     beta: 1.0,
     stdDev: 0,
     mean: 0,

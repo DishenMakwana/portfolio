@@ -6,7 +6,6 @@ import {
   Layers,
   PieChart,
   Activity,
-  Info,
   HelpCircle,
   ChevronUp,
   ChevronDown,
@@ -392,129 +391,94 @@ export default function FactsheetPanels({
           </div>
         )}
 
-        {/* PANEL 3: VOLATILITY MEASURES */}
+        {/* PANEL 3: ADVANCED RATIOS */}
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-300 backdrop-blur-sm">
           <div>
-            <h3 className="text-base font-black text-slate-100 mb-5 tracking-tight flex items-center gap-2 border-b border-slate-850 pb-3">
-              <Activity size={18} className="text-teal-400" />
-              <span>Volatility Measures</span>
+            <h3 className="text-base font-black text-slate-100 mb-5 tracking-tight flex items-center justify-between border-b border-slate-850 pb-3">
+              <div className="flex items-center gap-2">
+                <Activity size={18} className="text-teal-400" />
+                <span>Advanced Ratios</span>
+              </div>
             </h3>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Alpha
-                  <span title="Outperformance over index return">
-                    <Info size={10} className="text-slate-600" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6 relative">
+              {/* Left Column: Valuation & Outperformance */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    P/E Ratio
                   </span>
-                </span>
-                <span
-                  className={`text-base font-black block mt-1 ${currentVolatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {currentVolatilityStats.alpha.toFixed(2)}%
-                </span>
-              </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Sharpe Ratio
-                  <span title="Risk-adjusted outperformance return">
-                    <Info size={10} className="text-slate-600" />
+                  <span className="text-sm font-black text-slate-100">
+                    {currentVolatilityStats.peRatio !== undefined
+                      ? currentVolatilityStats.peRatio.toFixed(2)
+                      : "--"}
                   </span>
-                </span>
-                <span className="text-base font-black text-teal-400 block mt-1">
-                  {currentVolatilityStats.sharpe.toFixed(2)}
-                </span>
-              </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Mean Return
-                  <span title="Average annualized return rate">
-                    <Info size={10} className="text-slate-600" />
+                </div>
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    P/B Ratio
                   </span>
-                </span>
-                <span className="text-base font-black text-slate-200 block mt-1">
-                  {currentVolatilityStats.mean.toFixed(2)}%
-                </span>
-              </div>
-              <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Beta
-                  <span title="Market sensitivity volatility ratio">
-                    <Info size={10} className="text-slate-600" />
+                  <span className="text-sm font-black text-slate-100">
+                    {currentVolatilityStats.pbRatio !== undefined
+                      ? currentVolatilityStats.pbRatio.toFixed(2)
+                      : "--"}
                   </span>
-                </span>
-                <span className="text-base font-black text-indigo-400 block mt-1">
-                  {currentVolatilityStats.beta.toFixed(2)}
-                </span>
-              </div>
-              <div
-                className={`bg-slate-950/40 p-3 border border-slate-850 rounded-xl ${!isDebt ? "col-span-2" : ""}`}
-              >
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                  Std. Deviation
-                  <span title="Overall historical return volatility">
-                    <Info size={10} className="text-slate-600" />
+                </div>
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    Alpha
                   </span>
-                </span>
-                <span className="text-base font-black text-slate-200 block mt-1">
-                  {currentVolatilityStats.stdDev.toFixed(2)}%
-                </span>
+                  <span
+                    className={`text-sm font-black ${currentVolatilityStats.alpha >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {currentVolatilityStats.alpha.toFixed(2)}
+                  </span>
+                </div>
               </div>
-              {isDebt && (
-                <>
-                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                      YTM (Debt)
-                      <span title="Yield to maturity (only for Debt)">
-                        <Info size={10} className="text-slate-600" />
-                      </span>
-                    </span>
-                    <span className="text-base font-black text-slate-400 block mt-1">
-                      {currentVolatilityStats.ytm > 0
-                        ? `${currentVolatilityStats.ytm.toFixed(2)}%`
-                        : "0.0%"}
-                    </span>
-                  </div>
-                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl">
-                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1">
-                      Mod. Duration
-                      <span title="Debt yield sensitivity time frame">
-                        <Info size={10} className="text-slate-600" />
-                      </span>
-                    </span>
-                    <span className="text-base font-black text-slate-400 block mt-1">
-                      {currentVolatilityStats.modifiedDuration > 0
-                        ? `${currentVolatilityStats.modifiedDuration.toFixed(2)} Yr`
-                        : "0.0"}
-                    </span>
-                  </div>
-                  <div className="bg-slate-950/40 p-3 border border-slate-850 rounded-xl col-span-2">
-                    <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider flex items-center gap-1 justify-center">
-                      Avg Maturity
-                      <span title="Average holding debt maturity period">
-                        <Info size={10} className="text-slate-600" />
-                      </span>
-                    </span>
-                    <span className="text-base font-black text-slate-400 block mt-1 text-center">
-                      {currentVolatilityStats.avgMaturity > 0
-                        ? `${currentVolatilityStats.avgMaturity.toFixed(2)} Yr`
-                        : "0.0"}
-                    </span>
-                  </div>
-                </>
-              )}
+
+              {/* Middle vertical divider */}
+              <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-800/80 -translate-x-1/2" />
+
+              {/* Right Column: Risk & Volatility Ratios */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    Beta
+                  </span>
+                  <span className="text-sm font-black text-indigo-400">
+                    {currentVolatilityStats.beta.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    Sharpe
+                  </span>
+                  <span className="text-sm font-black text-teal-400">
+                    {(currentVolatilityStats.sharpe ?? 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center bg-slate-950/40 px-3.5 py-2.5 border border-slate-850 rounded-xl">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider">
+                    Sortino
+                  </span>
+                  <span className="text-sm font-black text-emerald-400">
+                    {(currentVolatilityStats.sortino ?? 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-500 border-t border-slate-850 pt-4 mt-6 leading-relaxed">
-            Note: Volatility metrics are calculated weekly over a rolling 2-year
-            period against the {factsheetMeta.profile.benchmarkName}.
+          <div className="text-[10px] text-slate-500 border-t border-slate-850 pt-4 mt-5 leading-relaxed">
+            Note: Advanced ratios include price valuation metrics and rolling
+            2-year risk-adjusted return ratios calculated against{" "}
+            {factsheetMeta.profile.benchmarkName}.
           </div>
         </div>
       </div>
 
-      {/* EDUCATIONAL METRIC EXPLANATIONS */}
-      <div className="bg-slate-900/40 border border-slate-850/60 rounded-2xl overflow-hidden shadow-lg">
+      {/* EDUCATIONAL METRIC EXPLANATIONS & ADVANCED RATIO FORMULAS */}
+      <div className="bg-slate-900/40 border border-slate-850/60 rounded-2xl overflow-hidden shadow-lg mt-6">
         <button
           onClick={() => setShowExplanation(!showExplanation)}
           className="w-full p-5 flex justify-between items-center text-left hover:bg-slate-900/60 transition cursor-pointer select-none"
@@ -522,7 +486,7 @@ export default function FactsheetPanels({
           <div className="flex items-center gap-2.5">
             <HelpCircle size={20} className="text-teal-400" />
             <h4 className="text-sm font-black text-slate-200 tracking-tight">
-              Understanding Volatility and Factsheet Metrics
+              Understanding Volatility and Advanced Ratio Metrics
             </h4>
           </div>
           {showExplanation ? (
@@ -556,7 +520,7 @@ export default function FactsheetPanels({
                     after accounting for risk.
                   </p>
                   <p className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Where: Rₚ = Portfolio XIRR, R_f = Risk-free rate (6.0%), R_m
+                    Where: Rₚ = Portfolio XIRR, R_f = Risk-free rate (6.5%), R_m
                     = Benchmark return, β = Beta
                   </p>
                 </div>
@@ -567,16 +531,11 @@ export default function FactsheetPanels({
                 <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
                   <span className="font-bold text-slate-200">Sharpe Ratio</span>
                   <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                    Risk-Adjusted Return
+                    Total Risk-Adjusted Return
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-teal-400 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
-                  <span>Sharpe =</span>
-                  <div className="flex items-center gap-2">
-                    <span>( Rₚ - R_f )</span>
-                    <span className="text-slate-500">/</span>
-                    <span>σₚ</span>
-                  </div>
+                  <span>Sharpe = ( Rₚ - R_f ) / σₚ</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
                   <p>
@@ -585,8 +544,35 @@ export default function FactsheetPanels({
                     ratio indicates better investment efficiency.
                   </p>
                   <p className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Where: Rₚ = Portfolio Return, R_f = Risk-free rate (6.0%),
+                    Where: Rₚ = Portfolio Return, R_f = Risk-free rate (6.5%),
                     σₚ = Annualized Standard Deviation
+                  </p>
+                </div>
+              </div>
+
+              {/* Sortino Ratio */}
+              <div className="bg-slate-950/50 p-4 border border-slate-850/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
+                  <span className="font-bold text-slate-200">
+                    Sortino Ratio
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
+                    Downside Risk-Adjusted Return
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-emerald-400 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
+                  <span>Sortino = ( Rₚ - R_f ) / σ_downside</span>
+                </div>
+                <div className="text-slate-400 text-xs leading-relaxed space-y-1">
+                  <p>
+                    Measures excess return per unit of harmful downside risk
+                    only. Unlike Sharpe, Sortino ignores positive upside
+                    volatility and only penalizes negative return swings below
+                    the risk-free rate.
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                    Where: Rₚ = Portfolio Return, R_f = Risk-free rate (6.5%),
+                    σ_downside = Annualized Downside Deviation
                   </p>
                 </div>
               </div>
@@ -622,7 +608,7 @@ export default function FactsheetPanels({
                     Standard Deviation (σ)
                   </span>
                   <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                    Total Risk
+                    Total Volatility
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-200 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
@@ -641,30 +627,34 @@ export default function FactsheetPanels({
                 </div>
               </div>
 
-              {/* Mean Return */}
+              {/* Valuation Ratios (P/E & P/B) */}
               <div className="bg-slate-950/50 p-4 border border-slate-850/80 rounded-xl space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
-                  <span className="font-bold text-slate-200">Mean Return</span>
+                  <span className="font-bold text-slate-200">
+                    P/E & P/B Ratios
+                  </span>
                   <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">
-                    Average Return
+                    Fund Valuation
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-200 text-sm bg-slate-950/80 p-2.5 rounded-lg border border-slate-900/60 justify-center">
-                  <span>Mean Return = R̄ × 52</span>
+                  <span>P/E = Σ ( w_i × PE_i ), P/B = Σ ( w_i × PB_i )</span>
                 </div>
                 <div className="text-slate-400 text-xs leading-relaxed space-y-1">
                   <p>
-                    The annualized average return of the mutual fund over the
-                    calculated rolling period, computed as average weekly
-                    returns multiplied by 52 weeks.
+                    Weighted average Price-to-Earnings and Price-to-Book
+                    multipliers of underlying equity stocks. Indicates whether
+                    the fund follows a Growth (higher PE/PB) or Value (lower
+                    PE/PB) investment strategy.
                   </p>
                   <p className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Where: R̄ = Average weekly return
+                    Where: w_i = Stock weight, PE_i / PB_i = Stock valuation
+                    multiple
                   </p>
                 </div>
               </div>
 
-              {/* Debt Metrics */}
+              {/* Debt Metrics (YTM / Duration / Maturity) */}
               {isDebt && (
                 <div className="bg-slate-950/50 p-4 border border-slate-850/80 rounded-xl space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-850/60 pb-2">
@@ -1008,24 +998,33 @@ export default function FactsheetPanels({
         })()}
 
         {/* Card 5: CAS Purchase Value (Final Total Card) */}
-        <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
-          <div className="flex items-center justify-between gap-1.5 h-8">
-            <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
-              CAS Purchase Val
-            </span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-inner">
-              <Scale size={15} />
+        {(() => {
+          const isFullySold = (holding.balanceUnits ?? 0) <= 0.0001;
+          return (
+            <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden flex flex-col justify-between hover:border-slate-700/80 transition-all duration-200">
+              <div className="flex items-center justify-between gap-1.5 h-8">
+                <span className="text-[10px] xl:text-[11px] font-extrabold uppercase tracking-wider text-slate-400 whitespace-nowrap">
+                  CAS Purchase Val
+                </span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 shadow-inner">
+                  <Scale size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-400 tracking-tight whitespace-nowrap">
+                  {formatCurrency(
+                    isFullySold ? 0 : txSummary.finalTotalValuation
+                  )}
+                </div>
+                <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
+                  {isFullySold
+                    ? "Fully Redeemed (0 Active Units)"
+                    : "Buy - Sell + Gains + Tax"}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-sm sm:text-base lg:text-lg font-black text-emerald-400 tracking-tight whitespace-nowrap">
-              {formatCurrency(txSummary.finalTotalValuation)}
-            </div>
-            <div className="text-[10px] xl:text-[11px] text-slate-400/80 mt-1 font-medium whitespace-nowrap">
-              Buy - Sell + Gains + Tax
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* TRANSACTION HISTORY SECTION */}

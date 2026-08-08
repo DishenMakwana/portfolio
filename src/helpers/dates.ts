@@ -112,3 +112,152 @@ export function parseToLocalMidnight(dateStr: string): Date {
 export function parseHistoryDate(dateStr: string): Date {
   return parseToLocalMidnight(dateStr);
 }
+
+/**
+ * Checks if a transaction date string falls within [startDate, endDate] inclusive.
+ * Handles YYYY-MM-DD, DD-MM-YYYY, or ISO date strings.
+ */
+export function isDateInRange(
+  dateStr: string,
+  startDateStr: string,
+  endDateStr: string
+): boolean {
+  if (!dateStr) return false;
+  if (!startDateStr && !endDateStr) return true;
+
+  const txTime = parseToLocalMidnight(dateStr).getTime();
+  if (isNaN(txTime) || txTime === 0) return false;
+
+  if (startDateStr) {
+    const startTime = parseToLocalMidnight(startDateStr).getTime();
+    if (!isNaN(startTime) && startTime > 0 && txTime < startTime) {
+      return false;
+    }
+  }
+
+  if (endDateStr) {
+    const endTime = parseToLocalMidnight(endDateStr).getTime();
+    if (!isNaN(endTime) && endTime > 0 && txTime > endTime) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Returns preset start and end date YYYY-MM-DD strings for common date range filters.
+ */
+export function getPresetDateRange(preset: string): {
+  start: string;
+  end: string;
+} {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+
+  const formatDateStr = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  switch (preset) {
+    case "today": {
+      return { start: formatDateStr(now), end: formatDateStr(now) };
+    }
+    case "yesterday": {
+      const yest = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      return { start: formatDateStr(yest), end: formatDateStr(yest) };
+    }
+    case "last-7": {
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return { start: formatDateStr(start), end: formatDateStr(now) };
+    }
+    case "this-month": {
+      const start = new Date(y, m, 1);
+      const end = new Date(y, m + 1, 0);
+      return { start: formatDateStr(start), end: formatDateStr(end) };
+    }
+    case "last-month": {
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0);
+      return { start: formatDateStr(start), end: formatDateStr(end) };
+    }
+    case "last-30": {
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return { start: formatDateStr(start), end: formatDateStr(now) };
+    }
+    case "last-90": {
+      const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      return { start: formatDateStr(start), end: formatDateStr(now) };
+    }
+    case "this-quarter": {
+      const qMonth = Math.floor(m / 3) * 3;
+      const start = new Date(y, qMonth, 1);
+      const end = new Date(y, qMonth + 3, 0);
+      return { start: formatDateStr(start), end: formatDateStr(end) };
+    }
+    case "this-fy": {
+      const startYear = m >= 3 ? y : y - 1;
+      const start = new Date(startYear, 3, 1);
+      const end = new Date(startYear + 1, 2, 31);
+      return { start: formatDateStr(start), end: formatDateStr(end) };
+    }
+    case "last-fy": {
+      const startYear = m >= 3 ? y - 1 : y - 2;
+      const start = new Date(startYear, 3, 1);
+      const end = new Date(startYear + 1, 2, 31);
+      return { start: formatDateStr(start), end: formatDateStr(end) };
+    }
+    default:
+      return { start: "", end: "" };
+  }
+}
+
+/**
+ * Calculates holding duration (total days and formatted years/months/days label like "4m 21d" or "1y 2m").
+ */
+export function formatHoldingDuration(
+  startDateStr: string | null | undefined,
+  endDateStr?: string
+): { days: number; label: string } | null {
+  if (!startDateStr) return null;
+  const start = parseToLocalMidnight(startDateStr);
+  if (isNaN(start.getTime()) || start.getTime() === 0) return null;
+
+  const end = endDateStr ? parseToLocalMidnight(endDateStr) : new Date();
+  const diffTime = end.getTime() - start.getTime();
+  if (diffTime < 0) return { days: 0, label: "0d" };
+
+  const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonthLastDay = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      0
+    ).getDate();
+    days += prevMonthLastDay;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years}y`);
+  if (months > 0) parts.push(`${months}m`);
+  if (days > 0 || parts.length === 0) parts.push(`${days}d`);
+
+  return {
+    days: totalDays,
+    label: parts.join(" "),
+  };
+}

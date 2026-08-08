@@ -11,12 +11,13 @@ import { parseHistoryDate } from "./dates";
  * Example: 1234567 → "₹12,34,567"
  */
 export function formatCurrency(val: number, decimals = 2): string {
+  const safeVal = Math.abs(val || 0) < 0.005 ? 0 : val;
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(val);
+  }).format(safeVal);
 }
 
 /**
@@ -227,4 +228,23 @@ export function formatMetricDiff(
   const subColor = isDiffPositive ? "text-emerald-400" : "text-red-400";
 
   return { sub, subColor };
+}
+
+// ─── Member Display Name ──────────────────────────────────────────────────────
+
+/**
+ * Overrides for raw DB member names to friendlier short display names.
+ * Add entries here whenever a member's first-word split produces the wrong label.
+ */
+const MEMBER_DISPLAY_NAMES: Record<string, string> = {
+  "MAKWANA SHAILESH R HUF": "SHAILESH HUF",
+  "ALPESHKUMAR RAMJIBHAI MAKWANA (HUF)": "ALPESH HUF",
+};
+
+/**
+ * Returns a short display name for a member.
+ * Falls back to the first word of the raw name if no override exists.
+ */
+export function getMemberShortName(fullName: string): string {
+  return MEMBER_DISPLAY_NAMES[fullName] ?? fullName.split(" ")[0];
 }

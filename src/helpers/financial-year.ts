@@ -1,4 +1,5 @@
 import { calculateXIRR } from "@/lib/xirr";
+import { isBuyTransactionType } from "@/lib/alpha";
 import type {
   FinancialYearAssetClass,
   FinancialYearSnapshot,
@@ -84,11 +85,10 @@ export function getFinancialYearAssetClass(
 }
 
 export function isIncludedInMutualFundSnapshot(
-  category: string | null | undefined,
-  schemeName?: string | null
+  _category?: string | null,
+  _schemeName?: string | null
 ): boolean {
-  const combinedName = `${category || ""} ${schemeName || ""}`.toLowerCase();
-  return !combinedName.includes("ulip") && !combinedName.includes("insurance");
+  return true;
 }
 
 export function findNavAtOrBefore(
@@ -137,7 +137,7 @@ export function calculateFinancialYearSnapshot(
       transaction.category,
       transaction.schemeName
     );
-    if (transaction.type === "BUY") {
+    if (isBuyTransactionType(transaction.type)) {
       purchases[assetClass] += transaction.amount;
     } else {
       redemptions[assetClass] += transaction.amount;
@@ -271,8 +271,9 @@ function calculateClassXirr(
       )
         continue;
       cashFlows.push({
-        amount:
-          transaction.type === "BUY" ? -transaction.amount : transaction.amount,
+        amount: isBuyTransactionType(transaction.type)
+          ? -transaction.amount
+          : transaction.amount,
         date: new Date(transaction.date),
       });
     }
@@ -290,8 +291,9 @@ function calculateClassXirr(
     totalCashFlows.push({ amount: -totalOpening, date: new Date(startDate) });
   for (const transaction of transactions) {
     totalCashFlows.push({
-      amount:
-        transaction.type === "BUY" ? -transaction.amount : transaction.amount,
+      amount: isBuyTransactionType(transaction.type)
+        ? -transaction.amount
+        : transaction.amount,
       date: new Date(transaction.date),
     });
   }
