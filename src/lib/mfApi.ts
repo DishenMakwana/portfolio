@@ -3,9 +3,10 @@ import axios from "axios";
 import type { MfDetailsResponse, MfSearchResult } from "@/types/mf-api";
 
 export function isSpecializedFundSchemeCode(
-  schemeCode: string | null | undefined
+  schemeCode: string | number | null | undefined
 ): boolean {
-  return Boolean(schemeCode?.toUpperCase().includes("SIF"));
+  if (schemeCode === null || schemeCode === undefined) return false;
+  return String(schemeCode).toUpperCase().includes("SIF");
 }
 
 let lastRequestTime = 0;

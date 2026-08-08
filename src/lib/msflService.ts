@@ -22,7 +22,6 @@ import {
 } from "@/types/msfl";
 import { MsflHoldingParsed } from "@/types/msfl-parser";
 import { MfDetailsResponse } from "@/types/mf-api";
-import { inferFallbackClassification } from "@/helpers/stockClassifier";
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -325,21 +324,34 @@ async function saveMsflStockCacheAndMapping(
         },
       });
 
-    const historyValues = data.data.map((p) => ({
-      schemeCode: t,
-      date: p.date,
-      nav: parseFloat(p.nav) || 0,
-      fetchedAt: new Date().toISOString(),
-    }));
+    const seenDates = new Set<string>();
+    const uniqueHistoryValues: {
+      schemeCode: string;
+      date: string;
+      nav: number;
+      fetchedAt: string;
+    }[] = [];
+
+    for (const p of data.data) {
+      if (p.date && !seenDates.has(p.date)) {
+        seenDates.add(p.date);
+        uniqueHistoryValues.push({
+          schemeCode: t,
+          date: p.date,
+          nav: parseFloat(p.nav) || 0,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    }
 
     await db
       .delete(msflSchemeNavHistory)
       .where(eq(msflSchemeNavHistory.schemeCode, t));
 
     const chunkSize = 100;
-    for (let i = 0; i < historyValues.length; i += chunkSize) {
-      const chunk = historyValues.slice(i, i + chunkSize);
-      await db.insert(msflSchemeNavHistory).values(chunk);
+    for (let i = 0; i < uniqueHistoryValues.length; i += chunkSize) {
+      const chunk = uniqueHistoryValues.slice(i, i + chunkSize);
+      await db.insert(msflSchemeNavHistory).values(chunk).onConflictDoNothing();
     }
   }
 }
@@ -606,58 +618,40 @@ export async function getMsflDashboardData(
     ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
 
-  const rawHoldings = await db
-    .select({
-      id: msflHoldings.id,
-      reportId: msflHoldings.reportId,
-      schemeId: msflHoldings.schemeId,
-      quantity: msflHoldings.quantity,
-      averagePrice: msflHoldings.averagePrice,
-      currentPrice: msflHoldings.currentPrice,
-      investedValue: msflHoldings.investedValue,
-      currentValue: msflHoldings.currentValue,
-      unrealizedPnl: msflHoldings.unrealizedPnl,
-      unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
-      symbol: msflSchemes.name,
-      faceValue: msflHoldings.faceValue,
-      tradingStatus: msflHoldings.tradingStatus,
-      isin: msflSchemes.isin,
-    })
-    .from(msflHoldings)
-    .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
-    .where(eq(msflHoldings.reportId, selectedReport.id));
+  const [rawHoldings, schemesList, niftyHistory] = await Promise.all([
+    db
+      .select({
+        id: msflHoldings.id,
+        reportId: msflHoldings.reportId,
+        schemeId: msflHoldings.schemeId,
+        quantity: msflHoldings.quantity,
+        averagePrice: msflHoldings.averagePrice,
+        currentPrice: msflHoldings.currentPrice,
+        investedValue: msflHoldings.investedValue,
+        currentValue: msflHoldings.currentValue,
+        unrealizedPnl: msflHoldings.unrealizedPnl,
+        unrealizedPnlPct: msflHoldings.unrealizedPnlPct,
+        symbol: msflSchemes.name,
+        faceValue: msflHoldings.faceValue,
+        tradingStatus: msflHoldings.tradingStatus,
+        isin: msflSchemes.isin,
+      })
+      .from(msflHoldings)
+      .leftJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
+      .where(eq(msflHoldings.reportId, selectedReport.id)),
+    db
+      .select({
+        id: msflSchemes.id,
+        name: msflSchemes.name,
+        category: msflSchemes.category,
+        sector: msflSchemes.sector,
+        marketCapCategory: msflSchemes.marketCapCategory,
+        schemeCodeApi: msflSchemes.schemeCodeApi,
+      })
+      .from(msflSchemes),
+    getBenchmarkHistory("120716"),
+  ]);
 
-  // Fetch schemes metadata directly from PostgreSQL database
-  const schemesList = await db
-    .select({
-      id: msflSchemes.id,
-      name: msflSchemes.name,
-      category: msflSchemes.category,
-      sector: msflSchemes.sector,
-      marketCapCategory: msflSchemes.marketCapCategory,
-      schemeCodeApi: msflSchemes.schemeCodeApi,
-    })
-    .from(msflSchemes);
-
-  // If any newly inserted scheme lacks sector or marketCapCategory in DB, infer and persist into PostgreSQL
-  for (const s of schemesList) {
-    if (!s.sector || !s.marketCapCategory) {
-      const cls = inferFallbackClassification(s.name);
-      const sector = s.sector || cls.sector;
-      const marketCapCategory = s.marketCapCategory || cls.marketCapCategory;
-      await db
-        .update(msflSchemes)
-        .set({
-          sector,
-          marketCapCategory,
-        })
-        .where(eq(msflSchemes.id, s.id));
-      s.sector = sector;
-      s.marketCapCategory = marketCapCategory;
-    }
-  }
-
-  const niftyHistory = await getBenchmarkHistory("120716");
   const niftyData = niftyHistory?.data || [];
 
   const enrichedHoldings = await Promise.all(

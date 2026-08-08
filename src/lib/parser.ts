@@ -4,7 +4,11 @@ import type { HoldingParsed, ParseResult } from "@/types/parser";
 export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
   const sheetNames = workbook.SheetNames;
-  if (!sheetNames.includes("1. Mutual Fund")) {
+  const targetSheetName = sheetNames.find(
+    (n) => n === "1. Mutual Fund" || n === "1. Mutual Funds"
+  );
+
+  if (!targetSheetName) {
     if (sheetNames.includes("Equity") || sheetNames.includes("Mutual Funds")) {
       throw new Error(
         "Invalid file: This appears to be a Zerodha holdings file. Please upload a Mutual Fund Valuation sheet."
@@ -21,12 +25,11 @@ export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
       );
     }
     throw new Error(
-      "Invalid file: Sheet '1. Mutual Fund' not found. Please upload a valid Mutual Fund Valuation sheet."
+      "Invalid file: Sheet '1. Mutual Fund' or '1. Mutual Funds' not found. Please upload a valid Mutual Fund Valuation sheet."
     );
   }
 
-  const sheetName = "1. Mutual Fund";
-  const sheet = workbook.Sheets[sheetName];
+  const sheet = workbook.Sheets[targetSheetName];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
   let asOfDate = "";
@@ -35,9 +38,11 @@ export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
   const memberCagrs: { memberName: string; cagr: number }[] = [];
 
   // Parse asOfDate from Row 2 (index 1)
-  // e.g. "Portfolio Valuation Report as on 01-07-2026"
+  // e.g. "Portfolio Valuation Report as on 01-07-2026" or "till 05-08-2026"
   const dateRowStr = String(rows[1]?.[0] || "");
-  const dateMatch = dateRowStr.match(/as on (\d{2})-(\d{2})-(\d{4})/i);
+  const dateMatch = dateRowStr.match(
+    /(?:as on|till)\s+(\d{2})-(\d{2})-(\d{4})/i
+  );
   if (dateMatch) {
     const [, dd, mm, yyyy] = dateMatch;
     asOfDate = `${yyyy}-${mm}-${dd}`;
@@ -60,23 +65,36 @@ export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
 
     // Check if it's the Grand Total or any section total row
     if (col0 === "Grand Total") {
-      familyCagr = Number(row[11]) || 0;
+      familyCagr = Number(row[11]) || Number(row[12]) || 0;
       continue;
     }
 
-    if (col0.endsWith(" Total")) {
-      if (
-        ![
-          "Equity Total",
-          "Hybrid Total",
-          "Debt Total",
-          "Liquid Total",
-          "Other Total",
-        ].includes(col0)
-      ) {
-        const memberName = col0.substring(0, col0.length - 6).trim();
-        const cagr = Number(row[11]) || 0;
-        memberCagrs.push({ memberName, cagr });
+    const isCategoryTotal = [
+      "Equity Total",
+      "Hybrid Total",
+      "Debt Total",
+      "Liquid Total",
+      "Other Total",
+      "SIF Total",
+      "Share And Bond Total",
+      "Shares And Bonds Total",
+    ].some((cat) => col0.toLowerCase() === cat.toLowerCase());
+
+    const isMemberTotal =
+      col0 === "Applicant Total" ||
+      (currentMemberName &&
+        col0.toLowerCase().includes(currentMemberName.toLowerCase()) &&
+        col0.toLowerCase().includes("total")) ||
+      (col0.toLowerCase().endsWith(" total") &&
+        col0.toLowerCase() !== "grand total" &&
+        !isCategoryTotal);
+
+    if (isMemberTotal) {
+      const cagr = Number(row[11]) || Number(row[12]) || 0;
+      if (currentMemberName && cagr > 0) {
+        if (!memberCagrs.some((mc) => mc.memberName === currentMemberName)) {
+          memberCagrs.push({ memberName: currentMemberName, cagr });
+        }
       }
       continue;
     }
@@ -90,10 +108,15 @@ export function parsePortfolioExcel(fileBuffer: Buffer): ParseResult {
       );
 
     if (!otherColsHaveValue) {
-      if (["Equity", "Hybrid", "Debt", "Liquid", "Other"].includes(col0)) {
+      if (
+        col0.includes(":") ||
+        ["Equity", "Hybrid", "Debt", "Liquid", "Other", "SIF"].some((c) =>
+          col0.startsWith(c)
+        )
+      ) {
         currentCategory = col0;
       } else {
-        const panMatch = col0.match(/(.+?)\s*\(([^)]+)\)/);
+        const panMatch = col0.match(/^(.*)\s*\(([^)]+)\)\s*$/);
         if (panMatch) {
           currentMemberName = panMatch[1].trim();
           currentMemberPan = panMatch[2].trim();

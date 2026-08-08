@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Lightbulb,
-  TrendingUp,
   BarChart3,
+  TrendingUp,
   Users,
   CalendarRange,
   Zap,
@@ -43,11 +43,8 @@ import {
   type SubMetricItem,
   ALLOCATION_ANALYSIS_SORT_KEYS,
   CAT_PALETTE,
-  FALLBACK_DOT_CLASS,
   CAT_DOT_CLASSES,
-  FALLBACK_GRADIENT_CLASS,
   CAT_GRADIENT_CLASSES,
-  FALLBACK_BADGE_CLASS,
   CAT_BADGE_CLASSES,
 } from "@/types/insights";
 
@@ -60,6 +57,21 @@ function getAllocationAnalysisSortKey(
     ? (rawSortKey as AllocationAnalysisSortKey)
     : "current";
 }
+
+const INSIGHTS_SUB_TAB_META: Record<
+  Tab,
+  { label: string; icon: React.ElementType }
+> = {
+  overview: { label: "Overview", icon: BarChart3 },
+  funds: { label: "Funds Performance", icon: TrendingUp },
+  members: { label: "Members CAGR", icon: Users },
+  sip: { label: "SIP Planner", icon: CalendarRange },
+  actions: { label: "Action Plan", icon: Zap },
+  overlaps: { label: "Category Overlaps", icon: Layers },
+  amc: { label: "AMC Analysis", icon: LineChart },
+  category: { label: "Category Allocation", icon: Layers },
+  sold: { label: "Past Sold Funds", icon: History },
+};
 
 export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   const router = useRouter();
@@ -84,18 +96,59 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
       ? tabParam
       : "overview";
 
-  const handleTabChange = (newTab: Tab) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", newTab);
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  const currentMeta =
+    INSIGHTS_SUB_TAB_META[activeTab] || INSIGHTS_SUB_TAB_META.overview;
+  const MetaIcon = currentMeta.icon;
 
-  const [filterCategory, setFilterCategory] = useState<string>("All");
-  const [sort, setSort] = useState<SortState>({ key: "avgCagr", dir: "desc" });
+  const initialCategory = searchParams.get("category") || "All";
+  const initialSortKey = (searchParams.get("sort") as SortKey) || "avgCagr";
+  const initialSortDir =
+    (searchParams.get("order") as "asc" | "desc") || "desc";
+
+  const [filterCategory, setFilterCategory] = useState<string>(initialCategory);
+  const [sort, setSort] = useState<SortState>({
+    key: initialSortKey,
+    dir: initialSortDir,
+  });
   const [stepUpPct, setStepUpPct] = useState(10);
   const [expandedSchemes, setExpandedSchemes] = useState<Set<string>>(
     new Set()
   );
+
+  useEffect(() => {
+    setFilterCategory(searchParams.get("category") || "All");
+    const sKey = (searchParams.get("sort") as SortKey) || "avgCagr";
+    const sDir = (searchParams.get("order") as "asc" | "desc") || "desc";
+    setSort({ key: sKey, dir: sDir });
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "" || value === "All") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  const handleFilterCategoryChange = (cat: string) => {
+    setFilterCategory(cat);
+    updateUrl({ category: cat });
+  };
+
+  const handleSortChange = (key: SortKey) => {
+    let dir: "asc" | "desc" = "desc";
+    if (sort.key === key) {
+      dir = sort.dir === "asc" ? "desc" : "asc";
+    }
+    const nextSort = { key, dir };
+    setSort(nextSort);
+    updateUrl({ sort: key, order: dir });
+  };
 
   const toggleSchemeExpanded = (schemeName: string) => {
     const next = new Set(expandedSchemes);
@@ -106,18 +159,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     }
     setExpandedSchemes(next);
   };
-
-  const TABS: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "funds", label: "Funds", icon: TrendingUp },
-    { id: "members", label: "Members", icon: Users },
-    { id: "sip", label: "SIP Planner", icon: CalendarRange },
-    { id: "actions", label: "Actions", icon: Zap },
-    { id: "overlaps", label: "Overlaps", icon: Layers },
-    { id: "amc", label: "AMC Analysis", icon: LineChart },
-    { id: "category", label: "Category Allocation", icon: Layers },
-    { id: "sold", label: "Past Sold Funds", icon: History },
-  ];
 
   // Decompiled reverse engineering portfolio insights
   const reverseInsights = useMemo(() => {
@@ -513,47 +554,70 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     });
   }, [baseSip, stepUpPct]);
 
-  // Category palette index — dynamically mapped from module-level palette constants
+  // Category palette index — mapped across all categories (active, zero balance, sold)
   const catPaletteIndexes = useMemo(() => {
     const map: Record<string, number> = {};
-    data.categoryAllocation.forEach((c, i) => {
-      map[c.category] = i % CAT_PALETTE.length;
-    });
-    return map;
-  }, [data.categoryAllocation]);
+    let currentIndex = 0;
 
-  const getCategoryPaletteIndex = (category: string): number | null =>
-    catPaletteIndexes[category] ?? null;
+    // 1. Index active categories from categoryAllocation
+    data.categoryAllocation.forEach((c) => {
+      if (c.category && map[c.category] === undefined) {
+        map[c.category] = currentIndex % CAT_PALETTE.length;
+        currentIndex++;
+      }
+    });
+
+    // 2. Index categories from schemes (includes zero balance funds)
+    data.schemes.forEach((s) => {
+      if (s.category && map[s.category] === undefined) {
+        map[s.category] = currentIndex % CAT_PALETTE.length;
+        currentIndex++;
+      }
+    });
+
+    // 3. Index categories from soldHoldings
+    data.soldHoldings?.forEach((s) => {
+      if (s.schemeCategory && map[s.schemeCategory] === undefined) {
+        map[s.schemeCategory] = currentIndex % CAT_PALETTE.length;
+        currentIndex++;
+      }
+    });
+
+    return map;
+  }, [data.categoryAllocation, data.schemes, data.soldHoldings]);
+
+  const getCategoryPaletteIndex = (category: string): number => {
+    if (catPaletteIndexes[category] !== undefined) {
+      return catPaletteIndexes[category];
+    }
+    // Deterministic string hash fallback so no category ever falls back to plain gray
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = (hash << 5) - hash + category.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash) % CAT_PALETTE.length;
+  };
 
   const getCategoryColor = (category: string): string => {
     const index = getCategoryPaletteIndex(category);
-    return index === null ? "#64748b" : CAT_PALETTE[index];
+    return CAT_PALETTE[index];
   };
 
   const getCategoryDotClass = (category: string): string => {
     const index = getCategoryPaletteIndex(category);
-    return index === null ? FALLBACK_DOT_CLASS : CAT_DOT_CLASSES[index];
+    return CAT_DOT_CLASSES[index];
   };
 
   const getCategoryGradientClass = (category: string): string => {
     const index = getCategoryPaletteIndex(category);
-    return index === null
-      ? FALLBACK_GRADIENT_CLASS
-      : CAT_GRADIENT_CLASSES[index];
+    return CAT_GRADIENT_CLASSES[index];
   };
 
   const getCategoryBadgeClass = (category: string): string => {
     const index = getCategoryPaletteIndex(category);
-    return index === null ? FALLBACK_BADGE_CLASS : CAT_BADGE_CLASSES[index];
+    return CAT_BADGE_CLASSES[index];
   };
-
-  function handleSort(key: SortKey) {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "desc" }
-    );
-  }
 
   const weightedCagr =
     data.memberCagrs.length > 0
@@ -631,193 +695,175 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-100 flex items-center gap-2">
-          <Lightbulb size={22} className="text-teal-400" />
-          Investment Insights
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          As of{" "}
-          <span className="text-teal-400 font-semibold">{data.reportDate}</span>{" "}
-          · {data.totals.memberCount} members · {data.totals.uniqueSchemes}{" "}
-          schemes
-        </p>
-      </div>
-
-      {/* Navigation Tab Bar */}
-      <div className="w-full overflow-x-auto no-scrollbar scroll-smooth py-1">
-        <div className="flex items-center gap-1.5 p-1.5 bg-slate-900/90 rounded-2xl border border-slate-850 backdrop-blur-md min-w-max shadow-inner">
-          {TABS.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200 cursor-pointer select-none ${
-                  active
-                    ? "text-emerald-400 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="activeTabIndicator"
-                    className="absolute inset-0 bg-emerald-500/15 border border-emerald-500/30 rounded-xl"
-                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                  />
-                )}
-                <tab.icon
-                  size={15}
-                  className={`relative z-10 ${
-                    active ? "text-emerald-400" : "text-slate-400"
-                  }`}
-                />
-                <span className="relative z-10 whitespace-nowrap">
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
+    <div className="flex flex-col flex-1 min-h-0 min-w-0">
+      {/* Dynamic Top Header Bar */}
+      <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
+        <div className="flex items-center gap-2.5">
+          <Lightbulb size={16} className="text-teal-400" />
+          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+            Investment Insights
+          </span>
+          <span className="text-slate-600 font-bold text-xs">/</span>
+          <div className="flex items-center gap-1.5 text-xs text-teal-300 font-extrabold tracking-wider uppercase bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-md shadow-sm">
+            <MetaIcon size={13} className="text-teal-400" />
+            <span>{currentMeta.label}</span>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Tab Panels */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.25 }}
-        >
-          {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
-          {activeTab === "overview" && (
-            <OverviewTab
-              data={data}
-              weightedCagr={weightedCagr}
-              benchmarkDelta={benchmarkDelta}
-              benchmarkLabel={benchmarkLabel}
-              portfolioXirr={portfolioXirr}
-              benchmarkXirr={benchmarkXirr}
-              xirrRating={xirrRating}
-              cagrSubMetrics={cagrSubMetrics}
-              xirrSubMetrics={xirrSubMetrics}
-              memberSipTotals={memberSipTotals}
-              getCategoryDotClass={getCategoryDotClass}
-              getCategoryGradientClass={getCategoryGradientClass}
-              getCategoryColor={getCategoryColor}
-              getXirrGrade={getXirrGrade}
-            />
-          )}
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Header Banner */}
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-100 flex items-center gap-2">
+            <MetaIcon size={22} className="text-teal-400" />
+            Investment Insights — {currentMeta.label}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            As of{" "}
+            <span className="text-teal-400 font-semibold">
+              {data.reportDate}
+            </span>{" "}
+            · {data.totals.memberCount} members · {data.totals.uniqueSchemes}{" "}
+            schemes
+          </p>
+        </div>
 
-          {/* ── FUNDS ─────────────────────────────────────────────────────────── */}
-          {activeTab === "funds" && (
-            <FundsTab
-              schemes={filteredSchemes}
-              filterCategory={filterCategory}
-              onFilterChange={setFilterCategory}
-              sort={sort}
-              onSort={handleSort}
-              top5Schemes={top5Schemes}
-              watchlistSchemes={watchlistSchemes}
-              expandedSchemes={expandedSchemes}
-              onToggleExpand={toggleSchemeExpanded}
-              getCategoryBadgeClass={getCategoryBadgeClass}
-              niftyBenchmark={niftyBenchmark}
-              totalCount={data.schemes.length}
-              mfCount={
-                data.schemes.filter(
-                  (s) =>
-                    !(
+        {/* Tab Content Panels (Full Width - Navigated via AppSidebar Tree) */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25 }}
+          >
+            {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
+            {activeTab === "overview" && (
+              <OverviewTab
+                data={data}
+                weightedCagr={weightedCagr}
+                benchmarkDelta={benchmarkDelta}
+                benchmarkLabel={benchmarkLabel}
+                portfolioXirr={portfolioXirr}
+                benchmarkXirr={benchmarkXirr}
+                xirrRating={xirrRating}
+                cagrSubMetrics={cagrSubMetrics}
+                xirrSubMetrics={xirrSubMetrics}
+                memberSipTotals={memberSipTotals}
+                getCategoryDotClass={getCategoryDotClass}
+                getCategoryGradientClass={getCategoryGradientClass}
+                getCategoryColor={getCategoryColor}
+                getXirrGrade={getXirrGrade}
+              />
+            )}
+
+            {/* ── FUNDS ─────────────────────────────────────────────────────────── */}
+            {activeTab === "funds" && (
+              <FundsTab
+                schemes={filteredSchemes}
+                filterCategory={filterCategory}
+                onFilterChange={handleFilterCategoryChange}
+                sort={sort}
+                onSort={handleSortChange}
+                top5Schemes={top5Schemes}
+                watchlistSchemes={watchlistSchemes}
+                expandedSchemes={expandedSchemes}
+                onToggleExpand={toggleSchemeExpanded}
+                getCategoryBadgeClass={getCategoryBadgeClass}
+                niftyBenchmark={niftyBenchmark}
+                totalCount={data.schemes.length}
+                mfCount={
+                  data.schemes.filter(
+                    (s) =>
+                      !(
+                        s.scheme.toLowerCase().includes("sif") ||
+                        s.category.toLowerCase().includes("sif")
+                      )
+                  ).length
+                }
+                sifCount={
+                  data.schemes.filter(
+                    (s) =>
                       s.scheme.toLowerCase().includes("sif") ||
                       s.category.toLowerCase().includes("sif")
-                    )
-                ).length
-              }
-              sifCount={
-                data.schemes.filter(
-                  (s) =>
-                    s.scheme.toLowerCase().includes("sif") ||
-                    s.category.toLowerCase().includes("sif")
-                ).length
-              }
-            />
-          )}
+                  ).length
+                }
+              />
+            )}
 
-          {/* ── MEMBERS ───────────────────────────────────────────────────────── */}
-          {activeTab === "members" && (
-            <MembersTab
-              memberCagrs={data.memberCagrs}
-              niftyBenchmark={membersBenchmarkCagr}
-              benchmarkXirr={benchmarkXirr}
-            />
-          )}
+            {/* ── MEMBERS ───────────────────────────────────────────────────────── */}
+            {activeTab === "members" && (
+              <MembersTab
+                memberCagrs={data.memberCagrs}
+                niftyBenchmark={membersBenchmarkCagr}
+                benchmarkXirr={benchmarkXirr}
+              />
+            )}
 
-          {/* ── SIP PLANNER ───────────────────────────────────────────────────── */}
-          {activeTab === "sip" && (
-            <SipPlannerTab
-              baseSip={baseSip}
-              projectionRows={projectionRows}
-              stepUpPct={stepUpPct}
-              onStepUpChange={setStepUpPct}
-            />
-          )}
+            {/* ── SIP PLANNER ───────────────────────────────────────────────────── */}
+            {activeTab === "sip" && (
+              <SipPlannerTab
+                baseSip={baseSip}
+                projectionRows={projectionRows}
+                stepUpPct={stepUpPct}
+                onStepUpChange={setStepUpPct}
+              />
+            )}
 
-          {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
-          {activeTab === "actions" && (
-            <ActionsTab
-              scaleUpFunds={scaleUpFunds}
-              watchlistFunds={watchlistFunds}
-              zeroValueFunds={zeroValueFunds}
-              actionMonths={actionMonths}
-              reverseInsights={reverseInsights}
-            />
-          )}
+            {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
+            {activeTab === "actions" && (
+              <ActionsTab
+                scaleUpFunds={scaleUpFunds}
+                watchlistFunds={watchlistFunds}
+                zeroValueFunds={zeroValueFunds}
+                actionMonths={actionMonths}
+                reverseInsights={reverseInsights}
+              />
+            )}
 
-          {/* ── OVERLAPS ──────────────────────────────────────────────────────── */}
-          {activeTab === "overlaps" && (
-            <OverlapsTab
-              subCategoryGroups={subCategoryGroups}
-              subCategoryTotals={subCategoryTotals}
-            />
-          )}
+            {/* ── OVERLAPS ──────────────────────────────────────────────────────── */}
+            {activeTab === "overlaps" && (
+              <OverlapsTab
+                subCategoryGroups={subCategoryGroups}
+                subCategoryTotals={subCategoryTotals}
+              />
+            )}
 
-          {/* ── AMC ANALYSIS ──────────────────────────────────────────────────── */}
-          {activeTab === "amc" && (
-            <AmcAnalysisTab
-              analysisData={sortedAmcData}
-              niftyBenchmark={niftyBenchmark}
-              sortKey={amcSortKey}
-              sortDir={amcSortDir}
-              onSort={handleAmcSort}
-            />
-          )}
+            {/* ── AMC ANALYSIS ──────────────────────────────────────────────────── */}
+            {activeTab === "amc" && (
+              <AmcAnalysisTab
+                analysisData={sortedAmcData}
+                niftyBenchmark={niftyBenchmark}
+                sortKey={amcSortKey}
+                sortDir={amcSortDir}
+                onSort={handleAmcSort}
+              />
+            )}
 
-          {/* ── CATEGORY ALLOCATION ────────────────────────────────────────────── */}
-          {activeTab === "category" && (
-            <CategoryAnalysisTab
-              analysisData={sortedCategoryData}
-              niftyBenchmark={niftyBenchmark}
-              sortKey={categorySortKey}
-              sortDir={categorySortDir}
-              onSort={handleCategorySort}
-            />
-          )}
+            {/* ── CATEGORY ALLOCATION ────────────────────────────────────────────── */}
+            {activeTab === "category" && (
+              <CategoryAnalysisTab
+                analysisData={sortedCategoryData}
+                niftyBenchmark={niftyBenchmark}
+                sortKey={categorySortKey}
+                sortDir={categorySortDir}
+                onSort={handleCategorySort}
+              />
+            )}
 
-          {/* ── PAST SOLD FUNDS ────────────────────────────────────────────────── */}
-          {activeTab === "sold" && (
-            <SoldFundsTab
-              soldHoldings={data.soldHoldings || []}
-              partiallySoldHoldings={data.partiallySoldHoldings || []}
-              getCategoryDotClass={getCategoryDotClass}
-              getCategoryBadgeClass={getCategoryBadgeClass}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
+            {/* ── PAST SOLD FUNDS ────────────────────────────────────────────────── */}
+            {activeTab === "sold" && (
+              <SoldFundsTab
+                soldHoldings={data.soldHoldings || []}
+                partiallySoldHoldings={data.partiallySoldHoldings || []}
+                getCategoryDotClass={getCategoryDotClass}
+                getCategoryBadgeClass={getCategoryBadgeClass}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

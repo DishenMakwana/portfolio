@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -16,17 +16,43 @@ import {
 } from "lucide-react";
 import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
 import { formatCurrency } from "@/lib/formatters";
-import { parseMonthYear } from "@/helpers/dates";
+import { parseMonthYear, formatHoldingDuration } from "@/helpers/dates";
 import type { SipMandateRow } from "@/types/portfolio";
 import type { SipsClientProps } from "@/types/sips";
 import { toast } from "react-hot-toast";
 
 export default function SipsClient({ mandates }: SipsClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  const initialMember = searchParams.get("member") || "all";
   const [isUploading, setIsUploading] = useState(false);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
-  const [filterMember, setFilterMember] = useState<string>("all");
+  const [filterMember, setFilterMember] = useState<string>(initialMember);
+
+  useEffect(() => {
+    setFilterMember(searchParams.get("member") || "all");
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "" || value === "all") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  const handleMemberChange = (member: string) => {
+    setFilterMember(member);
+    updateUrl({ member });
+  };
 
   // ── Upload handler
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,7 +286,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
           {/* ── MEMBER FILTER ── */}
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setFilterMember("all")}
+              onClick={() => handleMemberChange("all")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${filterMember === "all" ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
             >
               All Members ({mandates.length})
@@ -270,7 +296,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
               return (
                 <button
                   key={m}
-                  onClick={() => setFilterMember(m)}
+                  onClick={() => handleMemberChange(m)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${filterMember === m ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
                 >
                   {m.split(" ")[0]} ({count})
@@ -374,6 +400,9 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                 <th className="px-5 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                                   Status
                                 </th>
+                                <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                                  Holding Days
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/40">
@@ -420,6 +449,29 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                       </span>
                                     )}
                                   </td>
+                                  {(() => {
+                                    const duration = formatHoldingDuration(
+                                      sip.firstTxDate
+                                    );
+                                    return (
+                                      <td className="px-5 py-3 text-right whitespace-nowrap">
+                                        {duration ? (
+                                          <div>
+                                            <div className="font-extrabold text-slate-100 text-sm tracking-tight">
+                                              {duration.days}
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 font-medium">
+                                              {duration.label}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-600 text-xs">
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })()}
                                 </tr>
                               ))}
                             </tbody>
@@ -448,6 +500,7 @@ export default function SipsClient({ mandates }: SipsClientProps) {
                                     </td>
                                   );
                                 })}
+                                <td />
                                 <td />
                               </tr>
                             </tfoot>

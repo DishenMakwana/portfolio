@@ -1,6 +1,7 @@
-export const DEFAULT_BENCHMARK_CODE = "147625";
-export const DEFAULT_BENCHMARK_NAME = "Nifty 500 TRI";
-export const DEFAULT_BENCHMARK_FUND_NAME = "NSE - Nifty 500 TRI";
+export const DEFAULT_BENCHMARK_CODE = "120716";
+export const DEFAULT_BENCHMARK_NAME = "Nifty 50 Index";
+export const DEFAULT_BENCHMARK_FUND_NAME =
+  "UTI Nifty 50 Index Fund Direct Growth";
 
 export const DEFAULT_CORPUS_CR = 12500;
 export const DEFAULT_EXPENSE_RATIO = 1.25;

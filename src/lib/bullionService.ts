@@ -259,6 +259,7 @@ export async function getBullionData(
 
         chartData.push({
           date: dateStr,
+          timestamp: rec.timestamp,
           Gold: Math.round(rec.goldPrice),
           Silver: Math.round(rec.silverPrice),
           Platinum: Math.round(rec.platinumPrice),
@@ -283,6 +284,7 @@ export async function getBullionData(
 
         chartData.push({
           date: dateStr,
+          timestamp: time,
           Gold: gG,
           Silver: sS,
           Platinum: pP,

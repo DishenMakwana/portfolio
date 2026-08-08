@@ -17,6 +17,10 @@ import {
   ChevronUp,
   ArrowUpRight,
   ArrowDownRight,
+  BarChart3,
+  GitMerge,
+  CalendarDays,
+  Lightbulb,
 } from "lucide-react";
 import {
   uploadZerodhaHoldingsAction,
@@ -25,16 +29,15 @@ import {
 import { toast } from "react-hot-toast";
 import {
   formatCurrency,
-  formatPercent,
   formatCurrencyWithDecimals as formatPrice,
   formatDate,
 } from "@/helpers/formatters";
+import { ZERODHA_COLORS } from "@/types/zerodha";
 import type {
   ZerodhaDashboardProps,
   ZerodhaFundSortField,
   ZerodhaStockSortField,
 } from "@/types/zerodha";
-import { ZERODHA_COLORS } from "@/types/zerodha";
 import ZerodhaMappingTab from "@/components/zerodha/mapping/ZerodhaMappingTab";
 import ZerodhaOverviewTab from "@/components/zerodha/overview/ZerodhaOverviewTab";
 import ZerodhaStocksTab from "@/components/zerodha/stocks/ZerodhaStocksTab";
@@ -52,6 +55,21 @@ const cardVariants: Variants = {
   }),
 };
 
+type ZerodhaTab =
+  "overview" | "insights" | "stocks" | "funds" | "mapping" | "files";
+
+const ZERODHA_SUB_TAB_META: Record<
+  ZerodhaTab,
+  { label: string; icon: React.ElementType }
+> = {
+  overview: { label: "Overview", icon: BarChart3 },
+  stocks: { label: "Stocks", icon: TrendingUp },
+  funds: { label: "Mutual Funds", icon: Target },
+  mapping: { label: "Fund Mapping", icon: GitMerge },
+  files: { label: "Upload Tracker", icon: CalendarDays },
+  insights: { label: "Insights", icon: Lightbulb },
+};
+
 export default function ZerodhaDashboard({
   data,
   allSchemes = [],
@@ -61,18 +79,15 @@ export default function ZerodhaDashboard({
   const [, startTransition] = useTransition();
 
   const rawTab = searchParams.get("tab");
-  const activeTab =
+  const activeTab: ZerodhaTab =
     rawTab &&
     ["overview", "insights", "stocks", "funds", "mapping", "files"].includes(
       rawTab
     )
-      ? (rawTab as
-          "overview" | "insights" | "stocks" | "funds" | "mapping" | "files")
+      ? (rawTab as ZerodhaTab)
       : "overview";
 
-  const setActiveTab = (
-    tab: "overview" | "insights" | "stocks" | "funds" | "mapping" | "files"
-  ) => {
+  const setActiveTab = (tab: ZerodhaTab) => {
     const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
     router.replace(`/zerodha?${params.toString()}`, { scroll: false });
@@ -255,358 +270,291 @@ export default function ZerodhaDashboard({
     );
   };
 
+  const currentMeta =
+    ZERODHA_SUB_TAB_META[activeTab] || ZERODHA_SUB_TAB_META.overview;
+  const MetaIcon = currentMeta.icon;
+
   return (
-    <div className="space-y-6">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-100 flex items-center gap-2">
-            <Briefcase className="text-teal-400" size={24} /> Zerodha Portfolio
-          </h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            Personal stock and mutual fund holdings separate from family
-            investments.
-          </p>
+    <div className="flex flex-col flex-1 min-h-0 min-w-0">
+      {/* Dynamic Top Header Bar */}
+      <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
+        <div className="flex items-center gap-2.5">
+          <Briefcase size={16} className="text-teal-400" />
+          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+            Zerodha Portfolio
+          </span>
+          <span className="text-slate-600 font-bold text-xs">/</span>
+          <div className="flex items-center gap-1.5 text-xs text-teal-300 font-extrabold tracking-wider uppercase bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-md shadow-sm">
+            <MetaIcon size={13} className="text-teal-400" />
+            <span>{currentMeta.label}</span>
+          </div>
         </div>
+      </header>
 
-        <div className="flex items-center gap-3">
-          {/* Dropdown snapshot selector */}
-          <div className="relative">
-            <select
-              value={selectedReport?.id || ""}
-              onChange={(e) => handleReportChange(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-9 h-[38px] transition"
-            >
-              {reportsList.map((r) => (
-                <option key={r.id} value={r.id}>
-                  #{r.id} - {formatDate(r.asOfDate)}
-                </option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-              <ChevronDown size={14} />
-            </div>
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* HEADER SECTION */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-100 flex items-center gap-2">
+              <MetaIcon className="text-teal-400" size={24} /> Zerodha Portfolio
+              — {currentMeta.label}
+            </h1>
+            <p className="text-slate-400 text-sm mt-0.5">
+              Personal stock and mutual fund holdings separate from family
+              investments.
+            </p>
           </div>
 
-          <label className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-950 font-bold px-4 py-1.5 rounded-xl shadow-lg cursor-pointer transition text-sm h-[38px]">
-            {isUploading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Upload size={14} />
-            )}
-            <span>Upload</span>
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* ── ROW 1: 4 KPI Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Current Value */}
-        <motion.div
-          custom={0}
-          initial="hidden"
-          animate="visible"
-          variants={cardVariants}
-          onClick={() => setActiveTab("overview")}
-          className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl hover:border-teal-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent pointer-events-none" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Current Value
-              </span>
-              <div className="p-2 rounded-xl bg-teal-500/10">
-                <IndianRupee size={17} className="text-teal-400" />
-              </div>
-            </div>
-            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
-              {formatCurrency(totals.currentValue)}
-            </div>
-            <div className="text-xs font-semibold mt-2 text-slate-400">
-              Invested: {formatCurrency(totals.invested)}
-            </div>
-            {renderVsLast(previousSnapshot?.currentValueChange)}
-          </div>
-        </motion.div>
-
-        {/* Unrealised Gain */}
-        <motion.div
-          custom={1}
-          initial="hidden"
-          animate="visible"
-          variants={cardVariants}
-          onClick={() => setActiveTab("overview")}
-          className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border rounded-2xl p-5 shadow-xl transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99] ${
-            totals.gain >= 0
-              ? "border-emerald-500/20 hover:border-emerald-500/40"
-              : "border-red-500/20 hover:border-red-500/40"
-          }`}
-        >
-          <div
-            className={`absolute inset-0 bg-gradient-to-br to-transparent pointer-events-none ${
-              totals.gain >= 0 ? "from-emerald-500/10" : "from-red-500/10"
-            }`}
-          />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Unrealised P&amp;L
-              </span>
-              <div
-                className={`p-2 rounded-xl ${totals.gain >= 0 ? "bg-emerald-500/10" : "bg-red-500/10"}`}
+          <div className="flex items-center gap-3">
+            {/* Dropdown snapshot selector */}
+            <div className="relative">
+              <select
+                value={selectedReport?.id || ""}
+                onChange={(e) => handleReportChange(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-9 h-[38px] transition"
               >
-                {totals.gain >= 0 ? (
-                  <TrendingUp size={17} className="text-emerald-400" />
-                ) : (
-                  <TrendingDown size={17} className="text-red-400" />
-                )}
+                {reportsList.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    #{r.id} - {formatDate(r.asOfDate)}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
+                <ChevronDown size={14} />
               </div>
             </div>
-            <div
-              className={`text-xl font-extrabold leading-tight tracking-tight ${
-                totals.gain >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {formatCurrency(totals.gain)}
-            </div>
-            <div
-              className={`text-xs font-semibold mt-2 ${
-                totals.gain >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {formatPercent(totals.absoluteReturn)} absolute return
-            </div>
-            {renderVsLast(previousSnapshot?.gainChange)}
-          </div>
-        </motion.div>
 
-        {/* Equity Value */}
-        <motion.div
-          custom={2}
-          initial="hidden"
-          animate="visible"
-          variants={cardVariants}
-          onClick={() => setActiveTab("stocks")}
-          className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-blue-500/20 rounded-2xl p-5 shadow-xl hover:border-blue-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Equity Value
-              </span>
-              <div className="p-2 rounded-xl bg-blue-500/10">
-                <Activity size={17} className="text-blue-400" />
-              </div>
-            </div>
-            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
-              {formatCurrency(totals.stocksCurrentValue)}
-            </div>
-            <div
-              className={`text-xs font-semibold mt-2 ${
-                totals.stocksGain >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {totals.stocksGain >= 0 ? "+" : ""}
-              {formatCurrency(totals.stocksGain)} (
-              {totals.stocksInvested > 0
-                ? ((totals.stocksGain / totals.stocksInvested) * 100).toFixed(1)
-                : 0}
-              %)
-            </div>
-            {renderVsLast(previousSnapshot?.stocksCurrentValueChange)}
+            <label className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-950 font-bold px-4 py-1.5 rounded-xl shadow-lg cursor-pointer transition text-sm h-[38px]">
+              {isUploading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              <span>Upload</span>
+              <input
+                type="file"
+                accept=".xlsx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Mutual Fund Value */}
-        <motion.div
-          custom={3}
-          initial="hidden"
-          animate="visible"
-          variants={cardVariants}
-          onClick={() => setActiveTab("funds")}
-          className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                MF Value
-              </span>
-              <div className="p-2 rounded-xl bg-violet-500/10">
-                <Target size={17} className="text-violet-400" />
-              </div>
-            </div>
-            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
-              {formatCurrency(totals.fundsCurrentValue)}
-            </div>
-            <div
-              className={`text-xs font-semibold mt-2 ${
-                totals.fundsGain >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {totals.fundsGain >= 0 ? "+" : ""}
-              {formatCurrency(totals.fundsGain)} (
-              {totals.fundsInvested > 0
-                ? ((totals.fundsGain / totals.fundsInvested) * 100).toFixed(1)
-                : 0}
-              %)
-            </div>
-            {renderVsLast(previousSnapshot?.fundsCurrentValueChange)}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* TABS SELECTOR */}
-      <div className="border-b border-slate-800/60 flex items-center gap-6 text-sm font-bold text-slate-400 overflow-x-auto pb-px">
-        <button
-          onClick={() => setActiveTab("overview")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "overview" ? "text-teal-400" : ""
-          }`}
-        >
-          Overview
+        {/* Tab Content Panels (Full Width - Navigated via AppSidebar Tree) */}
+        <div>
           {activeTab === "overview" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
+            <div className="space-y-6">
+              {/* ── ROW 1: 4 KPI Cards (Overview Tab Only) ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Current Value */}
+                <motion.div
+                  custom={0}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardVariants}
+                  className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl hover:border-teal-500/40 transition-all duration-200"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent pointer-events-none" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                        Current Value
+                      </span>
+                      <div className="p-2 rounded-xl bg-teal-500/10">
+                        <IndianRupee size={17} className="text-teal-400" />
+                      </div>
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
+                      {formatCurrency(totals.currentValue)}
+                    </div>
+                    <div className="text-xs font-semibold text-slate-400 mt-2">
+                      Invested: {formatCurrency(totals.invested)}
+                    </div>
+                    {renderVsLast(previousSnapshot?.currentValueChange)}
+                  </div>
+                </motion.div>
+
+                {/* Unrealised P&L */}
+                <motion.div
+                  custom={1}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardVariants}
+                  className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-5 shadow-xl hover:border-emerald-500/40 transition-all duration-200"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                        Unrealised P&L
+                      </span>
+                      <div className="p-2 rounded-xl bg-emerald-500/10">
+                        {totals.gain >= 0 ? (
+                          <TrendingUp size={17} className="text-emerald-400" />
+                        ) : (
+                          <TrendingDown size={17} className="text-red-400" />
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      className={`text-xl font-extrabold leading-tight tracking-tight ${
+                        totals.gain >= 0 ? "text-emerald-400" : "text-red-400"
+                      }`}
+                    >
+                      {totals.gain >= 0 ? "+" : ""}
+                      {formatCurrency(totals.gain)}
+                    </div>
+                    <div className="text-xs font-semibold text-emerald-400/90 mt-2">
+                      {totals.gain >= 0 ? "+" : ""}
+                      {totals.absoluteReturn.toFixed(2)}% absolute return
+                    </div>
+                    {renderVsLast(previousSnapshot?.gainChange)}
+                  </div>
+                </motion.div>
+
+                {/* Equity Value */}
+                <motion.div
+                  custom={2}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardVariants}
+                  onClick={() => setActiveTab("stocks")}
+                  className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-blue-500/20 rounded-2xl p-5 shadow-xl hover:border-blue-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                        Equity Value
+                      </span>
+                      <div className="p-2 rounded-xl bg-blue-500/10">
+                        <Activity size={17} className="text-blue-400" />
+                      </div>
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
+                      {formatCurrency(totals.stocksCurrentValue)}
+                    </div>
+                    <div
+                      className={`text-xs font-semibold mt-2 ${
+                        totals.stocksGain >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {totals.stocksGain >= 0 ? "+" : ""}
+                      {formatCurrency(totals.stocksGain)} (
+                      {totals.stocksInvested > 0
+                        ? (
+                            (totals.stocksGain / totals.stocksInvested) *
+                            100
+                          ).toFixed(1)
+                        : 0}
+                      %)
+                    </div>
+                    {renderVsLast(previousSnapshot?.stocksCurrentValueChange)}
+                  </div>
+                </motion.div>
+
+                {/* Mutual Fund Value */}
+                <motion.div
+                  custom={3}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardVariants}
+                  onClick={() => setActiveTab("funds")}
+                  className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                        MF Value
+                      </span>
+                      <div className="p-2 rounded-xl bg-violet-500/10">
+                        <Target size={17} className="text-violet-400" />
+                      </div>
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
+                      {formatCurrency(totals.fundsCurrentValue)}
+                    </div>
+                    <div
+                      className={`text-xs font-semibold mt-2 ${
+                        totals.fundsGain >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {totals.fundsGain >= 0 ? "+" : ""}
+                      {formatCurrency(totals.fundsGain)} (
+                      {totals.fundsInvested > 0
+                        ? (
+                            (totals.fundsGain / totals.fundsInvested) *
+                            100
+                          ).toFixed(1)
+                        : 0}
+                      %)
+                    </div>
+                    {renderVsLast(previousSnapshot?.fundsCurrentValueChange)}
+                  </div>
+                </motion.div>
+              </div>
+
+              <ZerodhaOverviewTab
+                data={data}
+                holdings={holdings}
+                COLORS={ZERODHA_COLORS}
+              />
+            </div>
           )}
-        </button>
-        <button
-          onClick={() => setActiveTab("stocks")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "stocks" ? "text-teal-400" : ""
-          }`}
-        >
-          Stocks ({stocks.length})
+
+          {activeTab === "insights" && <ZerodhaInsightsTab data={data} />}
+
           {activeTab === "stocks" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
+            <div className="space-y-6">
+              <ZerodhaStocksTab
+                stocks={stocks}
+                totals={totals}
+                metricDeltas={data.metricDeltas}
+                renderStockSortIcon={renderStockSortIcon}
+                toggleStockSort={toggleStockSort}
+                stockSortField={stockSortField}
+                stockSortOrder={stockSortOrder}
+                formatPrice={formatPrice}
+              />
+              <ZerodhaSectorAndCapAnalysis
+                sectorBreakdown={data.sectorBreakdown}
+                marketCapBreakdown={data.marketCapBreakdown}
+              />
+            </div>
           )}
-        </button>
-        <button
-          onClick={() => setActiveTab("funds")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "funds" ? "text-teal-400" : ""
-          }`}
-        >
-          Mutual Funds ({funds.length})
+
           {activeTab === "funds" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("mapping")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "mapping" ? "text-teal-400" : ""
-          }`}
-        >
-          Fund Mapping
-          {activeTab === "mapping" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("files")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "files" ? "text-teal-400" : ""
-          }`}
-        >
-          Upload Tracker
-          {activeTab === "files" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("insights")}
-          className={`py-3 relative cursor-pointer hover:text-slate-200 transition ${
-            activeTab === "insights" ? "text-teal-400" : ""
-          }`}
-        >
-          Insights
-          {activeTab === "insights" && (
-            <motion.div
-              layoutId="zerodhaActiveTab"
-              className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-            />
-          )}
-        </button>
-      </div>
-
-      {/* TAB CONTENT */}
-      <div>
-        {activeTab === "overview" && (
-          <ZerodhaOverviewTab
-            data={data}
-            holdings={holdings}
-            COLORS={ZERODHA_COLORS}
-          />
-        )}
-
-        {activeTab === "insights" && <ZerodhaInsightsTab data={data} />}
-
-        {activeTab === "stocks" && (
-          <div className="space-y-6">
-            <ZerodhaStocksTab
-              stocks={stocks}
+            <ZerodhaFundsTab
+              funds={funds}
               totals={totals}
               metricDeltas={data.metricDeltas}
-              renderStockSortIcon={renderStockSortIcon}
-              toggleStockSort={toggleStockSort}
-              stockSortField={stockSortField}
-              stockSortOrder={stockSortOrder}
-              formatPrice={formatPrice}
+              renderFundSortIcon={renderFundSortIcon}
+              toggleFundSort={toggleFundSort}
+              fundSortField={fundSortField}
+              fundSortOrder={fundSortOrder}
             />
-            <ZerodhaSectorAndCapAnalysis
-              sectorBreakdown={data.sectorBreakdown}
-              marketCapBreakdown={data.marketCapBreakdown}
+          )}
+
+          {activeTab === "files" && (
+            <ZerodhaSnapshotsTab
+              reportsList={reportsList}
+              handleFileUpload={handleFileUpload}
+              handleDeleteReport={handleDeleteReport}
+              firstCasReportDate={data.firstCasReportDate}
             />
-          </div>
-        )}
+          )}
 
-        {activeTab === "funds" && (
-          <ZerodhaFundsTab
-            funds={funds}
-            totals={totals}
-            metricDeltas={data.metricDeltas}
-            renderFundSortIcon={renderFundSortIcon}
-            toggleFundSort={toggleFundSort}
-            fundSortField={fundSortField}
-            fundSortOrder={fundSortOrder}
-          />
-        )}
-
-        {activeTab === "files" && (
-          <ZerodhaSnapshotsTab
-            reportsList={reportsList}
-            handleFileUpload={handleFileUpload}
-            handleDeleteReport={handleDeleteReport}
-            firstCasReportDate={data.firstCasReportDate}
-          />
-        )}
-
-        {activeTab === "mapping" && (
-          <ZerodhaMappingTab allSchemes={allSchemes} />
-        )}
+          {activeTab === "mapping" && (
+            <ZerodhaMappingTab allSchemes={allSchemes} />
+          )}
+        </div>
       </div>
     </div>
   );

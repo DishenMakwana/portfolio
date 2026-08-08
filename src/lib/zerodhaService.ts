@@ -24,6 +24,7 @@ import {
   calculateCagr,
   calculateXirrFromNav,
   calculateAlpha,
+  isBuyTransactionType,
   getBenchmarkCodeForCategory,
   getBenchmarkFundNameForCode,
 } from "./alpha";
@@ -767,6 +768,7 @@ export async function getZerodhaDashboardData(
                 units: zerodhaTransactions.units,
                 nav: zerodhaTransactions.nav,
                 amount: zerodhaTransactions.amount,
+                stampDuty: zerodhaTransactions.stampDuty,
                 assetType: zerodhaTransactions.assetType,
                 broker: zerodhaTransactions.broker,
                 uploadedAt: zerodhaTransactions.uploadedAt,
@@ -797,7 +799,7 @@ export async function getZerodhaDashboardData(
       const benchNavHistory = benchDetails?.data || [];
 
       const fundTxs = [...zTxs];
-      const hasBuyTx = fundTxs.some((tx: any) => tx.type === "BUY");
+      const hasBuyTx = fundTxs.some((tx: any) => isBuyTransactionType(tx.type));
 
       if (!hasBuyTx && h.averagePrice > 0) {
         let ipoDate = selectedReport.asOfDate;
@@ -832,6 +834,7 @@ export async function getZerodhaDashboardData(
           units: ipoUnits,
           nav: h.averagePrice,
           amount: ipoAmount,
+          stampDuty: 0,
           broker: "Zerodha (IPO Allotment)",
           assetType: holdingType || "equity",
           uploadedAt: new Date().toISOString(),
@@ -1751,21 +1754,37 @@ async function saveZerodhaStockCacheAndMapping(
         },
       });
 
-    const historyValues = data.data.map((p) => ({
-      schemeCode: t,
-      date: p.date,
-      nav: parseFloat(p.nav) || 0,
-      fetchedAt: new Date().toISOString(),
-    }));
+    const seenDates = new Set<string>();
+    const uniqueHistoryValues: {
+      schemeCode: string;
+      date: string;
+      nav: number;
+      fetchedAt: string;
+    }[] = [];
+
+    for (const p of data.data) {
+      if (p.date && !seenDates.has(p.date)) {
+        seenDates.add(p.date);
+        uniqueHistoryValues.push({
+          schemeCode: t,
+          date: p.date,
+          nav: parseFloat(p.nav) || 0,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    }
 
     await db
       .delete(zerodhaSchemeNavHistory)
       .where(eq(zerodhaSchemeNavHistory.schemeCode, t));
 
     const chunkSize = 100;
-    for (let i = 0; i < historyValues.length; i += chunkSize) {
-      const chunk = historyValues.slice(i, i + chunkSize);
-      await db.insert(zerodhaSchemeNavHistory).values(chunk);
+    for (let i = 0; i < uniqueHistoryValues.length; i += chunkSize) {
+      const chunk = uniqueHistoryValues.slice(i, i + chunkSize);
+      await db
+        .insert(zerodhaSchemeNavHistory)
+        .values(chunk)
+        .onConflictDoNothing();
     }
   }
 }

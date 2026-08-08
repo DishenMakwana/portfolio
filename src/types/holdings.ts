@@ -8,6 +8,7 @@ export const HOLDINGS_SORT_FIELDS = [
 ] as const;
 
 export type HoldingsSortField = (typeof HOLDINGS_SORT_FIELDS)[number];
+export type HoldingsCategoryFilters = string[];
 
 export interface Holding {
   id: number;

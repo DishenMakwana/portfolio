@@ -627,6 +627,8 @@ export async function getInsightsData(): Promise<InsightsData> {
       const memberIds = new Set<number>();
       const holdingsList: Array<{
         holdingId: number;
+        isZeroBalance?: boolean;
+        isSold?: boolean;
         memberName: string;
         folioNo: string;
         invested: number;
@@ -639,7 +641,9 @@ export async function getInsightsData(): Promise<InsightsData> {
       for (const f of folioMap.values()) {
         if (f.memberId != null) memberIds.add(f.memberId);
         holdingsList.push({
-          holdingId: firstTx ? -firstTx.id : -1,
+          holdingId: firstTx ? Math.abs(firstTx.id) : 1,
+          isZeroBalance: true,
+          isSold: true,
           memberName: f.memberName,
           folioNo: f.folioNo,
           invested: 0,
@@ -786,7 +790,9 @@ export async function getInsightsData(): Promise<InsightsData> {
       }
 
       soldHoldings.push({
-        holdingId: zeroHolding?.id || -firstTx.id,
+        holdingId: zeroHolding?.id || Math.abs(firstTx.id),
+        isZeroBalance: true,
+        isSold: true,
         memberId: zeroHolding?.memberId || firstTx.memberId,
         memberName:
           zeroHolding?.memberName || firstTx.memberName || "Family Member",

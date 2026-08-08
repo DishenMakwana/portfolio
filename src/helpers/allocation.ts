@@ -122,6 +122,9 @@ export function futureValueGrowingAnnuity(
  * Categorizes a mutual fund scheme into standard asset/purity classes based on name and category strings.
  */
 export function getSubCategory(name: string, category: string): string {
+  if (category && category.trim()) {
+    return category.trim();
+  }
   const n = name.toLowerCase();
   const cat = (category || "").toLowerCase();
   if (
@@ -343,6 +346,9 @@ export function getAssetRatios(subCat: string): AssetAllocation {
  * Categorizes a mutual fund scheme into standard sub-categories specifically for overlap analysis.
  */
 export function getOverlapSubCategory(name: string, category: string): string {
+  if (category && category.trim()) {
+    return category.trim();
+  }
   const nameLower = name.toLowerCase();
   const catLower = (category || "").toLowerCase();
 

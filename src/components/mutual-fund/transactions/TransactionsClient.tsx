@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Search,
   ChevronUp,
   ChevronDown,
-  Filter,
+  SlidersHorizontal,
   Info,
   ShieldAlert,
   Calendar,
@@ -64,6 +64,7 @@ export default function TransactionsClient({
   const [sortField, setSortField] = useState<TransactionSortField>(initialSort);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
   const [page, setPage] = useState(1);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
   const updateUrl = (updates: Record<string, string | null>) => {
     const searchString =
@@ -160,6 +161,23 @@ export default function TransactionsClient({
     setStartDate(start);
     setEndDate(end);
     updateUrl({ start: start || null, end: end || null });
+  };
+
+  const handleClearAll = () => {
+    setMemberFilter("All");
+    setTypeFilter("All");
+    setSttFilter("All");
+    setSearchVal("");
+    setStartDate("");
+    setEndDate("");
+    updateUrl({
+      member: null,
+      type: null,
+      stt: null,
+      q: null,
+      start: null,
+      end: null,
+    });
   };
 
   const renderSortIcon = (field: TransactionSortField) => {
@@ -395,296 +413,402 @@ export default function TransactionsClient({
           </div>
         </div>
 
-        {/* Filters Container (Matching Holdings section UI design) */}
-        <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 shadow-xl flex flex-col gap-4 mb-6">
-          {/* Top Row: Search & Date Range */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Search Bar (Left) */}
-            <div className="relative flex-1 max-w-lg">
-              <Search
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                size={18}
-              />
+        {/* ── Filter Modal ── */}
+        {filterPanelOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setFilterPanelOpen(false)}
+            />
+
+            {/* Panel */}
+            <div className="relative z-10 w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80">
+                <h2 className="text-sm font-bold text-slate-100 tracking-tight">
+                  Filters
+                </h2>
+                <button
+                  onClick={() => setFilterPanelOpen(false)}
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition text-xs"
+                  aria-label="Close filters"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
+                {/* Applicant */}
+                <div>
+                  <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <span>Applicant</span>
+                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                      Single Select
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        setMemberFilter("All");
+                        updateUrl({ member: "All" });
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        memberFilter === "All"
+                          ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
+                    >
+                      All Applicants
+                    </button>
+                    {memberNames.map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          const next = memberFilter === m ? "All" : m;
+                          setMemberFilter(next);
+                          updateUrl({ member: next });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          memberFilter === m
+                            ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                            : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-px bg-slate-800/60" />
+
+                {/* Transaction Type */}
+                <div>
+                  <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <span>Transaction Type</span>
+                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                      Single Select
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["All", "BUY", "SELL"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setTypeFilter(opt);
+                          updateUrl({ type: opt });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          typeFilter === opt
+                            ? opt === "BUY"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-emerald-500/40"
+                              : opt === "SELL"
+                                ? "bg-rose-500/20 text-rose-300 border-rose-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-rose-500/40"
+                                : "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                            : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                        }`}
+                      >
+                        {opt === "All" ? "All Types" : opt}
+                      </button>
+                    ))}
+                    {transactionTypeNames.map((tt) => (
+                      <button
+                        key={tt}
+                        onClick={() => {
+                          setTypeFilter(tt);
+                          updateUrl({ type: tt });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          typeFilter === tt
+                            ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                            : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                        }`}
+                      >
+                        {tt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-px bg-slate-800/60" />
+
+                {/* STT Status */}
+                <div>
+                  <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <span>STT Status</span>
+                    <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                      Single Select
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["All", "Charged", "Zero"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setSttFilter(opt);
+                          updateUrl({ stt: opt });
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          sttFilter === opt
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-indigo-500/40"
+                            : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                        }`}
+                      >
+                        {opt === "All"
+                          ? "All STT Status"
+                          : opt === "Charged"
+                            ? "STT Charged (> ₹0)"
+                            : "No STT (₹0)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Sticky footer */}
+              <div className="flex items-center justify-between px-5 py-4 border-t border-slate-800/80 bg-slate-950">
+                <button
+                  onClick={handleClearAll}
+                  className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 transition"
+                >
+                  Clear all
+                </button>
+                <button
+                  onClick={() => setFilterPanelOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-teal-500/20"
+                >
+                  Show {filtered.length} result
+                  {filtered.length !== 1 ? "s" : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Search + Date Range + Filters card ── */}
+        <div className="mb-6 bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl px-4 py-3 shadow-xl flex flex-col gap-2.5">
+          {/* Toolbar row */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search scheme, folio or applicant..."
+                placeholder="Search scheme, folio or applicant…"
                 value={searchVal}
                 onChange={(e) => setSearchVal(e.target.value)}
-                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 shadow-inner transition-all"
+                className="w-full h-9 bg-slate-950/60 border border-slate-800/60 rounded-xl pl-9 pr-8 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition"
               />
+              {searchVal && (
+                <button
+                  onClick={() => setSearchVal("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition text-[10px]"
+                  aria-label="Clear search"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            {/* Date Range Picker Controls (Right) */}
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <div className="flex items-center gap-1.5 text-slate-400 mr-1">
-                <Calendar size={15} className="text-teal-400" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  DATE:
-                </span>
-              </div>
-
-              {/* Quick Presets Dropdown */}
-              <div className="relative inline-block">
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) handlePresetRange(e.target.value);
-                  }}
-                  value=""
-                  className="appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 pr-8 text-xs font-semibold text-slate-300 focus:border-teal-500/50 focus:outline-none cursor-pointer shadow-inner transition-all hover:bg-slate-900/80"
-                >
-                  <option value="" disabled>
-                    Date Presets...
-                  </option>
-                  <option value="all" className="bg-slate-900 text-slate-200">
-                    All Time
-                  </option>
-                  <option value="today" className="bg-slate-900 text-slate-200">
-                    Today
-                  </option>
-                  <option
-                    value="yesterday"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Yesterday
-                  </option>
-                  <option
-                    value="last-7"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Last 7 Days
-                  </option>
-                  <option
-                    value="this-month"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    This Month
-                  </option>
-                  <option
-                    value="last-month"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Last Month
-                  </option>
-                  <option
-                    value="last-30"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Last 30 Days
-                  </option>
-                  <option
-                    value="last-90"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Last 90 Days
-                  </option>
-                  <option
-                    value="this-quarter"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    This Quarter
-                  </option>
-                  <option
-                    value="this-fy"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    This FY (2026-27)
-                  </option>
-                  <option
-                    value="last-fy"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Last FY (2025-26)
-                  </option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-              </div>
-
-              {/* Start & End Date Inputs */}
-              <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800/90 rounded-xl px-3 py-1.5 shadow-inner">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">
-                    From
-                  </span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      updateUrl({ start: e.target.value });
-                    }}
-                    className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer border-none font-medium [color-scheme:dark]"
-                  />
-                </div>
-                <span className="text-slate-600 font-bold text-xs">–</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">
-                    To
-                  </span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      updateUrl({ end: e.target.value });
-                    }}
-                    className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer border-none font-medium [color-scheme:dark]"
-                  />
-                </div>
-              </div>
-
-              {/* Clear Date Filter Button */}
+            {/* Date Range (compact inline) */}
+            <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-800/60 bg-slate-950/60">
+              <Calendar className="w-3 h-3 text-teal-400 shrink-0" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  updateUrl({ start: e.target.value });
+                }}
+                className="bg-transparent text-xs text-slate-300 focus:outline-none border-none [color-scheme:dark] w-[110px]"
+                title="From date"
+              />
+              <span className="text-slate-600 text-xs">–</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  updateUrl({ end: e.target.value });
+                }}
+                className="bg-transparent text-xs text-slate-300 focus:outline-none border-none [color-scheme:dark] w-[110px]"
+                title="To date"
+              />
               {(startDate || endDate) && (
                 <button
-                  type="button"
                   onClick={() => {
                     setStartDate("");
                     setEndDate("");
                     updateUrl({ start: null, end: null });
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-xs font-semibold text-slate-300 transition-all cursor-pointer"
-                  title="Clear Date Filter"
+                  className="text-slate-500 hover:text-rose-400 transition ml-0.5"
+                  title="Clear date filter"
                 >
-                  <RotateCcw size={12} className="text-slate-400" />
-                  <span>Clear</span>
+                  <RotateCcw className="w-3 h-3" />
                 </button>
               )}
             </div>
-          </div>
 
-          {/* Bottom Row: Applicant, Type & STT Status */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-800/50">
-            <div className="flex items-center gap-2">
-              <Filter size={15} className="text-emerald-400" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                APPLICANT:
-              </span>
-              <div className="relative inline-block min-w-[200px]">
-                <select
-                  value={memberFilter}
-                  onChange={(e) => {
-                    setMemberFilter(e.target.value);
-                    updateUrl({ member: e.target.value });
-                  }}
-                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-2 pr-9 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all"
+            {/* Date presets */}
+            <div className="relative h-9">
+              <select
+                onChange={(e) => {
+                  if (e.target.value) handlePresetRange(e.target.value);
+                }}
+                value=""
+                className="h-9 appearance-none bg-slate-950/60 border border-slate-800/60 rounded-xl px-3 pr-7 text-xs font-semibold text-slate-300 focus:outline-none cursor-pointer transition hover:border-slate-600 hover:text-slate-100"
+              >
+                <option value="" disabled>
+                  Presets
+                </option>
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="last-7">Last 7 Days</option>
+                <option value="this-month">This Month</option>
+                <option value="last-month">Last Month</option>
+                <option value="last-30">Last 30 Days</option>
+                <option value="last-90">Last 90 Days</option>
+                <option value="this-quarter">This Quarter</option>
+                <option value="this-fy">This FY (2026-27)</option>
+                <option value="last-fy">Last FY (2025-26)</option>
+              </select>
+              <ChevronDown className="w-3 h-3 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
+
+            {/* Filters button */}
+            {(() => {
+              const activeCount =
+                (memberFilter !== "All" ? 1 : 0) +
+                (typeFilter !== "All" ? 1 : 0) +
+                (sttFilter !== "All" ? 1 : 0);
+              return (
+                <button
+                  onClick={() => setFilterPanelOpen(true)}
+                  className={`relative flex items-center gap-2 h-9 px-4 rounded-xl border text-xs font-semibold transition-all ${
+                    activeCount > 0
+                      ? "bg-teal-500/10 border-teal-500/40 text-teal-300 hover:bg-teal-500/20"
+                      : "bg-slate-950/60 border-slate-800/60 text-slate-300 hover:border-slate-600 hover:text-slate-100"
+                  }`}
                 >
-                  <option value="All" className="bg-slate-900 text-slate-200">
-                    All Applicants
-                  </option>
-                  {memberNames.map((m) => (
-                    <option
-                      key={m}
-                      value={m}
-                      className="bg-slate-900 text-slate-200"
-                    >
-                      {m}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  TYPE:
-                </span>
-                <div className="relative inline-block min-w-[140px]">
-                  <select
-                    value={typeFilter}
-                    onChange={(e) => {
-                      setTypeFilter(e.target.value);
-                      updateUrl({ type: e.target.value });
-                    }}
-                    className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-2 pr-9 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all"
-                  >
-                    <option value="All" className="bg-slate-900 text-slate-200">
-                      All Types
-                    </option>
-                    <optgroup
-                      label="Action"
-                      className="bg-slate-900 text-slate-400 font-bold"
-                    >
-                      <option
-                        value="BUY"
-                        className="bg-slate-900 text-slate-200 font-normal"
-                      >
-                        BUY
-                      </option>
-                      <option
-                        value="SELL"
-                        className="bg-slate-900 text-slate-200 font-normal"
-                      >
-                        SELL
-                      </option>
-                    </optgroup>
-                    {transactionTypeNames.length > 0 && (
-                      <optgroup
-                        label="Transaction Type"
-                        className="bg-slate-900 text-slate-400 font-bold"
-                      >
-                        {transactionTypeNames.map((tt) => (
-                          <option
-                            key={tt}
-                            value={tt}
-                            className="bg-slate-900 text-slate-200 font-normal"
-                          >
-                            {tt}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  STT STATUS:
-                </span>
-                <div className="relative inline-block min-w-[150px]">
-                  <select
-                    value={sttFilter}
-                    onChange={(e) => {
-                      setSttFilter(e.target.value);
-                      updateUrl({ stt: e.target.value });
-                    }}
-                    className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-2 pr-9 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all"
-                  >
-                    <option value="All" className="bg-slate-900 text-slate-200">
-                      All STT Status
-                    </option>
-                    <option
-                      value="Charged"
-                      className="bg-slate-900 text-slate-200"
-                    >
-                      STT Charged (&gt; ₹0)
-                    </option>
-                    <option
-                      value="Zero"
-                      className="bg-slate-900 text-slate-200"
-                    >
-                      No STT (₹0)
-                    </option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                </div>
-              </div>
-            </div>
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  Filters
+                  {activeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-teal-500 text-[9px] font-bold text-slate-950">
+                      {activeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })()}
           </div>
+
+          {/* Active filter chips row inside card */}
+          {(() => {
+            const chips: ReactNode[] = [];
+            if (memberFilter !== "All")
+              chips.push(
+                <span
+                  key="member"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                >
+                  👤 {memberFilter}
+                  <button
+                    onClick={() => {
+                      setMemberFilter("All");
+                      updateUrl({ member: "All" });
+                    }}
+                    className="hover:opacity-70 transition ml-0.5"
+                    aria-label="Remove member filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            if (typeFilter !== "All")
+              chips.push(
+                <span
+                  key="type"
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                    typeFilter === "BUY"
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                      : typeFilter === "SELL"
+                        ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                        : "bg-teal-500/15 text-teal-300 border-teal-500/30"
+                  }`}
+                >
+                  🔄 {typeFilter}
+                  <button
+                    onClick={() => {
+                      setTypeFilter("All");
+                      updateUrl({ type: "All" });
+                    }}
+                    className="hover:opacity-70 transition ml-0.5"
+                    aria-label="Remove type filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            if (sttFilter !== "All")
+              chips.push(
+                <span
+                  key="stt"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+                >
+                  🏛 {sttFilter === "Charged" ? "STT Charged" : "No STT"}
+                  <button
+                    onClick={() => {
+                      setSttFilter("All");
+                      updateUrl({ stt: "All" });
+                    }}
+                    className="hover:opacity-70 transition ml-0.5"
+                    aria-label="Remove STT filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            if (startDate || endDate)
+              chips.push(
+                <span
+                  key="date"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                >
+                  📅{" "}
+                  {startDate && endDate
+                    ? `${startDate} – ${endDate}`
+                    : startDate
+                      ? `From ${startDate}`
+                      : `Until ${endDate}`}
+                  <button
+                    onClick={() => {
+                      setStartDate("");
+                      setEndDate("");
+                      updateUrl({ start: null, end: null });
+                    }}
+                    className="hover:opacity-70 transition ml-0.5"
+                    aria-label="Remove date filter"
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            if (chips.length === 0) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/50">
+                {chips}
+                <button
+                  onClick={handleClearAll}
+                  className="text-[10px] text-slate-500 hover:text-rose-400 transition ml-1"
+                >
+                  Clear all
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Table Container */}

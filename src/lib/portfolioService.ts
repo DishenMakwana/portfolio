@@ -8,9 +8,11 @@ import {
   sipMandates,
   memberReportCagrs,
   sipTransactions,
+  zerodhaTransactions,
 } from "../db/schema";
 import { eq, asc, desc, sql } from "drizzle-orm";
 import { autoMapScheme } from "./mfApi";
+import { parseMonthYear } from "@/helpers/dates";
 import {
   HoldingDetails,
   ParsedHolding,
@@ -106,6 +108,11 @@ export async function saveReportSnapshot(
         })
         .returning();
       member = inserted;
+    } else if (!member.pan && item.memberPan) {
+      await db
+        .update(familyMembers)
+        .set({ pan: item.memberPan })
+        .where(eq(familyMembers.id, member.id));
     }
 
     // 3.2 Get or Create Scheme
@@ -184,11 +191,17 @@ export async function saveReportSnapshot(
           .returning();
         member = inserted;
       }
-      await db.insert(memberReportCagrs).values({
-        reportId: newReport.id,
-        memberId: member.id,
-        cagr: mc.cagr,
+      const existing = await db.query.memberReportCagrs.findFirst({
+        where: (table, { and, eq }) =>
+          and(eq(table.reportId, newReport.id), eq(table.memberId, member.id)),
       });
+      if (!existing) {
+        await db.insert(memberReportCagrs).values({
+          reportId: newReport.id,
+          memberId: member.id,
+          cagr: mc.cagr,
+        });
+      }
     }
   }
 
@@ -218,7 +231,7 @@ export async function getReports() {
 }
 
 /**
- * Get detailed holdings snapshot for a specific report
+ * Get detailed holdings snapshot for a specific report, including fully redeemed / inactive folios
  */
 export async function getReportHoldings(
   reportId: number
@@ -260,7 +273,184 @@ export async function getReportHoldings(
     .where(eq(holdingsSnapshot.reportId, reportId))
     .orderBy(desc(holdingsSnapshot.currentValue));
 
-  return snapshots as HoldingDetails[];
+  // Build a set of existing active snapshot keys (memberId_schemeId_folioNo)
+  const existingSnapshotKeys = new Set<string>();
+  snapshots.forEach((s) => {
+    if (s.memberId && s.schemeId && s.folioNo) {
+      const cleanFolio = s.folioNo.trim().replace(/^'/, "").toLowerCase();
+      existingSnapshotKeys.add(`${s.memberId}_${s.schemeId}_${cleanFolio}`);
+    }
+  });
+
+  // Query transactions to reconstruct any inactive / fully redeemed folios
+  const rawTxs = await db
+    .select({
+      id: transactions.id,
+      schemeId: transactions.schemeId,
+      memberId: transactions.memberId,
+      folioNo: transactions.folioNo,
+      date: transactions.date,
+      type: transactions.type,
+      units: transactions.units,
+      amount: transactions.amount,
+      nav: transactions.nav,
+      schemeCategory: schemes.category,
+      schemeName: schemes.name,
+      schemeCodeApi: schemes.schemeCodeApi,
+      memberName: familyMembers.name,
+      memberPan: familyMembers.pan,
+    })
+    .from(transactions)
+    .leftJoin(schemes, eq(transactions.schemeId, schemes.id))
+    .leftJoin(familyMembers, eq(transactions.memberId, familyMembers.id))
+    .orderBy(asc(transactions.date));
+
+  // Group transactions by (memberId_schemeId_folioNo)
+  const txFolioMap = new Map<
+    string,
+    {
+      firstTxId: number;
+      memberId: number;
+      schemeId: number;
+      memberName: string;
+      memberPan: string | null;
+      schemeName: string;
+      category: string;
+      schemeCodeApi: string | null;
+      folioNo: string;
+      buyUnits: number;
+      sellUnits: number;
+      buyAmount: number;
+      sellAmount: number;
+      buyDates: string[];
+      sellDates: string[];
+      lastNav: number;
+    }
+  >();
+
+  for (const t of rawTxs) {
+    if (!t.memberId || !t.schemeId || !t.folioNo) continue;
+    const cleanFolio = t.folioNo.trim().replace(/^'/, "").toLowerCase();
+    const key = `${t.memberId}_${t.schemeId}_${cleanFolio}`;
+
+    if (!txFolioMap.has(key)) {
+      txFolioMap.set(key, {
+        firstTxId: t.id,
+        memberId: t.memberId,
+        schemeId: t.schemeId,
+        memberName: t.memberName || "Unknown",
+        memberPan: t.memberPan || null,
+        schemeName: t.schemeName || "Unknown Scheme",
+        category: t.schemeCategory || "Equity",
+        schemeCodeApi: t.schemeCodeApi || null,
+        folioNo: t.folioNo,
+        buyUnits: 0,
+        sellUnits: 0,
+        buyAmount: 0,
+        sellAmount: 0,
+        buyDates: [],
+        sellDates: [],
+        lastNav: t.nav || 0,
+      });
+    }
+
+    const item = txFolioMap.get(key)!;
+    const type = (t.type || "").toUpperCase();
+    const amt = t.amount || 0;
+    const units = t.units || 0;
+
+    if (type === "BUY" || type === "PURCHASE" || type === "SIP") {
+      item.buyUnits += units;
+      item.buyAmount += amt;
+      if (t.date) item.buyDates.push(t.date);
+    } else if (type === "SELL" || type === "REDEMPTION" || type === "SWP") {
+      item.sellUnits += units;
+      item.sellAmount += amt;
+      if (t.date) item.sellDates.push(t.date);
+    }
+  }
+
+  // Patch purchaseValue for existing snapshot rows that have 0 balance and 0 purchaseValue
+  snapshots.forEach((s) => {
+    if (
+      s.memberId &&
+      s.schemeId &&
+      s.folioNo &&
+      (s.balanceUnits ?? 0) <= 0.0001 &&
+      (s.purchaseValue ?? 0) === 0
+    ) {
+      const cleanFolio = s.folioNo.trim().replace(/^'/, "").toLowerCase();
+      const key = `${s.memberId}_${s.schemeId}_${cleanFolio}`;
+      const item = txFolioMap.get(key);
+      if (item && item.buyAmount > 0) {
+        s.purchaseValue = Math.round(item.buyAmount * 100) / 100;
+        s.gain = Math.round((item.sellAmount - item.buyAmount) * 100) / 100;
+      }
+    }
+  });
+
+  // Identify inactive (fully redeemed) folios not already present as active snapshots
+  const inactiveHoldings: HoldingDetails[] = [];
+
+  for (const [key, item] of txFolioMap.entries()) {
+    const balUnits = item.buyUnits - item.sellUnits;
+    const isInactive = balUnits <= 0.0001 && item.buyUnits > 0;
+
+    // Only add if it's inactive and NOT already present in active snapshots
+    if (isInactive && !existingSnapshotKeys.has(key)) {
+      const netProfit = item.sellAmount - item.buyAmount;
+      const absReturn =
+        item.buyAmount > 0
+          ? Math.round((netProfit / item.buyAmount) * 10000) / 100
+          : 0;
+
+      let holdingDays = 1;
+      if (item.buyDates.length > 0 && item.sellDates.length > 0) {
+        const d1 = new Date(item.buyDates[0]);
+        const d2 = new Date(item.sellDates[item.sellDates.length - 1]);
+        holdingDays = Math.max(
+          1,
+          Math.round((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24))
+        );
+      }
+
+      inactiveHoldings.push({
+        id: -item.firstTxId,
+        schemeId: item.schemeId,
+        memberId: item.memberId,
+        schemeName: item.schemeName,
+        category: item.category,
+        schemeCodeApi: item.schemeCodeApi,
+        folioNo: item.folioNo,
+        balanceUnits: 0,
+        purchaseNav:
+          item.buyUnits > 0 ? item.buyAmount / item.buyUnits : item.lastNav,
+        purchaseValue: Math.round(item.buyAmount * 100) / 100,
+        currentNav: 0,
+        currentValue: 0,
+        gain: Math.round(netProfit * 100) / 100,
+        holdingDays,
+        absoluteReturn: absReturn,
+        cagr: 0,
+        xirr: 0,
+        alpha: 0,
+        comments: "Fully Redeemed / Sold",
+        memberName: item.memberName,
+        memberPan: item.memberPan,
+        modeOfHolding: null,
+        kycStatus: null,
+        ucc: null,
+        email: null,
+        mobile: null,
+        nominee: null,
+        rta: null,
+        isin: null,
+        annualisedReturn: null,
+      } as HoldingDetails);
+    }
+  }
+
+  return [...snapshots, ...inactiveHoldings] as HoldingDetails[];
 }
 
 /**
@@ -492,34 +682,50 @@ export async function saveSipMandates(
  * Get all SIP mandates with member and scheme info joined
  */
 export async function getSipMandates(): Promise<SipMandateRow[]> {
-  const rows = await db
-    .select({
-      id: sipMandates.id,
-      memberId: sipMandates.memberId,
-      memberName: familyMembers.name,
-      schemeId: sipMandates.schemeId,
-      schemeName: schemes.name,
-      folioNo: sipMandates.folioNo,
-      monthlyAmount: sipMandates.monthlyAmount,
-      startMonth: sipMandates.startMonth,
-      isActive: sipMandates.isActive,
-      uploadedAt: sipMandates.uploadedAt,
-      sourceFile: sipMandates.sourceFile,
-    })
-    .from(sipMandates)
-    .leftJoin(familyMembers, eq(sipMandates.memberId, familyMembers.id))
-    .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id))
-    .orderBy(asc(familyMembers.name), asc(schemes.name));
-
-  // Fetch all monthly transaction payment records
-  const txs = await db
-    .select({
-      id: sipTransactions.id,
-      sipMandateId: sipTransactions.sipMandateId,
-      month: sipTransactions.month,
-      amount: sipTransactions.amount,
-    })
-    .from(sipTransactions);
+  const [rows, txs, dbTxs, zTxs] = await Promise.all([
+    db
+      .select({
+        id: sipMandates.id,
+        memberId: sipMandates.memberId,
+        memberName: familyMembers.name,
+        schemeId: sipMandates.schemeId,
+        schemeName: schemes.name,
+        folioNo: sipMandates.folioNo,
+        monthlyAmount: sipMandates.monthlyAmount,
+        startMonth: sipMandates.startMonth,
+        isActive: sipMandates.isActive,
+        uploadedAt: sipMandates.uploadedAt,
+        sourceFile: sipMandates.sourceFile,
+      })
+      .from(sipMandates)
+      .leftJoin(familyMembers, eq(sipMandates.memberId, familyMembers.id))
+      .leftJoin(schemes, eq(sipMandates.schemeId, schemes.id))
+      .orderBy(asc(familyMembers.name), asc(schemes.name)),
+    db
+      .select({
+        id: sipTransactions.id,
+        sipMandateId: sipTransactions.sipMandateId,
+        month: sipTransactions.month,
+        amount: sipTransactions.amount,
+      })
+      .from(sipTransactions),
+    db
+      .select({
+        memberId: transactions.memberId,
+        schemeId: transactions.schemeId,
+        folioNo: transactions.folioNo,
+        date: transactions.date,
+      })
+      .from(transactions),
+    db
+      .select({
+        memberId: zerodhaTransactions.memberId,
+        schemeId: zerodhaTransactions.schemeId,
+        folioNo: zerodhaTransactions.folioNo,
+        date: zerodhaTransactions.date,
+      })
+      .from(zerodhaTransactions),
+  ]);
 
   // Group transactions by mandateId
   const txsMap: Record<number, Record<string, number>> = {};
@@ -529,20 +735,93 @@ export async function getSipMandates(): Promise<SipMandateRow[]> {
     txsMap[tx.sipMandateId][tx.month] = tx.amount;
   });
 
-  return rows.map((r) => ({
-    id: r.id,
-    memberId: r.memberId!,
-    memberName: r.memberName || "Unknown",
-    schemeId: r.schemeId!,
-    schemeName: r.schemeName || "Unknown",
-    folioNo: r.folioNo,
-    monthlyAmount: r.monthlyAmount,
-    monthlyHistory: txsMap[r.id] || {},
-    startMonth: r.startMonth,
-    isActive: r.isActive === 1,
-    uploadedAt: r.uploadedAt,
-    sourceFile: r.sourceFile,
-  }));
+  const cleanFolio = (f: string | null | undefined): string => {
+    if (!f) return "";
+    return f.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  };
+
+  return rows.map((r) => {
+    const rCleanFolio = cleanFolio(r.folioNo);
+    const matchingTxDates: string[] = [];
+
+    if (r.memberId) {
+      dbTxs.forEach((t) => {
+        if (t.memberId === r.memberId) {
+          const tCleanFolio = cleanFolio(t.folioNo);
+          const folioMatch =
+            rCleanFolio &&
+            tCleanFolio &&
+            (rCleanFolio.includes(tCleanFolio) ||
+              tCleanFolio.includes(rCleanFolio));
+          const schemeMatch = Boolean(r.schemeId && t.schemeId === r.schemeId);
+          if (folioMatch || schemeMatch) {
+            if (t.date) matchingTxDates.push(t.date);
+          }
+        }
+      });
+
+      zTxs.forEach((t) => {
+        if (t.memberId === r.memberId) {
+          const tCleanFolio = cleanFolio(t.folioNo);
+          const folioMatch =
+            rCleanFolio &&
+            tCleanFolio &&
+            (rCleanFolio.includes(tCleanFolio) ||
+              tCleanFolio.includes(rCleanFolio));
+          const schemeMatch = Boolean(r.schemeId && t.schemeId === r.schemeId);
+          if (folioMatch || schemeMatch) {
+            if (t.date) matchingTxDates.push(t.date);
+          }
+        }
+      });
+    }
+
+    matchingTxDates.sort();
+    let firstTxDate = matchingTxDates[0] || null;
+
+    const mHistory = txsMap[r.id] || {};
+    if (!firstTxDate) {
+      const activeMonths = Object.keys(mHistory).filter(
+        (col) => (mHistory[col] ?? 0) > 0
+      );
+      if (activeMonths.length > 0) {
+        const sortedMonths = activeMonths.sort(
+          (a, b) => parseMonthYear(a).getTime() - parseMonthYear(b).getTime()
+        );
+        const earliestDate = parseMonthYear(sortedMonths[0]);
+        if (earliestDate.getTime() > 0) {
+          const yyyy = earliestDate.getFullYear();
+          const mm = String(earliestDate.getMonth() + 1).padStart(2, "0");
+          firstTxDate = `${yyyy}-${mm}-01`;
+        }
+      }
+    }
+
+    if (!firstTxDate && r.startMonth) {
+      const parsedStart = parseMonthYear(r.startMonth);
+      if (parsedStart.getTime() > 0) {
+        const yyyy = parsedStart.getFullYear();
+        const mm = String(parsedStart.getMonth() + 1).padStart(2, "0");
+        firstTxDate = `${yyyy}-${mm}-01`;
+      }
+    }
+
+    return {
+      id: r.id,
+      memberId: r.memberId!,
+      memberName: r.memberName || "Unknown",
+      schemeId: r.schemeId!,
+      schemeName: r.schemeName || "Unknown",
+      folioNo: r.folioNo,
+      monthlyAmount: r.monthlyAmount,
+      monthlyHistory: mHistory,
+      startMonth: r.startMonth,
+      isActive: r.isActive === 1,
+      uploadedAt: r.uploadedAt,
+      sourceFile: r.sourceFile,
+      firstTxDate,
+    };
+  });
 }
 
 /**
