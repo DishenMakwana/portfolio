@@ -38,6 +38,7 @@ export function createBullionChartData(
 ): ChartDataPoint[] {
   return records.map((record) => ({
     date: formatBullionDate(record.timestamp, "2-digit"),
+    timestamp: record.timestamp,
     Gold: Math.round(record.goldPrice),
     Silver: Math.round(record.silverPrice),
     Platinum: Math.round(record.platinumPrice),

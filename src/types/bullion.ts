@@ -22,9 +22,20 @@ export interface BullionRates {
 
 export interface ChartDataPoint {
   date: string;
+  timestamp?: number;
   Gold: number;
   Silver: number;
   Platinum: number;
+}
+
+export type BullionPriceKey = Exclude<
+  keyof ChartDataPoint,
+  "date" | "timestamp"
+>;
+
+export interface BullionPriceTrend {
+  label: string;
+  priceKey: BullionPriceKey;
 }
 
 export interface BullionCache {
@@ -54,6 +65,21 @@ export const BULLION_METALS = {
 } as const;
 
 export type BullionMetal = (typeof BULLION_METALS)[keyof typeof BULLION_METALS];
+
+export const BULLION_PRICE_TRENDS: Record<BullionMetal, BullionPriceTrend> = {
+  [BULLION_METALS.GOLD]: {
+    label: "24K Gold /g without tax",
+    priceKey: "Gold",
+  },
+  [BULLION_METALS.SILVER]: {
+    label: "999 Fine Silver /g without tax",
+    priceKey: "Silver",
+  },
+  [BULLION_METALS.PLATINUM]: {
+    label: "PT950 Platinum /g without tax",
+    priceKey: "Platinum",
+  },
+};
 
 export const GOLD_PURITIES = {
   K24: "24K",
@@ -91,7 +117,10 @@ export type GstType = (typeof GST_TYPES)[keyof typeof GST_TYPES];
 export const TIMEFRAMES = {
   TF_7D: "7D",
   TF_30D: "30D",
+  TF_3M: "3M",
+  TF_6M: "6M",
   TF_1Y: "1Y",
+  TF_CUSTOM: "Custom",
 } as const;
 
 export type Timeframe = (typeof TIMEFRAMES)[keyof typeof TIMEFRAMES];

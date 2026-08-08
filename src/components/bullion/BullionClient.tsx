@@ -2,7 +2,7 @@
 
 import { formatInr } from "@/helpers/formatters";
 import { getAdjustedBullionPrice, CITIES } from "@/helpers/bullion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AreaChart,
@@ -13,6 +13,8 @@ import {
   Tooltip,
   ResponsiveContainer,
   Label,
+  ReferenceLine,
+  ReferenceDot,
 } from "recharts";
 import {
   TrendingUp,
@@ -23,6 +25,9 @@ import {
   Info,
   ChevronDown,
   RefreshCw,
+  Layers,
+  Check,
+  X,
 } from "lucide-react";
 import { refreshBullionDataAction } from "@/actions/portfolio";
 import {
@@ -31,6 +36,7 @@ import {
   ChartDataPoint,
   CustomChartTooltipProps,
   BULLION_METALS,
+  BULLION_PRICE_TRENDS,
   BullionMetal,
   GOLD_PURITIES,
   SILVER_PURITIES,
@@ -54,8 +60,16 @@ export default function BullionClient({
   const [selectedCity, setSelectedCity] = useState(CITIES[0]);
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
   const [timeframe, setTimeframe] = useState<Timeframe>(TIMEFRAMES.TF_1Y);
+  const [showHighLow, setShowHighLow] = useState<boolean>(false);
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [tempStartDate, setTempStartDate] = useState<string>("");
+  const [tempEndDate, setTempEndDate] = useState<string>("");
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] =
+    useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const selectedPriceTrend = BULLION_PRICE_TRENDS[selectedTab];
 
   const showToast = (msg: string): void => {
     setToastMessage(msg);
@@ -179,29 +193,83 @@ export default function BullionClient({
     }
   }, [budget, activePricePerGram, makingCharges, gstType]);
 
-  // Prepare chart data for active tab based on selected timeframe
-  const getChartData = () => {
+  // Prepare chart data for active tab based on selected timeframe & custom date range
+  const chartData = useMemo(() => {
     let rawData = chartDataState;
+
     if (timeframe === TIMEFRAMES.TF_7D) {
       rawData = chartDataState.slice(-7);
     } else if (timeframe === TIMEFRAMES.TF_30D) {
       rawData = chartDataState.slice(-30);
+    } else if (timeframe === TIMEFRAMES.TF_3M) {
+      rawData = chartDataState.slice(-90);
+    } else if (timeframe === TIMEFRAMES.TF_6M) {
+      rawData = chartDataState.slice(-180);
+    } else if (timeframe === TIMEFRAMES.TF_1Y) {
+      rawData = chartDataState.slice(-365);
+    } else if (
+      timeframe === TIMEFRAMES.TF_CUSTOM &&
+      customStartDate &&
+      customEndDate
+    ) {
+      const startTs = new Date(customStartDate + "T00:00:00").getTime();
+      const endTs = new Date(customEndDate + "T23:59:59").getTime();
+      rawData = chartDataState.filter((d) => {
+        const ts = d.timestamp || Date.parse(d.date) || 0;
+        return ts >= startTs && ts <= endTs;
+      });
     }
 
     return rawData.map((d) => ({
       date: d.date,
-      Price: getAdjustedBullionPrice(
-        selectedTab === BULLION_METALS.GOLD
-          ? d.Gold
-          : selectedTab === BULLION_METALS.SILVER
-            ? d.Silver
-            : d.Platinum,
-        selectedCity.offset
-      ),
+      timestamp: d.timestamp || Date.parse(d.date) || 0,
+      Price: d[selectedPriceTrend.priceKey],
     }));
-  };
+  }, [
+    chartDataState,
+    timeframe,
+    customStartDate,
+    customEndDate,
+    selectedPriceTrend.priceKey,
+  ]);
 
-  const chartData = getChartData();
+  // Compute Period High and Period Low for active chart data
+  const periodHighLow = useMemo(() => {
+    if (!chartData || chartData.length === 0) return null;
+
+    let highPt = chartData[0];
+    let lowPt = chartData[0];
+
+    for (const pt of chartData) {
+      if (pt.Price > highPt.Price) highPt = pt;
+      if (pt.Price < lowPt.Price) lowPt = pt;
+    }
+
+    const startPrice = chartData[0].Price;
+    const highReturnPct =
+      startPrice > 0 ? ((highPt.Price - startPrice) / startPrice) * 100 : 0;
+    const lowReturnPct =
+      startPrice > 0 ? ((lowPt.Price - startPrice) / startPrice) * 100 : 0;
+    const priceDiff = Math.abs(highPt.Price - lowPt.Price);
+    const rangePct =
+      lowPt.Price > 0 ? ((highPt.Price - lowPt.Price) / lowPt.Price) * 100 : 0;
+
+    const highTs = highPt.timestamp || Date.parse(highPt.date) || 0;
+    const lowTs = lowPt.timestamp || Date.parse(lowPt.date) || 0;
+    const daysApart = Math.round(
+      Math.abs(highTs - lowTs) / (24 * 60 * 60 * 1000)
+    );
+
+    return {
+      highPt,
+      lowPt,
+      highReturnPct,
+      lowReturnPct,
+      priceDiff,
+      rangePct,
+      daysApart,
+    };
+  }, [chartData]);
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -594,38 +662,162 @@ export default function BullionClient({
       </div>
 
       {/* Historical Trend Chart */}
-      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 shadow-xl">
+      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 shadow-xl relative">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div className="flex items-center gap-2">
             <TrendingUp size={18} className="text-teal-400" />
             <h2 className="text-base font-bold text-slate-200">
-              Price Trend ({selectedTab})
+              Price Trend ({selectedPriceTrend.label})
             </h2>
           </div>
-          <div className="flex bg-slate-950/60 p-0.5 border border-slate-800 rounded-lg text-xs font-bold w-full sm:w-auto">
-            {(
-              [TIMEFRAMES.TF_7D, TIMEFRAMES.TF_30D, TIMEFRAMES.TF_1Y] as const
-            ).map((tf) => (
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-start sm:justify-end">
+            {/* Timeframe Pill Buttons */}
+            <div className="flex bg-slate-950/60 p-0.5 border border-slate-800 rounded-lg text-xs font-bold">
+              {(
+                [
+                  TIMEFRAMES.TF_7D,
+                  TIMEFRAMES.TF_30D,
+                  TIMEFRAMES.TF_3M,
+                  TIMEFRAMES.TF_6M,
+                  TIMEFRAMES.TF_1Y,
+                ] as const
+              ).map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => {
+                    setTimeframe(tf);
+                    setIsCustomDatePickerOpen(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-md transition cursor-pointer ${
+                    timeframe === tf
+                      ? "bg-teal-500/20 text-teal-400 font-extrabold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Date Picker Dropdown Button */}
+            <div className="relative">
               <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-md transition cursor-pointer ${
-                  timeframe === tf
-                    ? "bg-teal-500/20 text-teal-400 font-extrabold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                onClick={() =>
+                  setIsCustomDatePickerOpen(!isCustomDatePickerOpen)
+                }
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                  timeframe === TIMEFRAMES.TF_CUSTOM
+                    ? "bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-sm"
+                    : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"
                 }`}
               >
-                {tf}
+                <Calendar size={13} className="text-teal-400" />
+                <span>
+                  {timeframe === TIMEFRAMES.TF_CUSTOM &&
+                  customStartDate &&
+                  customEndDate
+                    ? `${customStartDate} to ${customEndDate}`
+                    : "Custom Date"}
+                </span>
               </button>
-            ))}
+
+              {/* Custom Date Picker Popover */}
+              {isCustomDatePickerOpen && (
+                <div className="absolute right-0 top-11 z-30 w-80 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-xs font-bold text-slate-200">
+                      Custom Date Range
+                    </span>
+                    <button
+                      onClick={() => setIsCustomDatePickerOpen(false)}
+                      className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={tempStartDate}
+                        onChange={(e) => setTempStartDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={tempEndDate}
+                        onChange={(e) => setTempEndDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-teal-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                    <button
+                      onClick={() => {
+                        setCustomStartDate("");
+                        setCustomEndDate("");
+                        setTempStartDate("");
+                        setTempEndDate("");
+                        setTimeframe(TIMEFRAMES.TF_1Y);
+                        setIsCustomDatePickerOpen(false);
+                      }}
+                      className="text-xs font-semibold text-slate-400 hover:text-slate-200 cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (tempStartDate && tempEndDate) {
+                          setCustomStartDate(tempStartDate);
+                          setCustomEndDate(tempEndDate);
+                          setTimeframe(TIMEFRAMES.TF_CUSTOM);
+                          setIsCustomDatePickerOpen(false);
+                        }
+                      }}
+                      disabled={!tempStartDate || !tempEndDate}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 disabled:opacity-40 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer"
+                    >
+                      <Check size={13} />
+                      <span>Apply Range</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* High / Low Toggle Button */}
+            <button
+              onClick={() => setShowHighLow(!showHighLow)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${
+                showHighLow
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-950/40"
+                  : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"
+              }`}
+              title="Toggle High and Low points on graph"
+            >
+              <Layers size={13} />
+              <span>High / Low</span>
+            </button>
           </div>
         </div>
 
-        <div className="h-64">
+        {/* Chart Viewport */}
+        <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
-              margin={{ top: 10, right: 10, left: 10, bottom: 30 }}
+              margin={{ top: 15, right: 15, left: 10, bottom: 30 }}
             >
               <defs>
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
@@ -679,15 +871,127 @@ export default function BullionClient({
               <Area
                 type="monotone"
                 dataKey="Price"
-                name={`${selectedTab} Price`}
+                name={selectedPriceTrend.label}
                 stroke="#10b981"
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorPrice)"
               />
+
+              {/* Period High / Low Reference Lines & Dots */}
+              {showHighLow && periodHighLow && (
+                <>
+                  {/* High Line & Dot */}
+                  <ReferenceLine
+                    x={periodHighLow.highPt.date}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    opacity={0.6}
+                  />
+                  <ReferenceLine
+                    y={periodHighLow.highPt.Price}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    opacity={0.6}
+                  />
+                  <ReferenceDot
+                    x={periodHighLow.highPt.date}
+                    y={periodHighLow.highPt.Price}
+                    r={7}
+                    fill="#10b981"
+                    stroke="#022c22"
+                    strokeWidth={2.5}
+                    label={
+                      <HighLabelBadge
+                        value={`High: ${formatInr(periodHighLow.highPt.Price)}`}
+                      />
+                    }
+                  />
+
+                  {/* Low Line & Dot */}
+                  <ReferenceLine
+                    x={periodHighLow.lowPt.date}
+                    stroke="#f43f5e"
+                    strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    opacity={0.6}
+                  />
+                  <ReferenceLine
+                    y={periodHighLow.lowPt.Price}
+                    stroke="#f43f5e"
+                    strokeDasharray="3 3"
+                    strokeWidth={1.5}
+                    opacity={0.6}
+                  />
+                  {periodHighLow.lowPt.date !== periodHighLow.highPt.date && (
+                    <ReferenceDot
+                      x={periodHighLow.lowPt.date}
+                      y={periodHighLow.lowPt.Price}
+                      r={7}
+                      fill="#f43f5e"
+                      stroke="#4c0519"
+                      strokeWidth={2.5}
+                      label={
+                        <LowLabelBadge
+                          value={`Low: ${formatInr(periodHighLow.lowPt.Price)}`}
+                        />
+                      }
+                    />
+                  )}
+                </>
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
+
+        {/* High / Low Stat Pill Summary Bar */}
+        {showHighLow && periodHighLow && (
+          <div className="mt-5 p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-slate-400 font-semibold">Period High:</span>
+              <strong className="text-emerald-400 font-bold">
+                {formatInr(periodHighLow.highPt.Price)}
+              </strong>
+              <span className="text-slate-500">
+                ({periodHighLow.highPt.date},{" "}
+                {periodHighLow.highReturnPct >= 0 ? "+" : ""}
+                {periodHighLow.highReturnPct.toFixed(1)}%)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+              <span className="text-slate-400 font-semibold">Period Low:</span>
+              <strong className="text-rose-400 font-bold">
+                {formatInr(periodHighLow.lowPt.Price)}
+              </strong>
+              <span className="text-slate-500">
+                ({periodHighLow.lowPt.date},{" "}
+                {periodHighLow.lowReturnPct >= 0 ? "+" : ""}
+                {periodHighLow.lowReturnPct.toFixed(1)}%)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-slate-300 font-medium border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0 sm:pl-3">
+              <span>Range:</span>
+              <strong className="text-amber-400 font-bold">
+                {periodHighLow.rangePct.toFixed(1)}% (
+                {formatInr(periodHighLow.priceDiff)})
+              </strong>
+
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300 ml-1">
+                <Calendar size={12} className="text-amber-400" />
+                <span>
+                  {periodHighLow.daysApart}{" "}
+                  {periodHighLow.daysApart === 1 ? "day" : "days"} apart
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Toast Notification */}
@@ -781,3 +1085,85 @@ export default function BullionClient({
     return null;
   }
 }
+
+const HighLabelBadge = (props: {
+  viewBox?: { x?: number; y?: number };
+  value?: string;
+}) => {
+  const { viewBox, value } = props;
+  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
+    return null;
+  const { x, y } = viewBox;
+
+  const isNearRightEdge = x > 500;
+  const rectX = isNearRightEdge ? -120 : -60;
+  const textX = isNearRightEdge ? -60 : 0;
+
+  return (
+    <g transform={`translate(${x}, ${y - 14})`}>
+      <rect
+        x={rectX}
+        y={-18}
+        width={120}
+        height={22}
+        rx={6}
+        fill="#047857"
+        stroke="#34d399"
+        strokeWidth={1.5}
+        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+      />
+      <text
+        x={textX}
+        y={-6}
+        fill="#ecfdf5"
+        fontSize={11}
+        fontWeight="800"
+        textAnchor="middle"
+        dominantBaseline="middle"
+      >
+        {value}
+      </text>
+    </g>
+  );
+};
+
+const LowLabelBadge = (props: {
+  viewBox?: { x?: number; y?: number };
+  value?: string;
+}) => {
+  const { viewBox, value } = props;
+  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
+    return null;
+  const { x, y } = viewBox;
+
+  const isNearRightEdge = x > 500;
+  const rectX = isNearRightEdge ? -110 : -55;
+  const textX = isNearRightEdge ? -55 : 0;
+
+  return (
+    <g transform={`translate(${x}, ${y + 14})`}>
+      <rect
+        x={rectX}
+        y={-4}
+        width={110}
+        height={22}
+        rx={6}
+        fill="#be123c"
+        stroke="#f43f5e"
+        strokeWidth={1.5}
+        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+      />
+      <text
+        x={textX}
+        y={8}
+        fill="#fff1f2"
+        fontSize={11}
+        fontWeight="800"
+        textAnchor="middle"
+        dominantBaseline="middle"
+      >
+        {value}
+      </text>
+    </g>
+  );
+};
