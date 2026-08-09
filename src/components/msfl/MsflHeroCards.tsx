@@ -68,7 +68,7 @@ export default function MsflHeroCards({
         sub={
           mfCagrDelta === null
             ? benchmarkLabel
-            : `${formatPercent(mfCagrDelta)} vs Nifty Benchmark`
+            : `${formatPercent(mfCagrDelta)} vs Nifty Benchmark (${(insights.weightedCagr !== null ? insights.weightedCagr - mfCagrDelta : 0).toFixed(2)}%)`
         }
         icon={BarChart3}
         accentColor="amber"

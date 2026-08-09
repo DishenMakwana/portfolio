@@ -6,8 +6,8 @@ import MsflBenchmarkAndSummaryCards from "@/components/msfl/MsflBenchmarkAndSumm
 import MsflHoldingsSection from "@/components/msfl/MsflHoldingsSection";
 import MsflSectorAndCapAnalysis from "@/components/msfl/MsflSectorAndCapAnalysis";
 import MsflPortfolioTimeSeriesChart from "@/components/msfl/MsflPortfolioTimeSeriesChart";
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Upload,
   Trash,
@@ -29,27 +29,67 @@ import {
   updateMsflSchemeMappingAction,
 } from "@/actions/msfl";
 import { toast } from "react-hot-toast";
-// ─── Main Tab Component ────────────────────────────────────────────────────────
 
 export default function MsflDashboardClient({
   msflData,
   allMsflSchemes,
 }: MsflDashboardClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const [searchQuery, setSearchQuery] = useState("");
+
+  const initialQ = searchParams.get("q") || "";
+  const initialSort =
+    (searchParams.get("sort") as MsflSortField) || "currentValue";
+  const initialOrder = (searchParams.get("order") as "asc" | "desc") || "desc";
+
+  const [searchQuery, setSearchQuery] = useState(initialQ);
 
   // Sorting state for MSFL Stock Holdings
-  const [sortField, setSortField] = useState<MsflSortField>("currentValue");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortField, setSortField] = useState<MsflSortField>(initialSort);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("q") || "");
+    const sField =
+      (searchParams.get("sort") as MsflSortField) || "currentValue";
+    setSortField(sField);
+    const sOrder = (searchParams.get("order") as "asc" | "desc") || "desc";
+    setSortOrder(sOrder);
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQ = searchParams.get("q") || "";
+      if (currentQ !== searchQuery) {
+        updateUrl({ q: searchQuery });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const toggleSort = (field: typeof sortField) => {
+    let nextOrder: "asc" | "desc" = "desc";
     if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortOrder("desc");
+      nextOrder = sortOrder === "asc" ? "desc" : "asc";
     }
+    setSortField(field);
+    setSortOrder(nextOrder);
+    updateUrl({ sort: field, order: nextOrder });
   };
 
   const renderSortIcon = (field: typeof sortField) => {
