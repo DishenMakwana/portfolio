@@ -78,13 +78,44 @@ function getLastExpectedSnapshotDate(now: Date) {
   return yesterday;
 }
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+
 export default function ZerodhaSnapshotsTab({
   reportsList,
   handleFileUpload,
   handleDeleteReport,
   firstCasReportDate,
 }: ZerodhaSnapshotsTabProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialQ = searchParams.get("q") || "";
+  const [searchQuery, setSearchQuery] = useState(initialQ);
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQ = searchParams.get("q") || "";
+      if (currentQ !== searchQuery) {
+        const current = new URLSearchParams(searchParams.toString());
+        if (searchQuery) {
+          current.set("q", searchQuery);
+        } else {
+          current.delete("q");
+        }
+        const query = current.toString();
+        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+          scroll: false,
+        });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const chronologicalReports = [...reportsList].sort(
     (a, b) =>

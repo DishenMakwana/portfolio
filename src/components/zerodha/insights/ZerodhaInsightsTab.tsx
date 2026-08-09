@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { BarChart3, Layers, LineChart } from "lucide-react";
+import { BarChart3, Layers } from "lucide-react";
 import {
   formatMetricDiff,
   formatInrCompact,
@@ -30,43 +31,94 @@ import ZerodhaInsightsOutperformersGrid from "./ZerodhaInsightsOutperformersGrid
 
 export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
   const { insights, totals, holdings } = data;
+  const searchParams = useSearchParams();
 
-  const [activeSubTab, setActiveSubTab] = useState<
-    "overview" | "amc" | "category" | "overlaps"
-  >("overview");
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const rawSubTab = searchParams.get("tab");
+  const activeSubTab =
+    rawSubTab && ["overview", "amc", "category", "overlaps"].includes(rawSubTab)
+      ? (rawSubTab as "overview" | "amc" | "category" | "overlaps")
+      : "overview";
+
+  const initialAsset =
+    (searchParams.get("cagrAsset") as "mutual_fund" | "equity") ||
+    "mutual_fund";
+  const initialAmcKey =
+    (searchParams.get("amcSort") as AllocationAnalysisSortKey) || "weight";
+  const initialAmcDir =
+    (searchParams.get("amcOrder") as "asc" | "desc") || "desc";
+  const initialCatKey =
+    (searchParams.get("catSort") as AllocationAnalysisSortKey) || "weight";
+  const initialCatDir =
+    (searchParams.get("catOrder") as "asc" | "desc") || "desc";
 
   const [cagrAssetType, setCagrAssetType] = useState<"mutual_fund" | "equity">(
-    "mutual_fund"
+    initialAsset
   );
 
   // AMC sorting state
   const [amcSortKey, setAmcSortKey] =
-    useState<AllocationAnalysisSortKey>("weight");
-  const [amcSortDir, setAmcSortDir] = useState<"asc" | "desc">("desc");
+    useState<AllocationAnalysisSortKey>(initialAmcKey);
+  const [amcSortDir, setAmcSortDir] = useState<"asc" | "desc">(initialAmcDir);
 
   // Category sorting state
   const [categorySortKey, setCategorySortKey] =
-    useState<AllocationAnalysisSortKey>("weight");
+    useState<AllocationAnalysisSortKey>(initialCatKey);
   const [categorySortDir, setCategorySortDir] = useState<"asc" | "desc">(
-    "desc"
+    initialCatDir
   );
 
-  const handleAmcSort = (key: AllocationAnalysisSortKey) => {
-    if (amcSortKey === key) {
-      setAmcSortDir(amcSortDir === "asc" ? "desc" : "asc");
-    } else {
-      setAmcSortKey(key);
-      setAmcSortDir("desc");
+  useEffect(() => {
+    const cAsset = searchParams.get("cagrAsset") as "mutual_fund" | "equity";
+    if (cAsset) setCagrAssetType(cAsset);
+    const aKey = searchParams.get("amcSort") as AllocationAnalysisSortKey;
+    if (aKey) setAmcSortKey(aKey);
+    const aDir = searchParams.get("amcOrder") as "asc" | "desc";
+    if (aDir) setAmcSortDir(aDir);
+    const catKey = searchParams.get("catSort") as AllocationAnalysisSortKey;
+    if (catKey) setCategorySortKey(catKey);
+    const catDir = searchParams.get("catOrder") as "asc" | "desc";
+    if (catDir) setCategorySortDir(catDir);
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
     }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  const handleCagrAssetTypeChange = (asset: "mutual_fund" | "equity") => {
+    setCagrAssetType(asset);
+    updateUrl({ cagrAsset: asset });
+  };
+
+  const handleAmcSort = (key: AllocationAnalysisSortKey) => {
+    let nextDir: "asc" | "desc" = "desc";
+    if (amcSortKey === key) {
+      nextDir = amcSortDir === "asc" ? "desc" : "asc";
+    }
+    setAmcSortKey(key);
+    setAmcSortDir(nextDir);
+    updateUrl({ amcSort: key, amcOrder: nextDir });
   };
 
   const handleCategorySort = (key: AllocationAnalysisSortKey) => {
+    let nextDir: "asc" | "desc" = "desc";
     if (categorySortKey === key) {
-      setCategorySortDir(categorySortDir === "asc" ? "desc" : "asc");
-    } else {
-      setCategorySortKey(key);
-      setCategorySortDir("desc");
+      nextDir = categorySortDir === "asc" ? "desc" : "asc";
     }
+    setCategorySortKey(key);
+    setCategorySortDir(nextDir);
+    updateUrl({ catSort: key, catOrder: nextDir });
   };
 
   const benchmark = insights.benchmarkReturns.cagr3Y ?? 12;
@@ -422,7 +474,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
       {/* Hero metric cards with Asset View Selector */}
       <ZerodhaInsightsHeroCards
         cagrAssetType={cagrAssetType}
-        setCagrAssetType={setCagrAssetType}
+        setCagrAssetType={handleCagrAssetTypeChange}
         mfCount={mfHoldings.length}
         stockCount={stockHoldings.length}
         activeTotalInvested={activeTotalInvested}
@@ -437,34 +489,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
         assetTypeLabel={assetTypeLabel}
       />
 
-      {/* SUB-TABS SELECTOR */}
-      <div className="border-b border-slate-800/60 flex items-center gap-6 text-sm font-bold text-slate-400 overflow-x-auto pb-px">
-        {[
-          { id: "overview", label: "Overview", icon: BarChart3 },
-          { id: "amc", label: "AMC Analysis", icon: LineChart },
-          { id: "category", label: "Category Allocation", icon: Layers },
-          { id: "overlaps", label: "Overlaps", icon: Layers },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id as any)}
-            className={`py-3 relative cursor-pointer hover:text-slate-200 transition flex items-center gap-1.5 ${
-              activeSubTab === tab.id ? "text-teal-400" : ""
-            }`}
-          >
-            <tab.icon size={14} />
-            {tab.label}
-            {activeSubTab === tab.id && (
-              <motion.div
-                layoutId="zerodhaInsightsActiveSubTab"
-                className="absolute bottom-0 inset-x-0 h-0.5 bg-teal-400"
-              />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* SUB-TAB CONTENT */}
+      {/* Sub-Tab Content Panels (Full Width - Navigated via AppSidebar Tree) */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeSubTab}
@@ -506,10 +531,10 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                       : "Stocks CAGR Performance"}
                   </h3>
 
-                  {/* Toggle buttons right inside Chart Header */}
+                  {/* Asset View Selector (Mutual Funds vs Stocks) */}
                   <div className="flex items-center gap-1 bg-slate-950/80 border border-slate-800/80 p-1 rounded-xl shadow-inner shrink-0 self-start sm:self-auto">
                     <button
-                      onClick={() => setCagrAssetType("mutual_fund")}
+                      onClick={() => handleCagrAssetTypeChange("mutual_fund")}
                       className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${
                         cagrAssetType === "mutual_fund"
                           ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105"
@@ -519,7 +544,8 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                       Mutual Funds
                     </button>
                     <button
-                      onClick={() => setCagrAssetType("equity")}
+                      type="button"
+                      onClick={() => handleCagrAssetTypeChange("equity")}
                       className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${
                         cagrAssetType === "equity"
                           ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105"
@@ -589,7 +615,7 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                 <div className="flex items-center gap-2">
                   <Layers className="text-teal-400" size={18} />
                   <h2 className="text-base font-bold text-slate-100">
-                    Category Overlaps & Lumpsum Priorities
+                    Category Overlaps &amp; Lumpsum Priorities
                   </h2>
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -609,119 +635,83 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                     return (
                       <div
                         key={categoryName}
-                        className="rounded-2xl border border-slate-800/80 bg-slate-900/50 p-5 space-y-4"
+                        className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 shadow-xl space-y-4"
                       >
-                        <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-                          {categoryName} ({schemes.length} Funds)
-                        </h3>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-extrabold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-teal-400" />
+                            {categoryName}
+                          </h3>
+                          <span className="text-xs text-slate-400 font-medium">
+                            {schemes.length}{" "}
+                            {schemes.length === 1 ? "Fund" : "Funds"}
+                          </span>
+                        </div>
 
                         <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-slate-800">
+                          <table className="w-full text-left text-xs">
                             <thead>
-                              <tr className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                <th className="pb-3 pr-4">Scheme Name</th>
-                                <th className="pb-3 px-4 text-right">Value</th>
-                                <th className="pb-3 px-4 text-right">
-                                  Holding Period
+                              <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
+                                <th className="py-3 pr-4">Fund Name</th>
+                                <th className="py-3 px-4 text-right">
+                                  Current Value
                                 </th>
-                                <th className="pb-3 px-4 text-right">
-                                  Avg CAGR
+                                <th className="py-3 px-4 text-right">
+                                  Holding Days
                                 </th>
-                                <th className="pb-3 pl-4 text-right">
-                                  Action / Recommendation
+                                <th className="py-3 px-4 text-right">
+                                  Weighted CAGR
+                                </th>
+                                <th className="py-3 pl-4 text-right pr-4">
+                                  Status
                                 </th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800/60 text-sm">
-                              {schemes.map((s, idx) => {
-                                const isWinner =
-                                  idx === 0 && schemes.length > 1;
-                                const isRegular =
-                                  s.schemeName.toLowerCase().includes("reg") ||
-                                  s.schemeName
-                                    .toLowerCase()
-                                    .includes("regular");
-
-                                let recTag = "Consolidate / Switch";
-                                let tagClass =
-                                  "bg-slate-800/50 text-slate-400 border-slate-700/50";
-                                if (isWinner) {
-                                  if (s.avgHoldingDays < 365) {
-                                    recTag = "🏆 Priority (Short History ⚠️)";
-                                    tagClass =
-                                      "bg-amber-500/15 text-amber-300 border-amber-500/25 font-semibold";
-                                  } else {
-                                    recTag = "🏆 Lumpsum Priority";
-                                    tagClass =
-                                      "bg-teal-500/15 text-teal-300 border-teal-500/20 font-bold";
-                                  }
-                                } else if (schemes.length === 1) {
-                                  recTag = "Single Fund";
-                                  tagClass =
-                                    "bg-slate-800/60 text-slate-300 border-slate-700";
-                                } else if (s.cagr < 8) {
-                                  recTag = "Avoid / Underperforming";
-                                  tagClass =
-                                    "bg-rose-500/15 text-rose-400 border-rose-500/20";
-                                }
-
-                                return (
-                                  <tr
-                                    key={s.schemeName}
-                                    className="hover:bg-slate-800/20 transition-colors"
-                                  >
-                                    <td
-                                      className="py-3 pr-4 font-semibold text-slate-200"
-                                      title={s.schemeName}
-                                    >
-                                      {s.schemeName}
-                                      {isRegular && (
-                                        <span className="text-[10px] ml-2 px-1 py-0.25 bg-amber-500/10 text-amber-400 border border-amber-500/25 rounded uppercase">
-                                          Reg
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="py-3 px-4 text-right font-medium text-slate-300">
-                                      {formatInrCompact(s.totalValue)}
-                                    </td>
-                                    <td className="py-3 px-4 text-right text-xs text-slate-400">
-                                      <div className="font-bold text-slate-200">
-                                        {Math.round(
+                            <tbody className="divide-y divide-slate-800/50">
+                              {schemes.map((s, i) => (
+                                <tr
+                                  key={s.schemeName}
+                                  className={`hover:bg-slate-850/40 transition-colors ${
+                                    i === 0 ? "bg-teal-500/5" : ""
+                                  }`}
+                                >
+                                  <td className="py-3 pr-4 font-semibold text-slate-200">
+                                    {s.schemeName}
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-bold text-slate-300">
+                                    {formatInrCompact(s.totalValue)}
+                                  </td>
+                                  <td className="py-3 px-4 text-right text-slate-400 font-medium">
+                                    <div>
+                                      {Math.round(
+                                        s.avgHoldingDays
+                                      ).toLocaleString("en-IN")}{" "}
+                                      days
+                                    </div>
+                                    {s.avgHoldingDays >= 30 && (
+                                      <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                        {formatHoldingYearsAndDays(
                                           s.avgHoldingDays
-                                        ).toLocaleString("en-IN")}{" "}
-                                        {Math.round(s.avgHoldingDays) === 1
-                                          ? "day"
-                                          : "days"}
+                                        )}
                                       </div>
-                                      {s.avgHoldingDays >= 30 && (
-                                        <div className="text-[10px] mt-0.5 text-slate-500">
-                                          {formatHoldingYearsAndDays(
-                                            s.avgHoldingDays
-                                          )}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td
-                                      className={`py-3 px-4 text-right font-bold ${
-                                        s.cagr >= 15
-                                          ? "text-emerald-400"
-                                          : s.cagr >= 10
-                                            ? "text-amber-400"
-                                            : "text-rose-400"
-                                      }`}
-                                    >
-                                      {s.cagr.toFixed(2)}%
-                                    </td>
-                                    <td className="py-3 pl-4 text-right">
-                                      <span
-                                        className={`inline-block px-2.5 py-1 text-xs border rounded-lg ${tagClass}`}
-                                      >
-                                        {recTag}
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right font-extrabold text-teal-400">
+                                    {s.cagr.toFixed(2)}%
+                                  </td>
+                                  <td className="py-3 pl-4 text-right pr-4">
+                                    {i === 0 ? (
+                                      <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 font-bold uppercase tracking-wider">
+                                        Top Priority
                                       </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+                                    ) : (
+                                      <span className="inline-block text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-medium uppercase tracking-wider">
+                                        Secondary
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
 
                               {/* Total / Average Row */}
                               {(() => {

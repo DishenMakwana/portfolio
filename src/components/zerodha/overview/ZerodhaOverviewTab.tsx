@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   PieChart,
   Pie,
@@ -96,11 +96,18 @@ export default function ZerodhaOverviewTab({
       (a, b) => b.currentValue - a.currentValue
     );
     const topStock = sortedStocks[0] || null;
+    const top3Stocks = sortedStocks.slice(0, 3);
 
     const sortedFunds = [...fundHoldings].sort(
       (a, b) => b.currentValue - a.currentValue
     );
     const topFund = sortedFunds[0] || null;
+    const top3Funds = sortedFunds.slice(0, 3);
+
+    // Guaranteed top 3 stocks + top 3 mutual funds combined by valuation
+    const topHoldingsCombined = [...top3Stocks, ...top3Funds].sort(
+      (a, b) => b.currentValue - a.currentValue
+    );
 
     const sortedAll = [...holdings].sort(
       (a, b) => b.currentValue - a.currentValue
@@ -155,17 +162,32 @@ export default function ZerodhaOverviewTab({
       topStock,
       topStockPct:
         topStock && totalVal > 0 ? (topStock.currentValue / totalVal) * 100 : 0,
+      top3Stocks,
       topFund,
       topFundPct:
         topFund && totalVal > 0 ? (topFund.currentValue / totalVal) * 100 : 0,
+      top3Funds,
+      topHoldingsCombined,
       top3Pct,
       diversificationStatus,
       statusColor,
       topAmc,
       amcPct,
       avgDays,
+      totalVal,
     };
   }, [holdings]);
+  const [activeAssetIdx, setActiveAssetIdx] = useState<number | null>(null);
+  const [activeSectorIdx, setActiveSectorIdx] = useState<number | null>(null);
+
+  const activeAssetData =
+    activeAssetIdx !== null && data.assetSplit[activeAssetIdx]
+      ? data.assetSplit[activeAssetIdx]
+      : null;
+  const activeSectorData =
+    activeSectorIdx !== null && data.sectorAllocation[activeSectorIdx]
+      ? data.sectorAllocation[activeSectorIdx]
+      : null;
 
   return (
     <div className="space-y-6">
@@ -181,7 +203,7 @@ export default function ZerodhaOverviewTab({
                 <span className="w-1 h-4 bg-teal-400 rounded-full inline-block" />
                 Asset Distribution
               </h3>
-              <div className="h-48 flex items-center justify-center">
+              <div className="h-52 flex items-center justify-center">
                 {data.assetSplit.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -189,20 +211,70 @@ export default function ZerodhaOverviewTab({
                         data={data.assetSplit}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
+                        innerRadius={52}
                         outerRadius={75}
                         paddingAngle={3}
                         dataKey="value"
                         strokeWidth={0}
+                        onMouseEnter={(_, index) => setActiveAssetIdx(index)}
+                        onMouseLeave={() => setActiveAssetIdx(null)}
                         shape={(
-                          props: PieSectorDataItem & { index: number }
-                        ) => (
-                          <Sector
-                            {...props}
-                            fill={COLORS[props.index % COLORS.length]}
-                          />
-                        )}
+                          props: PieSectorDataItem & {
+                            index: number;
+                            cx: number;
+                            cy: number;
+                            midAngle?: number;
+                          }
+                        ) => {
+                          const isHovered = activeAssetIdx === props.index;
+                          const midAngle = props.midAngle ?? 0;
+                          const RADIAN = Math.PI / 180;
+                          const popDist = isHovered ? 7 : 0;
+                          const dx = Math.cos(-midAngle * RADIAN) * popDist;
+                          const dy = Math.sin(-midAngle * RADIAN) * popDist;
+                          const opacity =
+                            activeAssetIdx === null || isHovered ? 1 : 0.45;
+
+                          return (
+                            <g className="transition-all duration-300 cursor-pointer">
+                              <Sector
+                                {...props}
+                                cx={props.cx + dx}
+                                cy={props.cy + dy}
+                                outerRadius={
+                                  isHovered
+                                    ? (props.outerRadius ?? 75) + 4
+                                    : props.outerRadius
+                                }
+                                fill={COLORS[props.index % COLORS.length]}
+                                opacity={opacity}
+                              />
+                            </g>
+                          );
+                        }}
                       />
+                      <text
+                        x="50%"
+                        y="45%"
+                        textAnchor="middle"
+                        className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
+                      >
+                        {activeAssetData
+                          ? activeAssetData.name.length > 14
+                            ? `${activeAssetData.name.slice(0, 12)}..`
+                            : activeAssetData.name
+                          : "Asset Mix"}
+                      </text>
+                      <text
+                        x="50%"
+                        y="58%"
+                        textAnchor="middle"
+                        className="fill-teal-400 font-extrabold text-xs tracking-tight"
+                      >
+                        {activeAssetData
+                          ? formatCurrency(activeAssetData.value)
+                          : formatCurrency(totals.currentValue)}
+                      </text>
                       <Tooltip
                         content={({
                           active,
@@ -280,7 +352,7 @@ export default function ZerodhaOverviewTab({
                 <span className="w-1 h-4 bg-teal-400 rounded-full inline-block" />
                 Sector Weightages
               </h3>
-              <div className="h-48 flex items-center justify-center">
+              <div className="h-52 flex items-center justify-center">
                 {data.sectorAllocation.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -288,20 +360,70 @@ export default function ZerodhaOverviewTab({
                         data={data.sectorAllocation.slice(0, 5)}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
+                        innerRadius={52}
                         outerRadius={75}
                         paddingAngle={2}
                         dataKey="value"
                         strokeWidth={0}
+                        onMouseEnter={(_, index) => setActiveSectorIdx(index)}
+                        onMouseLeave={() => setActiveSectorIdx(null)}
                         shape={(
-                          props: PieSectorDataItem & { index: number }
-                        ) => (
-                          <Sector
-                            {...props}
-                            fill={COLORS[(props.index + 2) % COLORS.length]}
-                          />
-                        )}
+                          props: PieSectorDataItem & {
+                            index: number;
+                            cx: number;
+                            cy: number;
+                            midAngle?: number;
+                          }
+                        ) => {
+                          const isHovered = activeSectorIdx === props.index;
+                          const midAngle = props.midAngle ?? 0;
+                          const RADIAN = Math.PI / 180;
+                          const popDist = isHovered ? 7 : 0;
+                          const dx = Math.cos(-midAngle * RADIAN) * popDist;
+                          const dy = Math.sin(-midAngle * RADIAN) * popDist;
+                          const opacity =
+                            activeSectorIdx === null || isHovered ? 1 : 0.45;
+
+                          return (
+                            <g className="transition-all duration-300 cursor-pointer">
+                              <Sector
+                                {...props}
+                                cx={props.cx + dx}
+                                cy={props.cy + dy}
+                                outerRadius={
+                                  isHovered
+                                    ? (props.outerRadius ?? 75) + 4
+                                    : props.outerRadius
+                                }
+                                fill={COLORS[(props.index + 2) % COLORS.length]}
+                                opacity={opacity}
+                              />
+                            </g>
+                          );
+                        }}
                       />
+                      <text
+                        x="50%"
+                        y="45%"
+                        textAnchor="middle"
+                        className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
+                      >
+                        {activeSectorData
+                          ? activeSectorData.name.length > 14
+                            ? `${activeSectorData.name.slice(0, 12)}..`
+                            : activeSectorData.name
+                          : "Top Sectors"}
+                      </text>
+                      <text
+                        x="50%"
+                        y="58%"
+                        textAnchor="middle"
+                        className="fill-teal-400 font-extrabold text-xs tracking-tight"
+                      >
+                        {activeSectorData
+                          ? formatCurrency(activeSectorData.value)
+                          : formatCurrency(totals.currentValue)}
+                      </text>
                       <Tooltip
                         content={({
                           active,
@@ -395,62 +517,59 @@ export default function ZerodhaOverviewTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
-                  {holdings
-                    .sort((a, b) => b.currentValue - a.currentValue)
-                    .slice(0, 6)
-                    .map((h, i) => (
-                      <tr
-                        key={i}
-                        onClick={() => {
-                          if (h.holdingType === "mutual_fund") {
-                            router.push(`/fund/z_${h.id}`);
-                          }
-                        }}
-                        className={`hover:bg-slate-950/45 transition ${
-                          h.holdingType === "mutual_fund"
-                            ? "cursor-pointer select-none"
-                            : ""
+                  {insights.topHoldingsCombined.map((h, i) => (
+                    <tr
+                      key={i}
+                      onClick={() => {
+                        if (h.holdingType === "mutual_fund") {
+                          router.push(`/fund/z_${h.id}`);
+                        }
+                      }}
+                      className={`hover:bg-slate-950/45 transition ${
+                        h.holdingType === "mutual_fund"
+                          ? "cursor-pointer select-none"
+                          : ""
+                      }`}
+                    >
+                      <td className="p-3 font-bold text-slate-100">
+                        {h.symbol}
+                      </td>
+                      <td className="p-3">
+                        <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                          {h.holdingType === "equity" ? "EQ" : "MF"}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right text-slate-400">
+                        {formatCurrency(h.investedValue)}
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="font-bold text-slate-100">
+                          {formatCurrency(h.currentValue)}
+                        </div>
+                      </td>
+                      <td
+                        className={`p-3 text-right font-semibold ${
+                          h.unrealizedPnl >= 0
+                            ? "text-emerald-400"
+                            : "text-red-400"
                         }`}
                       >
-                        <td className="p-3 font-bold text-slate-100">
-                          {h.symbol}
-                        </td>
-                        <td className="p-3">
-                          <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
-                            {h.holdingType === "equity" ? "EQ" : "MF"}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right text-slate-400">
-                          {formatCurrency(h.investedValue)}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className="font-bold text-slate-100">
-                            {formatCurrency(h.currentValue)}
-                          </div>
-                        </td>
-                        <td
-                          className={`p-3 text-right font-semibold ${
+                        {formatCurrency(h.unrealizedPnl)}
+                      </td>
+                      <td className="p-3 text-right">
+                        <span
+                          className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
                             h.unrealizedPnl >= 0
-                              ? "text-emerald-400"
-                              : "text-red-400"
+                              ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
+                              : "bg-red-950/80 text-red-400 border border-red-800/40"
                           }`}
                         >
-                          {formatCurrency(h.unrealizedPnl)}
-                        </td>
-                        <td className="p-3 text-right">
-                          <span
-                            className={`font-bold inline-block px-2 py-0.5 rounded text-xs ${
-                              h.unrealizedPnl >= 0
-                                ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40"
-                                : "bg-red-950/80 text-red-400 border border-red-800/40"
-                            }`}
-                          >
-                            {h.unrealizedPnlPct >= 0 ? "+" : ""}
-                            {h.unrealizedPnlPct.toFixed(2)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          {h.unrealizedPnlPct >= 0 ? "+" : ""}
+                          {h.unrealizedPnlPct.toFixed(2)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -658,49 +777,68 @@ export default function ZerodhaOverviewTab({
             </div>
 
             {/* Top Assets */}
-            <div className="bg-slate-950/30 p-3 rounded-xl border border-slate-800/50 flex flex-col gap-2 text-xs">
-              {insights.topStock ? (
-                <div className="flex justify-between items-center gap-2">
-                  <span className="text-slate-400 font-medium shrink-0">
-                    Top Stock Asset
-                  </span>
-                  <span
-                    className="text-teal-400 font-bold text-right leading-snug"
-                    title={insights.topStock.symbol}
-                  >
-                    {insights.topStock.symbol} (
-                    {insights.topStockPct.toFixed(1)}% share)
-                  </span>
+            <div className="bg-slate-950/30 p-3.5 rounded-xl border border-slate-800/50 flex flex-col gap-3 text-xs">
+              <div>
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
+                  Top Stock Assets
                 </div>
-              ) : (
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 font-medium">
-                    Top Stock Asset
-                  </span>
-                  <span className="text-slate-500">—</span>
+                {insights.top3Stocks.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {insights.top3Stocks.map((s, idx) => {
+                      const pct =
+                        insights.totalVal > 0
+                          ? (s.currentValue / insights.totalVal) * 100
+                          : 0;
+                      return (
+                        <div
+                          key={s.id || s.symbol || idx}
+                          className="flex justify-between items-center gap-2"
+                        >
+                          <span className="text-slate-300 font-semibold truncate max-w-[140px]">
+                            {s.symbol}
+                          </span>
+                          <span className="text-teal-400 font-bold tabular-nums shrink-0">
+                            {pct.toFixed(1)}% share
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-slate-500">—</div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-800/50 pt-2.5">
+                <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
+                  Top Mutual Funds
                 </div>
-              )}
-              {insights.topFund ? (
-                <div className="flex justify-between items-center gap-2 border-t border-slate-800/50 pt-2">
-                  <span className="text-slate-400 font-medium shrink-0">
-                    Top Mutual Fund
-                  </span>
-                  <span
-                    className="text-violet-400 font-bold text-right leading-snug"
-                    title={insights.topFund.symbol}
-                  >
-                    {insights.topFund.symbol} ({insights.topFundPct.toFixed(1)}%
-                    share)
-                  </span>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center border-t border-slate-800/50 pt-2">
-                  <span className="text-slate-400 font-medium">
-                    Top Mutual Fund
-                  </span>
-                  <span className="text-slate-500">—</span>
-                </div>
-              )}
+                {insights.top3Funds.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {insights.top3Funds.map((f, idx) => {
+                      const pct =
+                        insights.totalVal > 0
+                          ? (f.currentValue / insights.totalVal) * 100
+                          : 0;
+                      return (
+                        <div
+                          key={f.id || f.symbol || idx}
+                          className="flex justify-between items-center gap-2"
+                        >
+                          <span className="text-slate-300 font-semibold truncate max-w-[140px]">
+                            {f.symbol}
+                          </span>
+                          <span className="text-violet-400 font-bold tabular-nums shrink-0">
+                            {pct.toFixed(1)}% share
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-slate-500">—</div>
+                )}
+              </div>
             </div>
           </motion.div>
 

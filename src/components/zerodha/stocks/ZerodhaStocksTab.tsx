@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { ZerodhaStocksTabProps } from "@/types/zerodha";
 import ZerodhaBenchmarkCards from "@/components/zerodha/overview/ZerodhaBenchmarkCards";
@@ -19,7 +19,34 @@ export default function ZerodhaStocksTab({
   metricDeltas,
 }: ZerodhaStocksTabProps) {
   const router = useRouter();
-  const [stockSearch, setStockSearch] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialSearch = searchParams.get("q") || "";
+  const [stockSearch, setStockSearch] = useState(initialSearch);
+
+  useEffect(() => {
+    setStockSearch(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQ = searchParams.get("q") || "";
+      if (currentQ !== stockSearch) {
+        const current = new URLSearchParams(searchParams.toString());
+        if (stockSearch) {
+          current.set("q", stockSearch);
+        } else {
+          current.delete("q");
+        }
+        const query = current.toString();
+        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+          scroll: false,
+        });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [stockSearch]);
 
   const filteredStocks = stocks
     .filter((s) => s.symbol.toLowerCase().includes(stockSearch.toLowerCase()))

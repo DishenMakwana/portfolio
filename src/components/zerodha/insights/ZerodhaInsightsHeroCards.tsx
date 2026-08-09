@@ -93,7 +93,7 @@ export default function ZerodhaInsightsHeroCards({
           sub={
             activeCagrDelta === null
               ? benchmarkLabel
-              : `${formatNullablePercent(activeCagrDelta)} vs benchmark`
+              : `${formatNullablePercent(activeCagrDelta)} vs benchmark (${(activeWeightedCagr !== null ? activeWeightedCagr - activeCagrDelta : 0).toFixed(2)}%)`
           }
           icon={BarChart3}
           accentColor="amber"

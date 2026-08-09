@@ -1,6 +1,8 @@
 "use client";
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { useState } from "react";
+import { PieChart, Pie, Sector, ResponsiveContainer, Tooltip } from "recharts";
+import type { PieSectorDataItem } from "recharts";
 import { PieChart as PieIcon, ShieldAlert, Layers } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import type {
@@ -71,47 +73,107 @@ export default function ZerodhaSectorAndCapAnalysis({
     color: SECTOR_COLORS[idx % SECTOR_COLORS.length],
   }));
 
+  const totalPortfolioValue = sectorBreakdown.reduce(
+    (acc, curr) => acc + curr.currentValue,
+    0
+  );
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const activeSector =
+    activeIndex !== null && pieData[activeIndex] ? pieData[activeIndex] : null;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch mb-6">
       {/* Sector Allocation Donut Chart & Breakdown */}
-      <div className="lg:col-span-7 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-md flex flex-col">
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5 mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400">
+      <div className="lg:col-span-7 bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800/60 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400">
               <PieIcon size={16} />
             </div>
             <div>
-              <h3 className="font-bold text-slate-100 text-sm sm:text-base leading-tight">
-                Sector Allocation & Return Breakdown
+              <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest">
+                Sector Breakdown
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Diversification across equity industry sectors
+              <p className="text-xs text-slate-400">
+                Distribution across {sectorBreakdown.length} sectors
               </p>
             </div>
           </div>
-          <span className="text-xs text-slate-400 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg font-semibold">
-            {sectorBreakdown.length} Sectors
-          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center flex-1">
           {/* Donut Chart with Center Summary Label */}
-          <div className="sm:col-span-5 h-[230px] relative flex items-center justify-center">
+          <div className="sm:col-span-5 h-[240px] relative flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
+                  innerRadius={58}
+                  outerRadius={88}
                   paddingAngle={3}
                   dataKey="value"
+                  strokeWidth={0}
+                  onMouseEnter={(_, index) => setActiveIndex(index)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                  shape={(
+                    props: PieSectorDataItem & {
+                      index: number;
+                      cx: number;
+                      cy: number;
+                      midAngle?: number;
+                    }
+                  ) => {
+                    const isHovered = activeIndex === props.index;
+                    const midAngle = props.midAngle ?? 0;
+                    const RADIAN = Math.PI / 180;
+                    const popDist = isHovered ? 7 : 0;
+                    const dx = Math.cos(-midAngle * RADIAN) * popDist;
+                    const dy = Math.sin(-midAngle * RADIAN) * popDist;
+                    const opacity =
+                      activeIndex === null || isHovered ? 1 : 0.45;
+
+                    return (
+                      <g className="transition-all duration-300 cursor-pointer">
+                        <Sector
+                          {...props}
+                          cx={props.cx + dx}
+                          cy={props.cy + dy}
+                          outerRadius={
+                            isHovered
+                              ? (props.outerRadius ?? 88) + 4
+                              : props.outerRadius
+                          }
+                          fill={pieData[props.index]?.color || "#3b82f6"}
+                          opacity={opacity}
+                        />
+                      </g>
+                    );
+                  }}
+                />
+                <text
+                  x="50%"
+                  y="45%"
+                  textAnchor="middle"
+                  className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
                 >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
+                  {activeSector
+                    ? activeSector.name.length > 14
+                      ? `${activeSector.name.slice(0, 12)}..`
+                      : activeSector.name
+                    : "Total Value"}
+                </text>
+                <text
+                  x="50%"
+                  y="58%"
+                  textAnchor="middle"
+                  className="fill-teal-400 font-extrabold text-xs tracking-tight"
+                >
+                  {activeSector
+                    ? formatCurrency(activeSector.value)
+                    : formatCurrency(totalPortfolioValue)}
+                </text>
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || !payload.length) return null;

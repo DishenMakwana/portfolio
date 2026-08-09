@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -37,16 +37,67 @@ export default function ZerodhaMappingTab({
   allSchemes,
 }: ZerodhaMappingTabProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  const initialStatus =
+    (searchParams.get("status") as "all" | "mapped" | "unmapped") || "all";
+  const initialType =
+    (searchParams.get("type") as "all" | "mf" | "stocks") || "all";
+  const initialQ = searchParams.get("q") || "";
 
   // Filter & Search states
   const [mappingFilter, setMappingFilter] = useState<
     "all" | "mapped" | "unmapped"
-  >("all");
+  >(initialStatus);
   const [assetTypeFilter, setAssetTypeFilter] = useState<
     "all" | "mf" | "stocks"
-  >("all");
-  const [localSearch, setLocalSearch] = useState("");
+  >(initialType);
+  const [localSearch, setLocalSearch] = useState(initialQ);
+
+  useEffect(() => {
+    setMappingFilter(
+      (searchParams.get("status") as "all" | "mapped" | "unmapped") || "all"
+    );
+    setAssetTypeFilter(
+      (searchParams.get("type") as "all" | "mf" | "stocks") || "all"
+    );
+    setLocalSearch(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "" || value === "all") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQ = searchParams.get("q") || "";
+      if (currentQ !== localSearch) {
+        updateUrl({ q: localSearch });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
+  const handleStatusFilterChange = (status: "all" | "mapped" | "unmapped") => {
+    setMappingFilter(status);
+    updateUrl({ status });
+  };
+
+  const handleTypeFilterChange = (type: "all" | "mf" | "stocks") => {
+    setAssetTypeFilter(type);
+    updateUrl({ type });
+  };
 
   // Manual Mapping Modal
   const [mappingSchemeId, setMappingSchemeId] = useState<number | null>(null);
@@ -171,7 +222,7 @@ export default function ZerodhaMappingTab({
             {(["all", "mapped", "unmapped"] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setMappingFilter(tab)}
+                onClick={() => handleStatusFilterChange(tab)}
                 className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${mappingFilter === tab ? "bg-slate-800 text-slate-100 shadow-md" : "text-slate-400 hover:text-slate-200"}`}
               >
                 {tab === "all" ? "All Status" : tab}
@@ -184,7 +235,7 @@ export default function ZerodhaMappingTab({
             {(["all", "mf", "stocks"] as const).map((type) => (
               <button
                 key={type}
-                onClick={() => setAssetTypeFilter(type)}
+                onClick={() => handleTypeFilterChange(type)}
                 className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition duration-150 cursor-pointer ${assetTypeFilter === type ? "bg-slate-800 text-slate-100 shadow-md" : "text-slate-400 hover:text-slate-200"}`}
               >
                 {type === "all"

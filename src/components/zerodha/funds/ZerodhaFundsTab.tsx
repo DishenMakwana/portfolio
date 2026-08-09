@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search } from "lucide-react";
 import {
   formatCurrency,
   formatPercent,
   formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ZerodhaFundsTabProps } from "@/types/zerodha";
 import ZerodhaBenchmarkCards from "@/components/zerodha/overview/ZerodhaBenchmarkCards";
 
@@ -21,7 +21,34 @@ export default function ZerodhaFundsTab({
   metricDeltas,
 }: ZerodhaFundsTabProps) {
   const router = useRouter();
-  const [fundSearch, setFundSearch] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialSearch = searchParams.get("q") || "";
+  const [fundSearch, setFundSearch] = useState(initialSearch);
+
+  useEffect(() => {
+    setFundSearch(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentQ = searchParams.get("q") || "";
+      if (currentQ !== fundSearch) {
+        const current = new URLSearchParams(searchParams.toString());
+        if (fundSearch) {
+          current.set("q", fundSearch);
+        } else {
+          current.delete("q");
+        }
+        const query = current.toString();
+        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+          scroll: false,
+        });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fundSearch]);
 
   const filteredFunds = funds
     .filter((f) => f.symbol.toLowerCase().includes(fundSearch.toLowerCase()))
