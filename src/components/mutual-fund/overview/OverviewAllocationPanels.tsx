@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { PieChart, Pie, Sector, Tooltip, ResponsiveContainer } from "recharts";
 import type { PieSectorDataItem } from "recharts";
@@ -27,6 +28,12 @@ export default function OverviewAllocationPanels({
   const stcgGain = Math.max(taxEstimate.stcgEstimate, 0);
   const taxableLtcg = Math.max(ltcgGain - 125000, 0);
 
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const activeCategory =
+    activeIndex !== null && categoryAllocation[activeIndex]
+      ? categoryAllocation[activeIndex]
+      : null;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       {/* Category Donut */}
@@ -40,23 +47,76 @@ export default function OverviewAllocationPanels({
           <span className="w-1 h-4 rounded-full bg-teal-400 inline-block" />
           Category Allocation
         </h4>
-        <div className="h-48">
+        <div className="h-52 relative">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={categoryAllocation}
-                innerRadius={50}
+                data={categoryAllocation.filter((c) => c.value > 0)}
+                innerRadius={52}
                 outerRadius={75}
                 paddingAngle={3}
                 dataKey="value"
                 strokeWidth={0}
-                shape={(props: PieSectorDataItem & { index: number }) => (
-                  <Sector
-                    {...props}
-                    fill={OVERVIEW_COLORS[props.index % OVERVIEW_COLORS.length]}
-                  />
-                )}
+                onMouseEnter={(_, index) => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(null)}
+                shape={(
+                  props: PieSectorDataItem & {
+                    index: number;
+                    cx: number;
+                    cy: number;
+                    midAngle?: number;
+                  }
+                ) => {
+                  const isHovered = activeIndex === props.index;
+                  const midAngle = props.midAngle ?? 0;
+                  const RADIAN = Math.PI / 180;
+                  const popDist = isHovered ? 7 : 0;
+                  const dx = Math.cos(-midAngle * RADIAN) * popDist;
+                  const dy = Math.sin(-midAngle * RADIAN) * popDist;
+                  const opacity = activeIndex === null || isHovered ? 1 : 0.45;
+
+                  return (
+                    <g className="transition-all duration-300 cursor-pointer">
+                      <Sector
+                        {...props}
+                        cx={props.cx + dx}
+                        cy={props.cy + dy}
+                        outerRadius={
+                          isHovered
+                            ? (props.outerRadius ?? 75) + 4
+                            : props.outerRadius
+                        }
+                        fill={
+                          OVERVIEW_COLORS[props.index % OVERVIEW_COLORS.length]
+                        }
+                        opacity={opacity}
+                      />
+                    </g>
+                  );
+                }}
               />
+              <text
+                x="50%"
+                y="45%"
+                textAnchor="middle"
+                className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
+              >
+                {activeCategory
+                  ? activeCategory.name.length > 14
+                    ? `${activeCategory.name.slice(0, 12)}..`
+                    : activeCategory.name
+                  : "Total Value"}
+              </text>
+              <text
+                x="50%"
+                y="58%"
+                textAnchor="middle"
+                className="fill-teal-400 font-extrabold text-xs tracking-tight"
+              >
+                {activeCategory
+                  ? formatCurrency(activeCategory.value)
+                  : formatCurrency(totals.currentValue)}
+              </text>
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;

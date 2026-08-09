@@ -130,7 +130,14 @@ export default function OverviewHeroCards({
         initial="hidden"
         animate="visible"
         variants={cardVariants}
-        onClick={() => topFund && router.push(`/fund/${topFund.id}`)}
+        onClick={() =>
+          topFund &&
+          router.push(
+            topFund.id < 0
+              ? `/fund/sold_${Math.abs(topFund.id)}`
+              : `/fund/${topFund.id}`
+          )
+        }
         className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl ${topFund ? "cursor-pointer hover:border-teal-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]" : ""}`}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
@@ -160,7 +167,14 @@ export default function OverviewHeroCards({
         initial="hidden"
         animate="visible"
         variants={cardVariants}
-        onClick={() => worstFund && router.push(`/fund/${worstFund.id}`)}
+        onClick={() =>
+          worstFund &&
+          router.push(
+            worstFund.id < 0
+              ? `/fund/sold_${Math.abs(worstFund.id)}`
+              : `/fund/${worstFund.id}`
+          )
+        }
         className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-red-500/20 rounded-2xl p-5 shadow-xl ${worstFund ? "cursor-pointer hover:border-red-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]" : ""}`}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none" />

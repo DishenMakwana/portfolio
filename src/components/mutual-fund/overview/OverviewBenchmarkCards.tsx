@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
-  Info,
   BarChart2,
   Zap,
   ArrowUpRight,
@@ -89,11 +88,8 @@ export default function OverviewBenchmarkCards({
         <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1">
-              Benchmark XIRR{" "}
-              <span title="Simulated UTI Nifty 50 Index Fund Direct Growth (120716) XIRR">
-                <Info size={10} className="text-slate-600" />
-              </span>
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Benchmark XIRR
             </span>
             <div className="p-2 rounded-xl bg-violet-500/10">
               <BarChart2 size={17} className="text-violet-400" />
@@ -125,11 +121,8 @@ export default function OverviewBenchmarkCards({
         />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1">
-              Alpha Generated{" "}
-              <span title="Portfolio XIRR – UTI Nifty 50 Index Fund Direct (120716) XIRR">
-                <Info size={10} className="text-slate-600" />
-              </span>
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Alpha Generated
             </span>
             <div
               className={`p-2 rounded-xl ${isAlphaPositive ? "bg-emerald-500/10" : "bg-red-500/10"}`}

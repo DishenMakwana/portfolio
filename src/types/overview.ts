@@ -74,6 +74,7 @@ export interface OverviewTabProps {
     cagrDelta: number | null;
     xirrDelta: number | null;
     alphaDelta: number | null;
+    accountStatus?: string | null;
   }[];
   holdings: OverviewHolding[];
 }
@@ -153,6 +154,7 @@ export interface OverviewMemberAndSubCategorySectionProps {
   };
   topFund: OverviewHolding | undefined;
   worstFund: OverviewHolding | undefined;
+  holdings?: OverviewHolding[];
   sortField:
     "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha";
   sortOrder: SortOrder;

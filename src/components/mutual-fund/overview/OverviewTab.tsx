@@ -210,6 +210,7 @@ export default function OverviewTab({
         concentrationInsights={concentrationInsights}
         topFund={topFund}
         worstFund={worstFund}
+        holdings={holdings}
         sortField={investorSortField}
         sortOrder={investorSortOrder}
         toggleSort={toggleInvestorSort}
