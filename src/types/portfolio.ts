@@ -35,6 +35,7 @@ export interface PortfolioTransaction {
   id?: number;
   date: string;
   type: "BUY" | "SELL";
+  transactionType?: string;
   amount: number;
   units?: number;
   schemeId?: number;
@@ -58,12 +59,44 @@ export interface RawTransaction {
 export interface VolatilityMeasures {
   alpha: number;
   sharpe: number;
+  sortino: number;
   mean: number;
   beta: number;
   stdDev: number;
   ytm: number;
   modifiedDuration: number;
   avgMaturity: number;
+  top5?: number;
+  top20?: number;
+  peRatio?: number;
+  pbRatio?: number;
+}
+
+export interface FactsheetPeriodReturns {
+  annualised: {
+    r3Y: number | null;
+    r5Y: number | null;
+    r10Y: number | null;
+    rAll: number | null;
+  };
+  absolute: {
+    r3Y: number | null;
+    r5Y: number | null;
+    r10Y: number | null;
+    rAll: number | null;
+  };
+  catAnnualised: {
+    r3Y: number | null;
+    r5Y: number | null;
+    r10Y: number | null;
+    rAll: number | null;
+  };
+  catAbsolute: {
+    r3Y: number | null;
+    r5Y: number | null;
+    r10Y: number | null;
+    rAll: number | null;
+  };
 }
 
 export interface FactsheetProfile {
@@ -246,6 +279,7 @@ export interface SipMandateRow {
   isActive: boolean;
   uploadedAt: string;
   sourceFile: string | null;
+  firstTxDate?: string | null;
 }
 
 export interface ActionResult<T = undefined> {
@@ -258,4 +292,5 @@ export interface BullionRatesResponse {
   rates: BullionRates;
   chartData: ChartDataPoint[];
   isThrottled?: boolean;
+  isStale?: boolean;
 }

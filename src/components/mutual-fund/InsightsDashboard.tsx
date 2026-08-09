@@ -111,6 +111,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     dir: initialSortDir,
   });
   const [stepUpPct, setStepUpPct] = useState(10);
+  const [expectedCagr, setExpectedCagr] = useState(12);
   const [expandedSchemes, setExpandedSchemes] = useState<Set<string>>(
     new Set()
   );
@@ -478,36 +479,6 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  // Sorted + filtered schemes
-  const filteredSchemes = useMemo(() => {
-    const base =
-      filterCategory === "All"
-        ? data.schemes
-        : filterCategory === "MF"
-          ? data.schemes.filter(
-              (s) =>
-                !(
-                  s.scheme.toLowerCase().includes("sif") ||
-                  s.category.toLowerCase().includes("sif")
-                )
-            )
-          : data.schemes.filter(
-              (s) =>
-                s.scheme.toLowerCase().includes("sif") ||
-                s.category.toLowerCase().includes("sif")
-            );
-    return [...base].sort((a, b) => {
-      const av = a[sort.key as keyof typeof a] as number | string;
-      const bv = b[sort.key as keyof typeof b] as number | string;
-      if (typeof av === "string" && typeof bv === "string") {
-        return sort.dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-      }
-      return sort.dir === "asc"
-        ? (av as number) - (bv as number)
-        : (bv as number) - (av as number);
-    });
-  }, [data.schemes, filterCategory, sort]);
-
   const niftyBenchmark = data.benchmarkReturns.cagr3Y ?? 12;
   // For the Members leaderboard CAGR filter: point-to-point Nifty CAGR from
   // the family's first investment date to today (not a fixed 3Y window).
@@ -544,15 +515,27 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
   const projectionRows = useMemo(() => {
     return Array.from({ length: 5 }, (_, i) => {
       const year = i + 1;
+      let cumulativeInvested = 0;
+      for (let y = 0; y <= i; y++) {
+        cumulativeInvested += baseSip * Math.pow(1 + stepUpPct / 100, y) * 12;
+      }
       const monthlySip = baseSip * Math.pow(1 + stepUpPct / 100, i);
-      const corpus = futureValueGrowingAnnuity(baseSip, 14, stepUpPct, year);
+      const annualSip = monthlySip * 12;
+      const corpus = futureValueGrowingAnnuity(
+        baseSip,
+        expectedCagr,
+        stepUpPct,
+        year
+      );
       return {
         year,
         monthlySip: Math.round(monthlySip),
+        annualSip: Math.round(annualSip),
+        cumulativeInvested: Math.round(cumulativeInvested),
         corpus: Math.round(corpus),
       };
     });
-  }, [baseSip, stepUpPct]);
+  }, [baseSip, stepUpPct, expectedCagr]);
 
   // Category palette index — mapped across all categories (active, zero balance, sold)
   const catPaletteIndexes = useMemo(() => {
@@ -761,7 +744,7 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
             {/* ── FUNDS ─────────────────────────────────────────────────────────── */}
             {activeTab === "funds" && (
               <FundsTab
-                schemes={filteredSchemes}
+                schemes={data.schemes}
                 filterCategory={filterCategory}
                 onFilterChange={handleFilterCategoryChange}
                 sort={sort}
@@ -808,6 +791,8 @@ export default function InsightsDashboard({ data }: InsightsDashboardProps) {
                 projectionRows={projectionRows}
                 stepUpPct={stepUpPct}
                 onStepUpChange={setStepUpPct}
+                expectedCagr={expectedCagr}
+                onCagrChange={setExpectedCagr}
               />
             )}
 

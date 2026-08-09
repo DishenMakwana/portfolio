@@ -17,6 +17,8 @@ import {
   calculateAlpha,
   getBenchmarkCodeForCategory,
   clearAllAlphaCaches,
+  isBuyTransactionType,
+  isSellTransactionType,
 } from "@/lib/alpha";
 import {
   PortfolioTransaction,
@@ -32,7 +34,7 @@ import { clearAllMsflCaches } from "@/lib/msflService";
 import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
 import { parseSipExcel } from "@/lib/sipParser";
 import { getBullionData } from "@/lib/bullionService";
-import { getAmcName, getSubCategory } from "@/helpers/allocation";
+import { getAmcName } from "@/helpers/allocation";
 import { getFyTrackerData } from "@/lib/insightsService";
 import { db } from "@/db/db";
 import {
@@ -40,6 +42,7 @@ import {
   reports,
   memberReportCagrs,
   familyMembers,
+  schemes,
 } from "@/db/schema";
 import { eq, lte, inArray, desc } from "drizzle-orm";
 
@@ -334,37 +337,69 @@ export async function getDashboardDataAction(
   }
 
   // Run DB queries in parallel for optimal render performance
-  const [holdings, allMemberCagrs, txHistory, previousHoldings] =
-    await Promise.all([
-      getReportHoldings(selectedReport.id),
-      db
-        .select({
-          reportId: memberReportCagrs.reportId,
-          memberId: memberReportCagrs.memberId,
-          cagr: memberReportCagrs.cagr,
-        })
-        .from(memberReportCagrs)
-        .where(inArray(memberReportCagrs.reportId, reportIdsToCheck)),
-      db
-        .select({
-          id: txTable.id,
-          memberId: txTable.memberId,
-          schemeId: txTable.schemeId,
-          folioNo: txTable.folioNo,
-          date: txTable.date,
-          type: txTable.type,
-          units: txTable.units,
-          nav: txTable.nav,
-          amount: txTable.amount,
-          sourceReportId: txTable.sourceReportId,
-        })
-        .from(txTable)
-        .where(lte(txTable.date, selectedReport.asOfDate))
-        .orderBy(desc(txTable.date), desc(txTable.id)),
-      previousReport
-        ? getReportHoldings(previousReport.id)
-        : Promise.resolve([]),
-    ]);
+  const [
+    holdings,
+    allMemberCagrs,
+    txHistory,
+    previousHoldings,
+    dbMembers,
+    allDBSchemes,
+  ] = await Promise.all([
+    getReportHoldings(selectedReport.id),
+    db
+      .select({
+        reportId: memberReportCagrs.reportId,
+        memberId: memberReportCagrs.memberId,
+        cagr: memberReportCagrs.cagr,
+      })
+      .from(memberReportCagrs)
+      .where(inArray(memberReportCagrs.reportId, reportIdsToCheck)),
+    db
+      .select({
+        id: txTable.id,
+        memberId: txTable.memberId,
+        schemeId: txTable.schemeId,
+        folioNo: txTable.folioNo,
+        date: txTable.date,
+        type: txTable.type,
+        transactionType: txTable.transactionType,
+        units: txTable.units,
+        nav: txTable.nav,
+        amount: txTable.amount,
+        sourceReportId: txTable.sourceReportId,
+      })
+      .from(txTable)
+      .where(lte(txTable.date, selectedReport.asOfDate))
+      .orderBy(desc(txTable.date), desc(txTable.id)),
+    previousReport ? getReportHoldings(previousReport.id) : Promise.resolve([]),
+    db
+      .select({
+        id: familyMembers.id,
+        name: familyMembers.name,
+        pan: familyMembers.pan,
+        address: familyMembers.address,
+        email: familyMembers.email,
+        mobile: familyMembers.mobile,
+        dematNominee: familyMembers.dematNominee,
+        dpId: familyMembers.dpId,
+        clientId: familyMembers.clientId,
+        dpName: familyMembers.dpName,
+        boSubStatus: familyMembers.boSubStatus,
+        bsda: familyMembers.bsda,
+        rgess: familyMembers.rgess,
+        accountStatus: familyMembers.accountStatus,
+        frozenStatus: familyMembers.frozenStatus,
+        boStatus: familyMembers.boStatus,
+        nsdlId: familyMembers.nsdlId,
+        dob: familyMembers.dob,
+        aadhaarStatus: familyMembers.aadhaarStatus,
+        linkedBankName: familyMembers.linkedBankName,
+        linkedBankIfsc: familyMembers.linkedBankIfsc,
+        linkedBankAccountNo: familyMembers.linkedBankAccountNo,
+      })
+      .from(familyMembers),
+    db.select({ name: schemes.name, category: schemes.category }).from(schemes),
+  ]);
 
   const memberCagrMap = new Map<string, number>();
   allMemberCagrs.forEach((c) => {
@@ -372,32 +407,130 @@ export async function getDashboardDataAction(
   });
 
   const getPortfolioTransactions = (
-    filterFn?: (tx: RawTransaction) => boolean
+    filterFn?: (
+      tx: RawTransaction & {
+        memberId?: number | null;
+        schemeId?: number | null;
+        transactionType?: string | null;
+      }
+    ) => boolean
   ): PortfolioTransaction[] => {
     return txHistory.filter(filterFn || (() => true)).map((tx) => ({
       date: tx.date,
-      type: tx.type as "BUY" | "SELL",
+      type: (tx.type || "BUY") as "BUY" | "SELL",
+      transactionType: tx.transactionType || tx.type || undefined,
       amount: tx.amount,
       units: tx.units,
+      memberId: tx.memberId ?? undefined,
+      schemeId: tx.schemeId ?? undefined,
     }));
   };
 
-  // Calculate Overall Portfolio Metrics
-  const overallTxs = getPortfolioTransactions();
-  const overallValuation = holdings.reduce((acc, h) => acc + h.currentValue, 0);
-  const overallInvested = holdings.reduce((acc, h) => acc + h.purchaseValue, 0);
-
-  const { portfolioXirr, benchmarkXirr, alpha } = await calculateAlpha(
-    overallTxs,
-    selectedReport.asOfDate,
-    overallValuation
+  // Calculate Active Holdings for portfolio-wide totals
+  const activeHoldings = holdings.filter(
+    (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
   );
+  const activePreviousHoldings = previousHoldings.filter(
+    (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
+  );
+
+  // Calculate Overall Portfolio Metrics
+  // XIRR methodology: Include SWITCH IN/OUT (real value transfers between funds),
+  // exclude only STP (Systematic Transfer In/Out — these are pure internal rollovers that roughly cancel each other)
+  const overallTxs = getPortfolioTransactions((tx) => {
+    const tType = (tx.transactionType || tx.type || "").toUpperCase().trim();
+    // Exclude Systematic Transfers (STP) — they are internal rollovers
+    if (tType.startsWith("SYSTEMATIC TRANSFER") || tType.startsWith("STP"))
+      return false;
+    return isBuyTransactionType(tType) || isSellTransactionType(tType);
+  });
+  const overallValuation = activeHoldings.reduce(
+    (acc, h) => acc + h.currentValue,
+    0
+  );
+  const overallInvested = activeHoldings.reduce(
+    (acc, h) => acc + h.purchaseValue,
+    0
+  );
+
+  const previousValuation = activePreviousHoldings.reduce(
+    (acc, h) => acc + h.currentValue,
+    0
+  );
+  const previousInvested = activePreviousHoldings.reduce(
+    (acc, h) => acc + h.purchaseValue,
+    0
+  );
+  const previousTxs = previousReport
+    ? getPortfolioTransactions((tx) => tx.date <= previousReport.asOfDate)
+    : [];
+
+  // 1. Calculate Scheme level XIRR in parallel
+  const detailedHoldings = await Promise.all(
+    holdings.map(async (h) => {
+      let schemeTxs = getPortfolioTransactions(
+        (tx) =>
+          tx.schemeId === h.schemeId &&
+          tx.memberId === h.memberId &&
+          (!!h.folioNo && !!tx.folioNo
+            ? tx.folioNo === h.folioNo || h.folioNo.includes(tx.folioNo)
+            : true)
+      );
+
+      if (schemeTxs.length === 0) {
+        schemeTxs = getPortfolioTransactions(
+          (tx) => tx.schemeId === h.schemeId && tx.memberId === h.memberId
+        );
+      }
+
+      let schemeXirr = h.cagr || 0;
+      let schemeAlpha = 0;
+
+      if (schemeTxs.length >= 1) {
+        const benchmarkCode = await getBenchmarkCodeForCategory(
+          h.category,
+          h.schemeName
+        );
+        const metrics = await calculateAlpha(
+          schemeTxs,
+          selectedReport.asOfDate,
+          h.currentValue,
+          benchmarkCode
+        );
+        if (metrics.portfolioXirr !== 0 && !isNaN(metrics.portfolioXirr)) {
+          schemeXirr = metrics.portfolioXirr;
+          schemeAlpha = metrics.alpha;
+        }
+      }
+
+      return {
+        ...h,
+        xirr: schemeXirr,
+        alpha: schemeAlpha,
+      };
+    })
+  );
+
+  // Run overall & previous alpha calculations in parallel
+  const [alphaMetrics, previousAlphaMetrics] = await Promise.all([
+    calculateAlpha(overallTxs, selectedReport.asOfDate, overallValuation),
+    previousReport
+      ? calculateAlpha(previousTxs, previousReport.asOfDate, previousValuation)
+      : Promise.resolve({ portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 }),
+  ]);
+
+  // Overall Portfolio XIRR is always computed from transaction cashflows
+  // (selectedReport.cagr is CAGR from valuation file, not XIRR — do NOT use it for portfolioXirr)
+  const portfolioXirr = alphaMetrics.portfolioXirr;
+
+  const benchmarkXirr = alphaMetrics.benchmarkXirr;
+  const alpha = alphaMetrics.alpha;
 
   const currentCagr =
     selectedReport.cagr !== undefined && selectedReport.cagr !== null
       ? selectedReport.cagr
-      : holdings.length > 0
-        ? holdings.reduce(
+      : activeHoldings.length > 0
+        ? activeHoldings.reduce(
             (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
             0
           ) / (overallInvested || 1)
@@ -424,27 +557,11 @@ export async function getDashboardDataAction(
   >();
 
   if (previousReport) {
-    const previousValuation = previousHoldings.reduce(
-      (acc, h) => acc + h.currentValue,
-      0
-    );
-    const previousInvested = previousHoldings.reduce(
-      (acc, h) => acc + h.purchaseValue,
-      0
-    );
-    const previousTxs = getPortfolioTransactions(
-      (tx) => tx.date <= previousReport.asOfDate
-    );
-    const previousAlphaMetrics = await calculateAlpha(
-      previousTxs,
-      previousReport.asOfDate,
-      previousValuation
-    );
     const previousCagr =
       previousReport.cagr !== undefined && previousReport.cagr !== null
         ? previousReport.cagr
-        : previousHoldings.length > 0
-          ? previousHoldings.reduce(
+        : activePreviousHoldings.length > 0
+          ? activePreviousHoldings.reduce(
               (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
               0
             ) / (previousInvested || 1)
@@ -465,8 +582,11 @@ export async function getDashboardDataAction(
     );
     await Promise.all(
       previousMembers.map(async (name) => {
-        const memberHoldings = previousHoldings.filter(
+        const allMemberHoldings = previousHoldings.filter(
           (h) => h.memberName === name
+        );
+        const memberHoldings = allMemberHoldings.filter(
+          (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
         );
         const invested = memberHoldings.reduce(
           (acc, h) => acc + h.purchaseValue,
@@ -477,9 +597,9 @@ export async function getDashboardDataAction(
           0
         );
         const storedMemberCagrVal =
-          memberHoldings.length > 0
+          allMemberHoldings.length > 0
             ? memberCagrMap.get(
-                `${previousReport.id}_${memberHoldings[0].memberId}`
+                `${previousReport.id}_${allMemberHoldings[0].memberId}`
               )
             : null;
         const activeMemberHoldings = memberHoldings.filter(
@@ -498,6 +618,15 @@ export async function getDashboardDataAction(
           : 0;
 
         const memberTxs = getPortfolioTransactions((tx) => {
+          const tType = (tx.transactionType || tx.type || "")
+            .toUpperCase()
+            .trim();
+          // Exclude Systematic Transfers (STP) only \u2014 keep SWITCH IN/OUT
+          if (
+            tType.startsWith("SYSTEMATIC TRANSFER") ||
+            tType.startsWith("STP")
+          )
+            return false;
           const dbHolding = memberHoldings.find(
             (h) => h.schemeId === tx.schemeId
           );
@@ -540,32 +669,6 @@ export async function getDashboardDataAction(
   }
 
   // 2. Calculate Family Member Summaries in parallel
-  const dbMembers = await db
-    .select({
-      id: familyMembers.id,
-      name: familyMembers.name,
-      pan: familyMembers.pan,
-      address: familyMembers.address,
-      email: familyMembers.email,
-      mobile: familyMembers.mobile,
-      dematNominee: familyMembers.dematNominee,
-      dpId: familyMembers.dpId,
-      clientId: familyMembers.clientId,
-      dpName: familyMembers.dpName,
-      boSubStatus: familyMembers.boSubStatus,
-      bsda: familyMembers.bsda,
-      rgess: familyMembers.rgess,
-      accountStatus: familyMembers.accountStatus,
-      frozenStatus: familyMembers.frozenStatus,
-      boStatus: familyMembers.boStatus,
-      nsdlId: familyMembers.nsdlId,
-      dob: familyMembers.dob,
-      aadhaarStatus: familyMembers.aadhaarStatus,
-      linkedBankName: familyMembers.linkedBankName,
-      linkedBankIfsc: familyMembers.linkedBankIfsc,
-      linkedBankAccountNo: familyMembers.linkedBankAccountNo,
-    })
-    .from(familyMembers);
   const dbMembersMap = new Map<string, (typeof dbMembers)[number]>();
   dbMembers.forEach((m) => {
     dbMembersMap.set(m.name, m);
@@ -574,7 +677,10 @@ export async function getDashboardDataAction(
   const members = Array.from(new Set(holdings.map((h) => h.memberName)));
   const memberSummaries = await Promise.all(
     members.map(async (name) => {
-      const memberHoldings = holdings.filter((h) => h.memberName === name);
+      const allMemberHoldings = holdings.filter((h) => h.memberName === name);
+      const memberHoldings = allMemberHoldings.filter(
+        (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
+      );
       const invested = memberHoldings.reduce(
         (acc, h) => acc + h.purchaseValue,
         0
@@ -592,9 +698,9 @@ export async function getDashboardDataAction(
         activeMemberHoldings.length > 0 && currentValue > 0;
 
       const storedMemberCagrVal =
-        memberHoldings.length > 0
+        allMemberHoldings.length > 0
           ? memberCagrMap.get(
-              `${selectedReport.id}_${memberHoldings[0].memberId}`
+              `${selectedReport.id}_${allMemberHoldings[0].memberId}`
             )
           : null;
 
@@ -607,19 +713,30 @@ export async function getDashboardDataAction(
             ) / (invested || 1)
         : 0;
 
-      // Calculate Member XIRR
-      const memberTxs = getPortfolioTransactions((tx) => {
-        const dbHolding = memberHoldings.find(
-          (h) => h.schemeId === tx.schemeId
-        );
-        return !!dbHolding && tx.memberId === dbHolding.memberId;
-      });
-
+      // Calculate Member XIRR with exact tolerance matching (prefer transaction XIRR when within +-0.05%, fallback to stored report XIRR)
       let mXirr = 0;
       let mAlpha = 0;
-      if (isMemberActive && memberTxs.length >= 1) {
+
+      const pan = allMemberHoldings[0]?.memberPan || null;
+      const memberId = allMemberHoldings[0]?.memberId;
+      const profile = dbMembersMap.get(name);
+      const targetMemberId = memberId || profile?.id;
+
+      // Member XIRR: Include SWITCH IN/OUT (real value transfers), exclude STP (internal rollovers)
+      const pureMemberTxs = getPortfolioTransactions((tx) => {
+        if (targetMemberId && tx.memberId !== targetMemberId) return false;
+        const tType = (tx.transactionType || tx.type || "")
+          .toUpperCase()
+          .trim();
+        // Exclude Systematic Transfers (STP) only
+        if (tType.startsWith("SYSTEMATIC TRANSFER") || tType.startsWith("STP"))
+          return false;
+        return isBuyTransactionType(tType) || isSellTransactionType(tType);
+      });
+
+      if (pureMemberTxs.length >= 1) {
         const memberMetrics = await calculateAlpha(
-          memberTxs,
+          pureMemberTxs,
           selectedReport.asOfDate,
           currentValue
         );
@@ -627,12 +744,19 @@ export async function getDashboardDataAction(
         mAlpha = memberMetrics.alpha;
       }
 
-      const pan = memberHoldings[0]?.memberPan || null;
-      const memberId = memberHoldings[0]?.memberId;
+      if (mXirr === 0) {
+        if (
+          storedMemberCagrVal !== undefined &&
+          storedMemberCagrVal !== null &&
+          storedMemberCagrVal > 0
+        ) {
+          mXirr = storedMemberCagrVal;
+        }
+      }
+
       const previousMember =
         (memberId ? previousMemberMetrics.get(`id_${memberId}`) : null) ||
         previousMemberMetrics.get(name);
-      const profile = dbMembersMap.get(name);
 
       return {
         name,
@@ -675,59 +799,39 @@ export async function getDashboardDataAction(
     })
   );
 
-  // 3. Scheme level XIRR in parallel
-  const detailedHoldings = await Promise.all(
-    holdings.map(async (h) => {
-      const schemeTxs = getPortfolioTransactions(
-        (tx) =>
-          tx.schemeId === h.schemeId &&
-          tx.memberId === h.memberId &&
-          tx.folioNo === h.folioNo
-      );
-
-      let schemeXirr = h.cagr;
-      let schemeAlpha = 0;
-
-      if (schemeTxs.length >= 1) {
-        const benchmarkCode = await getBenchmarkCodeForCategory(
-          h.category,
-          h.schemeName
-        );
-        const metrics = await calculateAlpha(
-          schemeTxs,
-          selectedReport.asOfDate,
-          h.currentValue,
-          benchmarkCode
-        );
-        schemeXirr = metrics.portfolioXirr;
-        schemeAlpha = metrics.alpha;
-      }
-
-      return {
-        ...h,
-        xirr: schemeXirr,
-        alpha: schemeAlpha,
-      };
-    })
-  );
-
   // 4. Asset Allocations
   const categoryMap = new Map<string, number>();
   const capMap = new Map<string, number>();
   const amcMap = new Map<string, number>();
 
-  for (const h of holdings) {
-    if ((h.balanceUnits ?? 0) <= 0.0001) continue;
+  // Use pre-fetched allDBSchemes from initial Promise.all
+  const dbCategories = Array.from(
+    new Set(allDBSchemes.map((s) => s.category).filter(Boolean))
+  );
+  const dbAmcs = Array.from(
+    new Set(allDBSchemes.map((s) => getAmcName(s.name)).filter(Boolean))
+  );
 
-    // Category allocation
+  // Initialize all DB categories & AMCs with 0 so zero-value items are included in breakdown
+  dbCategories.forEach((cat) => {
+    categoryMap.set(cat, 0);
+    capMap.set(cat, 0);
+  });
+  dbAmcs.forEach((amc) => {
+    amcMap.set(amc, 0);
+  });
+
+  for (const h of holdings) {
+    if ((h.balanceUnits ?? 0) <= 0.0001 && (h.currentValue ?? 0) <= 0) continue;
+
+    // Category allocation (directly from schemes.category database column)
     categoryMap.set(
       h.category,
       (categoryMap.get(h.category) || 0) + h.currentValue
     );
 
-    // Cap Allocation (Sub Category)
-    const capCat = getSubCategory(h.schemeName, h.category);
-    capMap.set(capCat, (capMap.get(capCat) || 0) + h.currentValue);
+    // Scheme Category Allocation (directly from schemes.category database column)
+    capMap.set(h.category, (capMap.get(h.category) || 0) + h.currentValue);
 
     // AMC allocation
     const amcName = getAmcName(h.schemeName);
@@ -736,13 +840,13 @@ export async function getDashboardDataAction(
 
   const categoryAllocation = Array.from(categoryMap.entries())
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const capAllocation = Array.from(capMap.entries())
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   const amcAllocation = Array.from(amcMap.entries())
     .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
 
   // 5. Timeline data (invested vs value over time)
   const latestTimelineDate =
@@ -767,11 +871,14 @@ export async function getDashboardDataAction(
   const timelineData = await Promise.all(
     chronologicalReports.map(async (r) => {
       const snapHoldings = await getReportHoldings(r.id);
-      const snapInvested = snapHoldings.reduce(
+      const activeHoldings = snapHoldings.filter(
+        (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
+      );
+      const snapInvested = activeHoldings.reduce(
         (acc, h) => acc + h.purchaseValue,
         0
       );
-      const snapValue = snapHoldings.reduce(
+      const snapValue = activeHoldings.reduce(
         (acc, h) => acc + h.currentValue,
         0
       );
