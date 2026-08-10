@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ShieldCheck,
   Search,
-  Filter,
+  SlidersHorizontal,
   Download,
   AlertTriangle,
   CheckCircle2,
@@ -61,7 +61,7 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
     initialUrlState.categoryFilter
   );
   const [viewMode, setViewMode] = useState(initialUrlState.viewMode);
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
   const [sortField, setSortField] = useState<AuditSortField>(
     initialUrlState.sortField
@@ -106,6 +106,11 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
 
   const summary = initialAuditData.summary;
   const items = initialAuditData.items;
+
+  const activeFilterCount =
+    statusFilters.length +
+    (memberFilter !== "ALL" ? 1 : 0) +
+    (categoryFilter !== "ALL" ? 1 : 0);
 
   // Filter lists
   const membersList = useMemo(() => {
@@ -214,6 +219,13 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
     sortField,
     sortOrder,
   ]);
+
+  const handleClearAll = () => {
+    setStatusFilters([]);
+    setMemberFilter("ALL");
+    setCategoryFilter("ALL");
+    setSearchTerm("");
+  };
 
   const handleSort = (field: AuditSortField) => {
     let nextOrder: AuditSortOrder = "desc";
@@ -466,160 +478,268 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
         </div>
       </div>
 
-      {/* Interactive Controls Card */}
-      <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-md shadow-xl space-y-4">
-        {/* Header row */}
-        <div className="flex items-center gap-3 border-b border-slate-800/60 pb-3">
-          <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <Filter className="w-4 h-4" />
-          </span>
-          <div>
-            <h3 className="text-sm font-bold text-slate-100">
-              Audit Reconciliation Filters
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Search folios · filter by status, member, or category
-            </p>
-          </div>
-        </div>
+      {/* ── Filter Modal ── */}
+      {filterPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setFilterPanelOpen(false)}
+          />
 
-        {/* Row 1 - Search bar full width */}
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            Search
-          </label>
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by member name, scheme name, or folio number…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-9 bg-slate-950/80 border border-slate-800/80 rounded-xl pl-9 pr-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition shadow-inner"
-            />
-          </div>
-        </div>
+          {/* Panel */}
+          <div className="relative z-10 w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80">
+              <h2 className="text-sm font-bold text-slate-100 tracking-tight">
+                Filters
+              </h2>
+              <button
+                onClick={() => setFilterPanelOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition text-xs"
+                aria-label="Close filters"
+              >
+                ✕
+              </button>
+            </div>
 
-        {/* Row 2 - Labeled dropdowns */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Multi-select Audit Status */}
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Audit Status
-            </label>
-            {/* Selected chips */}
-            {statusFilters.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-1.5">
-                {statusFilters.map((s) => {
-                  const badge = formatAuditStatusBadge(s as AuditStatusType);
-                  return (
-                    <span
-                      key={s}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.badgeClass}`}
-                    >
-                      {badge.label}
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
+              {/* Audit Status */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Audit Status</span>
+                  <span className="text-[10px] font-semibold text-teal-300 bg-teal-500/15 border border-teal-500/30 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Multi Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_OPTIONS.map(([val, label]) => {
+                    const active = statusFilters.includes(val);
+                    const badge = formatAuditStatusBadge(val);
+                    return (
                       <button
+                        key={val}
                         onClick={() =>
                           setStatusFilters((prev) =>
-                            prev.filter((x) => x !== s)
+                            active
+                              ? prev.filter((x) => x !== val)
+                              : [...prev, val]
                           )
                         }
-                        className="hover:opacity-70 transition"
-                        aria-label={`Remove ${badge.label} filter`}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          active
+                            ? badge.badgeClass +
+                              " ring-2 ring-offset-1 ring-offset-slate-950 ring-current"
+                            : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                        }`}
                       >
-                        ✕
+                        {active && <span className="mr-1">✓</span>}
+                        {label}
                       </button>
-                    </span>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            )}
-            <div className="relative">
-              <select
-                value=""
-                onChange={(e) => {
-                  const val = e.target.value as AuditStatusType;
-                  if (val && !statusFilters.includes(val)) {
-                    setStatusFilters((prev) => [...prev, val]);
-                  }
-                }}
-                onFocus={() => setStatusDropdownOpen(true)}
-                onBlur={() => setStatusDropdownOpen(false)}
-                className={`w-full h-9 bg-slate-950/80 border text-slate-200 text-xs rounded-xl px-3 pr-8 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition appearance-none shadow-inner cursor-pointer ${
-                  statusDropdownOpen
-                    ? "border-emerald-500/60"
-                    : "border-slate-800/80"
-                }`}
-              >
-                <option value="">
-                  {statusFilters.length === 0
-                    ? "+ Add status filter…"
-                    : "+ Add another…"}
-                </option>
-                {STATUS_OPTIONS.map(([val, label]) => (
-                  <option
-                    key={val}
-                    value={val}
-                    disabled={statusFilters.includes(val)}
+
+              <div className="h-px bg-slate-800/60" />
+
+              {/* Family Member */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Family Member</span>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Single Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setMemberFilter("ALL")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      memberFilter === "ALL"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-emerald-500/40"
+                        : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                    }`}
                   >
-                    {statusFilters.includes(val) ? `✓ ${label}` : label}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-3 top-3 pointer-events-none text-slate-400 text-[9px]">
-                ▼
+                    All
+                  </button>
+                  {membersList.map((m) => (
+                    <button
+                      key={m}
+                      onClick={() =>
+                        setMemberFilter(memberFilter === m ? "ALL" : m)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        memberFilter === m
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-emerald-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-800/60" />
+
+              {/* Fund Category */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Fund Category</span>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Single Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setCategoryFilter("ALL")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      categoryFilter === "ALL"
+                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-indigo-500/40"
+                        : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                    }`}
+                  >
+                    All Categories
+                  </button>
+                  {categoriesList.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() =>
+                        setCategoryFilter(categoryFilter === cat ? "ALL" : cat)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        categoryFilter === cat
+                          ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-indigo-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Family Member */}
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Family Member
-            </label>
-            <div className="relative">
-              <select
-                value={memberFilter}
-                onChange={(e) => setMemberFilter(e.target.value)}
-                className="w-full h-9 bg-slate-950/80 border border-slate-800/80 text-slate-200 text-xs rounded-xl px-3 pr-8 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition appearance-none shadow-inner cursor-pointer"
+            {/* Sticky footer */}
+            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-800/80 bg-slate-950">
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 transition"
               >
-                <option value="ALL">All Family Members</option>
-                {membersList.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-3 top-3 pointer-events-none text-slate-400 text-[9px]">
-                ▼
-              </div>
-            </div>
-          </div>
-
-          {/* Fund Category */}
-          <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              Fund Category
-            </label>
-            <div className="relative">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full h-9 bg-slate-950/80 border border-slate-800/80 text-slate-200 text-xs rounded-xl px-3 pr-8 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition appearance-none shadow-inner cursor-pointer"
+                Clear all
+              </button>
+              <button
+                onClick={() => setFilterPanelOpen(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20"
               >
-                <option value="ALL">All Categories</option>
-                {categoriesList.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-3 top-3 pointer-events-none text-slate-400 text-[9px]">
-                ▼
-              </div>
+                Show {filteredItems.length} result
+                {filteredItems.length !== 1 ? "s" : ""}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Search + Filters card ── */}
+      <div className="mb-6 bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl px-4 py-3 shadow-xl flex flex-col gap-2.5">
+        {/* Toolbar row */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search scheme, member, folio…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-9 bg-slate-950/60 border border-slate-800/60 rounded-xl pl-9 pr-8 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition text-[10px]"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filters button */}
+          <button
+            onClick={() => setFilterPanelOpen(true)}
+            className={`relative flex items-center gap-2 h-9 px-4 rounded-xl border text-xs font-semibold transition-all ${
+              activeFilterCount > 0
+                ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20"
+                : "bg-slate-950/60 border-slate-800/60 text-slate-300 hover:border-slate-600 hover:text-slate-100"
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-slate-950">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Active filter chips — inside the same card, only when filters applied */}
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/50">
+            {statusFilters.map((s) => {
+              const badge = formatAuditStatusBadge(s as AuditStatusType);
+              return (
+                <span
+                  key={s}
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.badgeClass}`}
+                >
+                  {badge.label}
+                  <button
+                    onClick={() =>
+                      setStatusFilters((prev) => prev.filter((x) => x !== s))
+                    }
+                    className="hover:opacity-70 transition ml-0.5"
+                    aria-label={`Remove ${badge.label} filter`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            })}
+            {memberFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                👤 {memberFilter}
+                <button
+                  onClick={() => setMemberFilter("ALL")}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label="Remove member filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {categoryFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                🏷 {categoryFilter}
+                <button
+                  onClick={() => setCategoryFilter("ALL")}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label="Remove category filter"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            <button
+              onClick={handleClearAll}
+              className="text-[10px] text-slate-500 hover:text-rose-400 transition ml-1"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Audit Table */}
@@ -712,19 +832,22 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
                     </td>
                   </tr>
                 ) : (
-                  filteredItems.map((item) => {
+                  filteredItems.map((item, idx) => {
                     const badge = formatAuditStatusBadge(item.auditStatus);
                     const isMismatch =
                       item.auditStatus === "UNIT_COST_MISMATCH";
 
                     return (
                       <motion.tr
-                        key={item.holdingId}
+                        key={`unmatched-${item.holdingId}-${item.memberName}-${idx}`}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         onClick={() =>
                           router.push(
-                            item.holdingId < 0
+                            item.isZeroBalance ||
+                              item.isSold ||
+                              item.holdingId < 0 ||
+                              item.casCurrentValue === 0
                               ? `/fund/sold_${Math.abs(item.holdingId)}`
                               : `/fund/${item.holdingId}`
                           )
@@ -858,7 +981,7 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
                           </div>
                           <div>
                             <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${badge.badgeClass}`}
+                              className={`inline-block whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${badge.badgeClass}`}
                             >
                               {badge.label}
                             </span>
@@ -902,11 +1025,11 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/40 text-slate-300 text-xs">
-                {filteredItems.map((item) => {
+                {filteredItems.map((item, idx) => {
                   const badge = formatAuditStatusBadge(item.auditStatus);
                   return (
                     <tr
-                      key={item.holdingId}
+                      key={`full-${item.holdingId}-${item.memberName}-${idx}`}
                       className="hover:bg-slate-800/50 cursor-pointer"
                     >
                       <td className="px-3 py-3 font-semibold">
@@ -955,7 +1078,7 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
                       </td>
                       <td className="px-3 py-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${badge.badgeClass}`}
+                          className={`inline-block whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-bold ${badge.badgeClass}`}
                         >
                           {badge.label}
                         </span>

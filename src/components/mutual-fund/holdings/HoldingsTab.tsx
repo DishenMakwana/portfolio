@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, ChevronUp, ChevronDown, Filter } from "lucide-react";
+import {
+  Search,
+  ChevronUp,
+  ChevronDown,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   formatCurrency,
   formatPercent,
@@ -12,10 +17,16 @@ import {
 import {
   matchCategoryFilter,
   getCategoryOptions,
+  parseCategoryFilters,
+  serializeCategoryFilters,
 } from "@/helpers/holdingsCategory";
 import { isUnlistedStock } from "@/lib/stockApi";
 import { HOLDINGS_SORT_FIELDS } from "@/types/holdings";
-import type { HoldingsSortField, HoldingsTabProps } from "@/types/holdings";
+import type {
+  HoldingsCategoryFilters,
+  HoldingsSortField,
+  HoldingsTabProps,
+} from "@/types/holdings";
 
 export default function HoldingsTab({
   holdings,
@@ -30,7 +41,9 @@ export default function HoldingsTab({
   const initialSearch = searchParams.get("q") || "";
   const initialMemberParam = searchParams.get("member") || initialMember;
   const initialPlan = searchParams.get("plan") || "All";
-  const initialCategory = searchParams.get("category") || "All";
+  const initialCategoryFilters = parseCategoryFilters(
+    searchParams.get("category")
+  );
   const rawSort = searchParams.get("sort");
   const initialSort = (
     (HOLDINGS_SORT_FIELDS as readonly string[]).includes(rawSort || "")
@@ -48,10 +61,12 @@ export default function HoldingsTab({
   const [searchVal, setSearchVal] = useState(initialSearch); // For instant input typing
   const [memberFilter, setMemberFilter] = useState(initialMemberParam);
   const [planFilter, setPlanFilter] = useState(initialPlan);
-  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
+  const [categoryFilters, setCategoryFilters] =
+    useState<HoldingsCategoryFilters>(initialCategoryFilters);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [sortField, setSortField] = useState<HoldingsSortField>(initialSort);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
   // Dynamic Category Options
   const categoryOptions = useMemo(
@@ -88,7 +103,7 @@ export default function HoldingsTab({
     setSearchVal(q);
     setMemberFilter(searchParams.get("member") || "All");
     setPlanFilter(searchParams.get("plan") || "All");
-    setCategoryFilter(searchParams.get("category") || "All");
+    setCategoryFilters(parseCategoryFilters(searchParams.get("category")));
     setStatusFilter(searchParams.get("status") || "active");
     const rawS = searchParams.get("sort");
     setSortField(
@@ -123,14 +138,37 @@ export default function HoldingsTab({
     updateUrl({ plan: value });
   };
 
-  const handleCategoryChange = (value: string) => {
-    setCategoryFilter(value);
-    updateUrl({ category: value });
+  const handleCategoryToggle = (category: string): void => {
+    const nextCategoryFilters = categoryFilters.includes(category)
+      ? categoryFilters.filter((filter) => filter !== category)
+      : [...categoryFilters, category];
+    setCategoryFilters(nextCategoryFilters);
+    updateUrl({ category: serializeCategoryFilters(nextCategoryFilters) });
+  };
+
+  const handleCategoryClear = (): void => {
+    setCategoryFilters([]);
+    updateUrl({ category: null });
   };
 
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
     updateUrl({ status: value });
+  };
+
+  const handleClearAll = () => {
+    setMemberFilter("All");
+    setPlanFilter("All");
+    setStatusFilter("active");
+    setCategoryFilters([]);
+    setSearchVal("");
+    updateUrl({
+      member: null,
+      plan: null,
+      status: null,
+      category: null,
+      q: null,
+    });
   };
 
   const handleSort = (field: typeof sortField) => {
@@ -194,7 +232,7 @@ export default function HoldingsTab({
       }
 
       // Category check
-      const matchCategory = matchCategoryFilter(h.category, categoryFilter);
+      const matchCategory = matchCategoryFilter(h.category, categoryFilters);
 
       return (
         matchSearch && matchMember && matchPlan && matchStatus && matchCategory
@@ -218,153 +256,330 @@ export default function HoldingsTab({
       exit={{ opacity: 0, y: -15 }}
       transition={{ duration: 0.25 }}
     >
-      {/* Filters Row */}
-      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-lg">
-          <Search
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            size={18}
+      {/* ── Filter Modal ── */}
+      {filterPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setFilterPanelOpen(false)}
           />
-          <input
-            type="text"
-            placeholder="Search scheme, folio or applicant..."
-            value={searchVal}
-            onChange={(e) => setSearchVal(e.target.value)}
-            className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 shadow-inner transition-all"
-          />
-        </div>
 
-        {/* Filter dropdowns aligned in a clean 2-row grid */}
-        <div className="flex flex-col gap-2.5 ml-auto">
-          {/* Row 1: APPLICANT & CATEGORY */}
-          <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-5">
-            <div className="flex items-center gap-2">
-              <Filter size={15} className="text-emerald-400 shrink-0" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
-                APPLICANT:
-              </span>
-              <div className="relative inline-block w-[180px] sm:w-[210px]">
-                <select
-                  value={memberFilter}
-                  onChange={(e) => handleMemberChange(e.target.value)}
-                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
-                >
-                  <option value="All" className="bg-slate-900 text-slate-200">
+          {/* Panel */}
+          <div className="relative z-10 w-full sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80">
+              <h2 className="text-sm font-bold text-slate-100 tracking-tight">
+                Filters
+              </h2>
+              <button
+                onClick={() => setFilterPanelOpen(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition text-xs"
+                aria-label="Close filters"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
+              {/* Applicant */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Applicant</span>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Single Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleMemberChange("All")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      memberFilter === "All"
+                        ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                        : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                    }`}
+                  >
                     All Applicants
-                  </option>
+                  </button>
                   {memberSummaries.map((m) => (
-                    <option
+                    <button
                       key={m.name}
-                      value={m.name}
-                      className="bg-slate-900 text-slate-200"
+                      onClick={() =>
+                        handleMemberChange(
+                          memberFilter === m.name ? "All" : m.name
+                        )
+                      }
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        memberFilter === m.name
+                          ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
                     >
                       {m.name}
-                    </option>
+                    </button>
                   ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
-                CATEGORY:
-              </span>
-              <div className="relative inline-block w-[180px] sm:w-[210px]">
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
-                >
-                  <option value="All" className="bg-slate-900 text-slate-200">
-                    All Categories
-                  </option>
-                  {categoryOptions.map((cat) => (
-                    <option
-                      key={cat}
-                      value={cat}
-                      className="bg-slate-900 text-slate-200"
+              <div className="h-px bg-slate-800/60" />
+
+              {/* Type */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Fund Type</span>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Single Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(["All", "MF", "SIF"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => handlePlanChange(opt)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        planFilter === opt
+                          ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
                     >
-                      {cat}
-                    </option>
+                      {opt === "All"
+                        ? "All Types"
+                        : opt === "MF"
+                          ? "Mutual Fund (MF)"
+                          : "Specialized (SIF)"}
+                    </button>
                   ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-800/60" />
+
+              {/* Status */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Folio Status</span>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Single Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(["active", "inactive", "all"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => handleStatusChange(opt)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        statusFilter === opt
+                          ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
+                    >
+                      {opt === "active"
+                        ? "Active Folios"
+                        : opt === "inactive"
+                          ? "Inactive / Sold"
+                          : "All Folios"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-800/60" />
+
+              {/* Category */}
+              <div>
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <span>Fund Category</span>
+                  <span className="text-[10px] font-semibold text-teal-300 bg-teal-500/15 border border-teal-500/30 px-1.5 py-0.5 rounded tracking-normal normal-case">
+                    Multi Select
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleCategoryClear}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      categoryFilters.length === 0
+                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-indigo-500/40"
+                        : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                    }`}
+                  >
+                    All Categories
+                  </button>
+                  {categoryOptions.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => handleCategoryToggle(cat)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        categoryFilters.includes(cat)
+                          ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-indigo-500/40"
+                          : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
+                      }`}
+                    >
+                      {categoryFilters.includes(cat) && (
+                        <span className="mr-1">✓</span>
+                      )}
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Row 2: TYPE & FOLIO STATUS */}
-          <div className="flex flex-wrap items-center justify-end gap-4 sm:gap-5">
-            <div className="flex items-center gap-2">
-              <div className="w-[15px] shrink-0" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
-                TYPE:
-              </span>
-              <div className="relative inline-block w-[180px] sm:w-[210px]">
-                <select
-                  value={planFilter}
-                  onChange={(e) => handlePlanChange(e.target.value)}
-                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
-                >
-                  <option value="All" className="bg-slate-900 text-slate-200">
-                    All Types
-                  </option>
-                  <option value="MF" className="bg-slate-900 text-slate-200">
-                    Mutual Fund (MF)
-                  </option>
-                  <option value="SIF" className="bg-slate-900 text-slate-200">
-                    Specialized (SIF)
-                  </option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 min-w-[72px]">
-                STATUS:
-              </span>
-              <div className="relative inline-block w-[180px] sm:w-[210px]">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full appearance-none bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-200 focus:border-teal-500/50 focus:outline-none focus:ring-1 focus:ring-teal-500/20 cursor-pointer shadow-inner transition-all truncate"
-                >
-                  <option
-                    value="active"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Active Folios
-                  </option>
-                  <option
-                    value="inactive"
-                    className="bg-slate-900 text-slate-200"
-                  >
-                    Inactive / Sold
-                  </option>
-                  <option value="all" className="bg-slate-900 text-slate-200">
-                    All Folios
-                  </option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-              </div>
+            {/* Sticky footer */}
+            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-800/80 bg-slate-950">
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 transition"
+              >
+                Clear all
+              </button>
+              <button
+                onClick={() => setFilterPanelOpen(false)}
+                className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-teal-500/20"
+              >
+                Show {filtered.length} result
+                {filtered.length !== 1 ? "s" : ""}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Search + Filters card ── */}
+      <div className="mb-6 bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl px-4 py-3 shadow-xl flex flex-col gap-2.5">
+        {/* Toolbar row */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search scheme, folio or applicant…"
+              value={searchVal}
+              onChange={(e) => setSearchVal(e.target.value)}
+              className="w-full h-9 bg-slate-950/60 border border-slate-800/60 rounded-xl pl-9 pr-8 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/20 transition"
+            />
+            {searchVal && (
+              <button
+                onClick={() => setSearchVal("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition text-[10px]"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filters button */}
+          {(() => {
+            const activeCount =
+              (memberFilter !== "All" ? 1 : 0) +
+              (planFilter !== "All" ? 1 : 0) +
+              (statusFilter !== "active" ? 1 : 0) +
+              categoryFilters.length;
+            return (
+              <button
+                onClick={() => setFilterPanelOpen(true)}
+                className={`relative flex items-center gap-2 h-9 px-4 rounded-xl border text-xs font-semibold transition-all ${
+                  activeCount > 0
+                    ? "bg-teal-500/10 border-teal-500/40 text-teal-300 hover:bg-teal-500/20"
+                    : "bg-slate-950/60 border-slate-800/60 text-slate-300 hover:border-slate-600 hover:text-slate-100"
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Filters
+                {activeCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-teal-500 text-[9px] font-bold text-slate-950">
+                    {activeCount}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Active filter chips — inside the same card */}
+        {(() => {
+          const chips: ReactNode[] = [];
+          if (memberFilter !== "All")
+            chips.push(
+              <span
+                key="member"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+              >
+                👤 {memberFilter}
+                <button
+                  onClick={() => handleMemberChange("All")}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label="Remove member filter"
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          if (planFilter !== "All")
+            chips.push(
+              <span
+                key="plan"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+              >
+                📦 {planFilter === "MF" ? "Mutual Fund" : "Specialized (SIF)"}
+                <button
+                  onClick={() => handlePlanChange("All")}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label="Remove plan filter"
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          if (statusFilter !== "active")
+            chips.push(
+              <span
+                key="status"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+              >
+                🔖{" "}
+                {statusFilter === "inactive" ? "Inactive / Sold" : "All Folios"}
+                <button
+                  onClick={() => handleStatusChange("active")}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label="Remove status filter"
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          categoryFilters.forEach((cat) =>
+            chips.push(
+              <span
+                key={`cat-${cat}`}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+              >
+                🏷 {cat}
+                <button
+                  onClick={() => handleCategoryToggle(cat)}
+                  className="hover:opacity-70 transition ml-0.5"
+                  aria-label={`Remove ${cat} filter`}
+                >
+                  ✕
+                </button>
+              </span>
+            )
+          );
+          if (chips.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/50">
+              {chips}
+              <button
+                onClick={handleClearAll}
+                className="text-[10px] text-slate-500 hover:text-rose-400 transition ml-1"
+              >
+                Clear all
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Table Container */}
@@ -453,7 +668,13 @@ export default function HoldingsTab({
                 filtered.map((h) => (
                   <tr
                     key={h.id}
-                    onClick={() => router.push(`/fund/${h.id}`)}
+                    onClick={() =>
+                      router.push(
+                        h.id < 0
+                          ? `/fund/sold_${Math.abs(h.id)}`
+                          : `/fund/${h.id}`
+                      )
+                    }
                     className="transition cursor-pointer select-none hover:bg-slate-950/45"
                   >
                     <td className="p-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Calendar,
@@ -101,12 +101,46 @@ function CustomFyTrendTooltip({
   return null;
 }
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
 export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialMetric =
+    (searchParams.get("metric") as "xirr" | "cagr") || "xirr";
   const [data, setData] = useState<FyTrackerData>(initialData);
-  const [metric, setMetric] = useState<"xirr" | "cagr">("xirr");
+  const [metric, setMetric] = useState<"xirr" | "cagr">(initialMetric);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    const m = searchParams.get("metric") as "xirr" | "cagr";
+    if (m && (m === "xirr" || m === "cagr")) {
+      setMetric(m);
+    }
+  }, [searchParams]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const current = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  const handleMetricChange = (nextMetric: "xirr" | "cagr") => {
+    setMetric(nextMetric);
+    updateUrl({ metric: nextMetric === "xirr" ? null : nextMetric });
+  };
+
   const handleFyChange = (label: string) => {
+    updateUrl({ fy: label });
     startTransition(async () => {
       try {
         const freshData = await getFyTrackerDataAction(label);
@@ -366,18 +400,18 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
           <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-800/80 gap-1 shadow-inner">
             <button
               type="button"
-              onClick={() => setMetric("xirr")}
+              onClick={() => handleMetricChange("xirr")}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold tracking-wide transition-all cursor-pointer ${
                 metric === "xirr"
-                  ? "bg-emerald-600/90 text-emerald-100 shadow-md border border-emerald-500/30"
+                  ? "bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm"
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              XIRR View
+              XIRR
             </button>
             <button
               type="button"
-              onClick={() => setMetric("cagr")}
+              onClick={() => handleMetricChange("cagr")}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold tracking-wide transition-all cursor-pointer ${
                 metric === "cagr"
                   ? "bg-emerald-600/90 text-emerald-100 shadow-md border border-emerald-500/30"
