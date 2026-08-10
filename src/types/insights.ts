@@ -13,6 +13,8 @@ export interface BenchmarkReturns {
 
 export interface SoldHoldingItem {
   holdingId: number;
+  isZeroBalance?: boolean;
+  isSold?: boolean;
   memberId: number | null;
   memberName: string;
   schemeId: number | null;
@@ -66,6 +68,8 @@ export interface InsightsData {
     memberCount: number;
     holdings: Array<{
       holdingId: number;
+      isZeroBalance?: boolean;
+      isSold?: boolean;
       memberName: string;
       folioNo: string;
       invested: number;
@@ -288,6 +292,8 @@ export interface AnalysisTabProps {
 export interface SipProjectionRow {
   year: number;
   monthlySip: number;
+  annualSip: number;
+  cumulativeInvested: number;
   corpus: number;
 }
 
@@ -296,6 +302,8 @@ export interface SipPlannerTabProps {
   projectionRows: SipProjectionRow[];
   stepUpPct: number;
   onStepUpChange: (value: number) => void;
+  expectedCagr: number;
+  onCagrChange: (value: number) => void;
 }
 
 export interface MembersTabProps {
@@ -315,6 +323,8 @@ export interface SchemeItem {
   memberCount: number;
   holdings: Array<{
     holdingId: number;
+    isZeroBalance?: boolean;
+    isSold?: boolean;
     memberName: string;
     folioNo: string;
     invested: number;
@@ -382,6 +392,7 @@ export interface DonutSlice {
   label: string;
   value: number;
   color: string;
+  formattedValue?: string;
 }
 
 export interface DonutChartProps {
@@ -538,4 +549,5 @@ export interface SummaryMetricCardsProps {
   absReturn: number;
   weightedCagr: number;
   benchmarkDelta: number;
+  benchmarkRate?: number;
 }

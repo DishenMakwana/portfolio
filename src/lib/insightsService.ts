@@ -811,13 +811,10 @@ export async function getInsightsData(): Promise<InsightsData> {
         lastSellDate,
       });
     } else {
-      // Partially Sold Holding
-      const netProfit = sellAmount - buyAmount + activeHolding.currentValue;
-      const totalCapitalDeployed = buyAmount;
+      // Partially Sold Holding (Pure Realised View for sold units)
+      const netProfit = sellAmount - buyAmount;
       const absReturn =
-        totalCapitalDeployed > 0
-          ? Math.round((netProfit / totalCapitalDeployed) * 10000) / 100
-          : 0;
+        buyAmount > 0 ? Math.round((netProfit / buyAmount) * 10000) / 100 : 0;
 
       partiallySoldHoldings.push({
         holdingId: activeHolding.id,
