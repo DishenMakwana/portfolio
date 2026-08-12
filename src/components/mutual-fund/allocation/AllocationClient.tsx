@@ -697,7 +697,7 @@ export default function AllocationClient({
                             </span>
                             <span className="text-slate-600 text-xs">·</span>
                             <span className="text-slate-400 text-xs tabular-nums">
-                              {formatPct(d.pct)}%
+                              {formatPct(d.pct)}
                             </span>
                           </div>
                         </div>
@@ -711,36 +711,78 @@ export default function AllocationClient({
                           data={categoryData}
                           cx="50%"
                           cy="50%"
-                          outerRadius="82%"
-                          innerRadius={0}
+                          outerRadius={100}
+                          innerRadius={65}
                           dataKey="value"
                           stroke="none"
                           startAngle={90}
                           endAngle={-270}
                           shape={(
-                            props: PieSectorDataItem & { index: number }
+                            props: PieSectorDataItem & {
+                              index: number;
+                              cx: number;
+                              cy: number;
+                              midAngle?: number;
+                            }
                           ) => {
                             const { index } = props;
+                            const isHovered = hoveredCell === index;
+                            const midAngle = props.midAngle ?? 0;
+                            const RADIAN = Math.PI / 180;
+                            const popDist = isHovered ? 8 : 0;
+                            const dx = Math.cos(-midAngle * RADIAN) * popDist;
+                            const dy = Math.sin(-midAngle * RADIAN) * popDist;
                             const opacity =
                               hoveredCell === null || hoveredCell === index
                                 ? 1
                                 : 0.4;
                             return (
-                              <Sector
-                                {...props}
-                                fill={
-                                  ALLOCATION_PALETTE[
-                                    index % ALLOCATION_PALETTE.length
-                                  ]
-                                }
-                                opacity={opacity}
-                                className="transition-opacity duration-200 cursor-pointer"
-                                onMouseEnter={() => setHoveredCell(index)}
-                                onMouseLeave={() => setHoveredCell(null)}
-                              />
+                              <g className="transition-all duration-300 cursor-pointer">
+                                <Sector
+                                  {...props}
+                                  cx={props.cx + dx}
+                                  cy={props.cy + dy}
+                                  outerRadius={isHovered ? 105 : 100}
+                                  fill={
+                                    ALLOCATION_PALETTE[
+                                      index % ALLOCATION_PALETTE.length
+                                    ]
+                                  }
+                                  opacity={opacity}
+                                  onMouseEnter={() => setHoveredCell(index)}
+                                  onMouseLeave={() => setHoveredCell(null)}
+                                />
+                              </g>
                             );
                           }}
                         />
+                        <text
+                          x="50%"
+                          y="46%"
+                          textAnchor="middle"
+                          className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
+                        >
+                          {hoveredCell !== null && categoryData[hoveredCell]
+                            ? categoryData[hoveredCell].name.length > 14
+                              ? `${categoryData[hoveredCell].name.slice(0, 12)}..`
+                              : categoryData[hoveredCell].name
+                            : "Total Value"}
+                        </text>
+                        <text
+                          x="50%"
+                          y="58%"
+                          textAnchor="middle"
+                          className="fill-teal-400 font-extrabold text-sm tracking-tight"
+                        >
+                          {hoveredCell !== null && categoryData[hoveredCell]
+                            ? formatCurrency(categoryData[hoveredCell].value)
+                            : formatCurrency(
+                                categoryData.reduce(
+                                  (acc, c) => acc + c.value,
+                                  0
+                                )
+                              )}
+                        </text>
                         <Tooltip content={<ChartTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
