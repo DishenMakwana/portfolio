@@ -175,6 +175,48 @@ export default function FundsTab({
     });
   }, [schemes, searchVal, typeFilter, categoryFilters]);
 
+  // Compute baseline rank for each scheme based on DESCENDING sort of current sort.key
+  const rankMap = useMemo(() => {
+    const descSorted = [...filteredSchemes].sort((a, b) => {
+      const valA = a[sort.key];
+      const valB = b[sort.key];
+      if (typeof valA === "number" && typeof valB === "number") {
+        return valB - valA;
+      }
+      if (typeof valA === "string" && typeof valB === "string") {
+        return valA.localeCompare(valB);
+      }
+      return 0;
+    });
+
+    const map = new Map<string, number>();
+    descSorted.forEach((item, index) => {
+      map.set(item.scheme, index + 1);
+    });
+    return map;
+  }, [filteredSchemes, sort.key]);
+
+  // Final display list sorted by sort.key and sort.dir
+  const sortedSchemes = useMemo(() => {
+    return [...filteredSchemes].sort((a, b) => {
+      const valA = a[sort.key];
+      const valB = b[sort.key];
+      if (sort.dir === "asc") {
+        if (typeof valA === "number" && typeof valB === "number")
+          return valA - valB;
+        if (typeof valA === "string" && typeof valB === "string")
+          return valA.localeCompare(valB);
+        return 0;
+      } else {
+        if (typeof valA === "number" && typeof valB === "number")
+          return valB - valA;
+        if (typeof valA === "string" && typeof valB === "string")
+          return valB.localeCompare(valA);
+        return 0;
+      }
+    });
+  }, [filteredSchemes, sort.key, sort.dir]);
+
   function SortIcon({ col }: { col: SortKey }) {
     if (sort.key !== col) {
       return <ChevronsUpDown size={12} className="text-slate-600" />;
@@ -222,24 +264,20 @@ export default function FundsTab({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { key: "All", label: "All Types", count: totalCount },
-                    { key: "MF", label: "Mutual Fund (MF)", count: mfCount },
-                    { key: "SIF", label: "Specialized (SIF)", count: sifCount },
-                  ].map((item) => (
+                    { id: "All", label: `All Types (${totalCount})` },
+                    { id: "MF", label: `Mutual Funds (${mfCount})` },
+                    { id: "SIF", label: `SIF (${sifCount})` },
+                  ].map((t) => (
                     <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => handleTypeChange(item.key)}
+                      key={t.id}
+                      onClick={() => handleTypeChange(t.id)}
                       className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                        typeFilter === item.key
+                        typeFilter === t.id
                           ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
                           : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
                       }`}
                     >
-                      {item.label}
-                      <span className="ml-1 text-[10px] opacity-60">
-                        ({item.count})
-                      </span>
+                      {t.label}
                     </button>
                   ))}
                 </div>
@@ -251,9 +289,9 @@ export default function FundsTab({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                    <span>Categories ({categoryOptions.length})</span>
+                    <span>Category</span>
                     <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded tracking-normal normal-case">
-                      Multi Select
+                      Multi Select ({categoryOptions.length})
                     </span>
                   </p>
                   {categoryFilters.length > 0 && (
@@ -262,27 +300,26 @@ export default function FundsTab({
                         setCategoryFilters([]);
                         updateUrl({ category: null });
                       }}
-                      className="text-xs text-teal-400 hover:underline font-semibold"
+                      className="text-xs font-semibold text-teal-400 hover:text-teal-300"
                     >
-                      Clear Selection
+                      Clear Selection ({categoryFilters.length})
                     </button>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {categoryOptions.map((cat) => {
-                    const isSelected = categoryFilters.includes(cat);
+                <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto pr-1">
+                  {categoryOptions.map((catName) => {
+                    const isSelected = categoryFilters.includes(catName);
                     return (
                       <button
-                        key={cat}
-                        type="button"
-                        onClick={() => handleCategoryToggle(cat)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        key={catName}
+                        onClick={() => handleCategoryToggle(catName)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                           isSelected
                             ? "bg-teal-500/20 text-teal-300 border-teal-500/50 ring-2 ring-offset-1 ring-offset-slate-950 ring-teal-500/40"
                             : "bg-slate-900/60 text-slate-400 border-slate-700/60 hover:border-slate-600 hover:text-slate-200"
                         }`}
                       >
-                        {cat}
+                        <span>{catName}</span>
                       </button>
                     );
                   })}
@@ -291,16 +328,16 @@ export default function FundsTab({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-800/80 bg-slate-900/40">
               <button
                 onClick={handleClearAll}
-                className="text-xs text-rose-400 hover:text-rose-300 font-semibold transition"
+                className="text-xs font-semibold text-slate-400 hover:text-slate-200"
               >
-                Reset All Filters
+                Reset All
               </button>
               <button
                 onClick={() => setFilterPanelOpen(false)}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-teal-500 hover:bg-teal-400 text-slate-950 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-extrabold bg-teal-500 text-slate-950 hover:bg-teal-400 transition"
               >
                 Apply Filters
               </button>
@@ -309,81 +346,73 @@ export default function FundsTab({
         </div>
       )}
 
-      {/* ── Search & Filter Controls Card ── */}
-      <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-4 shadow-xl space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1">
+      {/* ── Search & Filter Controls Header Card ── */}
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 backdrop-blur-md p-4 shadow-xl space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Instant Search Box */}
+          <div className="relative flex-1 min-w-[220px]">
             <Search
               size={15}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
             />
             <input
               type="text"
               value={searchVal}
               onChange={(e) => setSearchVal(e.target.value)}
-              placeholder="Search funds by name or category..."
-              className="w-full pl-9 pr-8 py-2 text-xs font-medium bg-slate-950/80 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/50 transition-all"
+              placeholder="Search scheme name or category..."
+              className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500/60 focus:ring-1 focus:ring-teal-500/40 transition"
             />
             {searchVal && (
               <button
                 onClick={() => setSearchVal("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
               >
-                ✕
+                <X size={13} />
               </button>
             )}
           </div>
 
-          {/* Filters Button */}
+          {/* Single Unified Filters Button */}
           <button
-            type="button"
             onClick={() => setFilterPanelOpen(true)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
               typeFilter !== "All" || categoryFilters.length > 0
-                ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
-                : "bg-slate-950/80 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200"
+                ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-md shadow-teal-950/50"
+                : "bg-slate-950/80 text-slate-300 border-slate-800 hover:bg-slate-900"
             }`}
           >
             <SlidersHorizontal size={14} />
             <span>Filters</span>
             {(typeFilter !== "All" || categoryFilters.length > 0) && (
-              <span className="w-4 h-4 rounded-full bg-teal-500 text-slate-950 text-[10px] font-black flex items-center justify-center">
+              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-teal-500 text-slate-950 text-[10px] font-extrabold ml-0.5">
                 {(typeFilter !== "All" ? 1 : 0) + categoryFilters.length}
               </span>
             )}
           </button>
 
-          {/* Clear All Button */}
+          {/* Reset button when filters active */}
           {(searchVal ||
             typeFilter !== "All" ||
             categoryFilters.length > 0) && (
             <button
               onClick={handleClearAll}
-              className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2 py-1.5 transition-colors cursor-pointer shrink-0"
+              className="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition"
             >
               Reset
             </button>
           )}
         </div>
 
-        {/* Active Filters Display */}
-        {(searchVal || typeFilter !== "All" || categoryFilters.length > 0) && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60 text-xs">
-            <span className="text-slate-500 font-medium">Active:</span>
-            {searchVal && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60">
-                Search: &quot;{searchVal}&quot;
-                <button
-                  onClick={() => setSearchVal("")}
-                  className="hover:text-rose-400"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
+        {/* Active Filters Pill Bar */}
+        {(typeFilter !== "All" || categoryFilters.length > 0) && (
+          <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-slate-800/60">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              Active:
+            </span>
+
+            {/* Type Badge */}
             {typeFilter !== "All" && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-teal-500/10 text-teal-300 border border-teal-500/30 font-semibold">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-teal-950/80 text-teal-300 border border-teal-800/60">
                 Type: {typeFilter}
                 <button
                   onClick={() => handleTypeChange("All")}
@@ -393,10 +422,12 @@ export default function FundsTab({
                 </button>
               </span>
             )}
+
+            {/* Category Badges */}
             {categoryFilters.map((cat) => (
               <span
                 key={cat}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 font-semibold"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-teal-950/80 text-teal-300 border border-teal-800/60"
               >
                 {cat}
                 <button
@@ -407,9 +438,6 @@ export default function FundsTab({
                 </button>
               </span>
             ))}
-            <span className="ml-auto text-slate-500 text-[11px]">
-              Showing {filteredSchemes.length} of {schemes.length} funds
-            </span>
           </div>
         )}
       </div>
@@ -420,6 +448,9 @@ export default function FundsTab({
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-700/50">
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider w-12">
+                  #
+                </th>
                 {SCHEME_COLUMNS.map((col) => (
                   <th
                     key={col.key}
@@ -435,7 +466,7 @@ export default function FundsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {filteredSchemes.map((s, i) => {
+              {sortedSchemes.map((s, i) => {
                 const isTop = top5Schemes.has(s.scheme);
                 const isWatch = watchlistSchemes.has(s.scheme);
                 const isExpanded = expandedSchemes.has(s.scheme);
@@ -459,6 +490,9 @@ export default function FundsTab({
                       className={`transition-colors group cursor-pointer ${rowBgClass}`}
                       onClick={() => onToggleExpand(s.scheme)}
                     >
+                      <td className="px-4 py-3 text-center font-mono text-xs font-bold text-slate-500">
+                        {rankMap.get(s.scheme) ?? "-"}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="min-w-0">

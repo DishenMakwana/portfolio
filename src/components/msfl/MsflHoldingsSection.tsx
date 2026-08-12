@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatCurrency } from "@/helpers/formatters";
@@ -11,6 +12,7 @@ export default function MsflHoldingsSection({
   filteredHoldings,
   searchQuery,
   setSearchQuery,
+  sortField,
   toggleSort,
   renderSortIcon,
   handleEditMapping,
@@ -18,6 +20,31 @@ export default function MsflHoldingsSection({
   laggingFunds,
 }: MsflHoldingsSectionProps) {
   const router = useRouter();
+
+  const filteredBase = useMemo(() => {
+    return holdings.filter((h) =>
+      h.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [holdings, searchQuery]);
+
+  const rankMap = useMemo(() => {
+    const descSorted = [...filteredBase].sort((a, b) => {
+      const valA = a[sortField];
+      const valB = b[sortField];
+      if (typeof valA === "string" && typeof valB === "string") {
+        return valB.localeCompare(valA);
+      }
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return numB - numA;
+    });
+
+    const map = new Map<string, number>();
+    descSorted.forEach((item, index) => {
+      map.set(item.symbol, index + 1);
+    });
+    return map;
+  }, [filteredBase, sortField]);
 
   return (
     <div className="space-y-6">
@@ -46,6 +73,9 @@ export default function MsflHoldingsSection({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
+                <th className="p-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 w-12 select-none">
+                  #
+                </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
                   onClick={() => toggleSort("symbol")}
@@ -129,6 +159,9 @@ export default function MsflHoldingsSection({
                     onClick={() => router.push(`/fund/msfl_${h.id}`)}
                     className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                   >
+                    <td className="p-4 text-center font-mono text-xs font-bold text-slate-500">
+                      {rankMap.get(h.symbol) ?? "-"}
+                    </td>
                     <td className="p-4">
                       <div className="flex flex-col gap-0.5">
                         <div className="font-bold text-slate-100 flex items-center gap-2">
@@ -222,7 +255,7 @@ export default function MsflHoldingsSection({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-500">
+                  <td colSpan={11} className="p-8 text-center text-slate-500">
                     No stocks found matching search query.
                   </td>
                 </tr>

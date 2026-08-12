@@ -197,9 +197,9 @@ export default function HoldingsTab({
     (h) => (h.balanceUnits ?? 0) > 0.0001
   ).length;
 
-  // Filter and Sort holdings
-  const filtered = holdings
-    .filter((h) => {
+  // Filter holdings
+  const filtered = useMemo(() => {
+    return holdings.filter((h) => {
       const searchLower = searchVal.trim().toLowerCase();
       const cleanFolio = (h.folioNo || "").replace(/^'/, "").toLowerCase();
       const matchSearch =
@@ -237,8 +237,37 @@ export default function HoldingsTab({
       return (
         matchSearch && matchMember && matchPlan && matchStatus && matchCategory
       );
-    })
-    .sort((a, b) => {
+    });
+  }, [
+    holdings,
+    searchVal,
+    memberFilter,
+    planFilter,
+    statusFilter,
+    categoryFilters,
+  ]);
+
+  // Compute baseline rank for each item based on DESCENDING sort of current sortField
+  const rankMap = useMemo(() => {
+    const descSorted = [...filtered].sort((a, b) => {
+      const valA = a[sortField];
+      const valB = b[sortField];
+      if (typeof valA === "number" && typeof valB === "number") {
+        return valB - valA;
+      }
+      return 0;
+    });
+
+    const map = new Map<number, number>();
+    descSorted.forEach((item, index) => {
+      map.set(item.id, index + 1);
+    });
+    return map;
+  }, [filtered, sortField]);
+
+  // Final display list sorted by sortField and sortOrder
+  const sortedHoldings = useMemo(() => {
+    return [...filtered].sort((a, b) => {
       const valA = a[sortField];
       const valB = b[sortField];
       if (sortOrder === "asc") {
@@ -247,6 +276,7 @@ export default function HoldingsTab({
         return valA < valB ? 1 : -1;
       }
     });
+  }, [filtered, sortField, sortOrder]);
 
   return (
     <motion.div
@@ -605,6 +635,7 @@ export default function HoldingsTab({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
+                <th className="p-4 w-12 text-center text-slate-500">#</th>
                 <th className="p-4">Scheme Details</th>
                 <th className="p-4">Holder</th>
                 <th
@@ -658,14 +689,14 @@ export default function HoldingsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
-              {filtered.length === 0 ? (
+              {sortedHoldings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
                     No holdings match the search filter.
                   </td>
                 </tr>
               ) : (
-                filtered.map((h) => (
+                sortedHoldings.map((h) => (
                   <tr
                     key={h.id}
                     onClick={() =>
@@ -677,6 +708,9 @@ export default function HoldingsTab({
                     }
                     className="transition cursor-pointer select-none hover:bg-slate-950/45"
                   >
+                    <td className="p-4 w-12 text-center font-mono text-xs font-bold text-slate-500">
+                      {rankMap.get(h.id) ?? "-"}
+                    </td>
                     <td className="p-4">
                       <div className="font-bold text-slate-100">
                         {h.schemeName}
