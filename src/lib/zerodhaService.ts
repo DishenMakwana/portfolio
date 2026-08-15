@@ -28,7 +28,11 @@ import {
   getBenchmarkCodeForCategory,
   getBenchmarkFundNameForCode,
 } from "./alpha";
-import { fetchStockHistory } from "./stockApi";
+import { fetchStockHistory, getNifty50IndexHistory } from "./stockApi";
+import {
+  calculateAthCorrectionData,
+  getNiftyAthAndCurrentPoints,
+} from "@/helpers/ath";
 import {
   autoMapScheme,
   fetchMfDetails,
@@ -1045,6 +1049,10 @@ export async function getZerodhaDashboardData(
   let niftyStartNav = 0;
   let niftyBase = 1000;
 
+  let maxInvested = { value: 0, date: selectedReport.asOfDate };
+  let maxValue = { value: 0, date: selectedReport.asOfDate };
+  let maxGain = { value: 0, date: selectedReport.asOfDate };
+
   for (const r of chronologicalReports) {
     const snapHoldings = await db
       .select({
@@ -1085,8 +1093,19 @@ export async function getZerodhaDashboardData(
 
     const totalVal = snapStocksCurrentValue + snapFundsCurrentValue;
     const totalInv = snapStocksInvested + snapFundsInvested;
+    const totalSnapGain = totalVal - totalInv;
     const totalReturn =
       totalInv > 0 ? ((totalVal - totalInv) / totalInv) * 105 : 0;
+
+    if (totalInv > maxInvested.value) {
+      maxInvested = { value: totalInv, date: r.asOfDate };
+    }
+    if (totalVal > maxValue.value) {
+      maxValue = { value: totalVal, date: r.asOfDate };
+    }
+    if (totalSnapGain > maxGain.value) {
+      maxGain = { value: totalSnapGain, date: r.asOfDate };
+    }
 
     const eqIndex = 1000 * (1 + eqReturn / 100);
     const mfIndex = 1000 * (1 + mfReturn / 100);
@@ -1371,6 +1390,26 @@ export async function getZerodhaDashboardData(
     };
   }
 
+  // Benchmark Nifty 50 Spot Index ATH & Current Points
+  const niftyIndexDetails = await getNifty50IndexHistory("5y");
+  const bmData = niftyIndexDetails?.data || [];
+  const { maxNifty, currentNifty } = getNiftyAthAndCurrentPoints(
+    selectedReport.asOfDate,
+    bmData
+  );
+
+  const athData = calculateAthCorrectionData({
+    currentInvested: totalInvested,
+    currentValue: totalCurrentValue,
+    currentGain: totalGain,
+    currentDate: selectedReport.asOfDate,
+    maxInvested,
+    maxValue,
+    maxGain,
+    currentNifty,
+    maxNifty,
+  });
+
   return {
     firstCasReportDate,
     reportsList,
@@ -1405,6 +1444,7 @@ export async function getZerodhaDashboardData(
     assetSplit,
     timelineData,
     insights,
+    athData,
   };
 }
 

@@ -50,9 +50,33 @@ export default function ZerodhaFundsTab({
     return () => clearTimeout(timer);
   }, [fundSearch]);
 
-  const filteredFunds = funds
-    .filter((f) => f.symbol.toLowerCase().includes(fundSearch.toLowerCase()))
-    .sort((a, b) => {
+  const filteredBase = useMemo(() => {
+    return funds.filter((f) =>
+      f.symbol.toLowerCase().includes(fundSearch.toLowerCase())
+    );
+  }, [funds, fundSearch]);
+
+  const rankMap = useMemo(() => {
+    const descSorted = [...filteredBase].sort((a, b) => {
+      const valA = a[fundSortField];
+      const valB = b[fundSortField];
+      if (typeof valA === "string" && typeof valB === "string") {
+        return valB.localeCompare(valA);
+      }
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return numB - numA;
+    });
+
+    const map = new Map<string, number>();
+    descSorted.forEach((item, index) => {
+      map.set(item.symbol, index + 1);
+    });
+    return map;
+  }, [filteredBase, fundSortField]);
+
+  const filteredFunds = useMemo(() => {
+    return [...filteredBase].sort((a, b) => {
       const valA = a[fundSortField];
       const valB = b[fundSortField];
       if (typeof valA === "string" && typeof valB === "string") {
@@ -64,6 +88,7 @@ export default function ZerodhaFundsTab({
       const numB = typeof valB === "number" ? valB : Number(valB) || 0;
       return fundSortOrder === "asc" ? numA - numB : numB - numA;
     });
+  }, [filteredBase, fundSortField, fundSortOrder]);
 
   const fundTotals = useMemo(() => {
     if (filteredFunds.length === 0) return null;
@@ -168,6 +193,9 @@ export default function ZerodhaFundsTab({
           <table className="w-full min-w-[1180px] text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-700/80">
+                <th className="p-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 w-12 select-none">
+                  #
+                </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
                   onClick={() => toggleFundSort("symbol")}
@@ -235,6 +263,9 @@ export default function ZerodhaFundsTab({
                     onClick={() => router.push(`/fund/z_${f.id}`)}
                     className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                   >
+                    <td className="p-4 text-center font-mono text-xs font-bold text-slate-500">
+                      {rankMap.get(f.symbol) ?? "-"}
+                    </td>
                     <td className="p-4">
                       <div
                         className="font-bold text-slate-100 break-words max-w-[320px] text-base leading-snug"
@@ -335,13 +366,14 @@ export default function ZerodhaFundsTab({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
                     No mutual funds found matching search.
                   </td>
                 </tr>
               )}
               {fundTotals && (
                 <tr className="bg-slate-950/80 border-t border-slate-700 font-bold text-slate-200">
+                  <td className="p-4 text-center text-slate-500">-</td>
                   <td className="p-4 text-xs font-bold uppercase tracking-wider text-slate-400">
                     Total / Weighted Avg
                     <div className="text-[10px] text-slate-500 font-semibold normal-case mt-0.5">

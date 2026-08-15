@@ -356,7 +356,7 @@ export default function ZerodhaDashboard({
                   variants={cardVariants}
                   className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl hover:border-teal-500/40 transition-all duration-200"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 to-transparent pointer-events-none" />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -384,7 +384,7 @@ export default function ZerodhaDashboard({
                   variants={cardVariants}
                   className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-emerald-500/20 rounded-2xl p-5 shadow-xl hover:border-emerald-500/40 transition-all duration-200"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -398,11 +398,7 @@ export default function ZerodhaDashboard({
                         )}
                       </div>
                     </div>
-                    <div
-                      className={`text-xl font-extrabold leading-tight tracking-tight ${
-                        totals.gain >= 0 ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
+                    <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
                       {totals.gain >= 0 ? "+" : ""}
                       {formatCurrency(totals.gain)}
                     </div>
@@ -423,7 +419,7 @@ export default function ZerodhaDashboard({
                   onClick={() => setActiveTab("stocks")}
                   className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-blue-500/20 rounded-2xl p-5 shadow-xl hover:border-blue-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -466,7 +462,7 @@ export default function ZerodhaDashboard({
                   onClick={() => setActiveTab("funds")}
                   className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
                   <div className="relative z-10">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
