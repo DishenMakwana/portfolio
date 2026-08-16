@@ -1,7 +1,12 @@
 "use client";
 
 import { formatInr } from "@/helpers/formatters";
-import { getAdjustedBullionPrice, CITIES } from "@/helpers/bullion";
+import {
+  getAdjustedBullionPrice,
+  calculateBullionAthData,
+  CITIES,
+} from "@/helpers/bullion";
+import BullionAthCorrectionCards from "@/components/bullion/BullionAthCorrectionCards";
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -84,7 +89,7 @@ export default function BullionClient({
   };
 
   // Calculator State
-  const [purity, setPurity] = useState<string>(GOLD_PURITIES.K22);
+  const [purity, setPurity] = useState<string>(GOLD_PURITIES.K24);
   const [weight, setWeight] = useState<number>(10);
   const [makingCharges, setMakingCharges] = useState<number>(12);
   const [gstType, setGstType] = useState<GstType>(GST_TYPES.INCL);
@@ -93,10 +98,21 @@ export default function BullionClient({
   const [budget, setBudget] = useState<number>(10000);
   const [calculatedWeight, setCalculatedWeight] = useState<number | null>(null);
 
+  // All-Time High & Drawdown Data
+  const athData = useMemo(
+    () => calculateBullionAthData(rates, chartDataState, selectedCity.offset),
+    [rates, chartDataState, selectedCity.offset]
+  );
+
+  const handleSelectMetalFromAth = (metal: BullionMetal, p: string) => {
+    setSelectedTab(metal);
+    setPurity(p);
+  };
+
   // Sync default purity when selected tab changes
   useEffect(() => {
     if (selectedTab === BULLION_METALS.GOLD) {
-      setPurity(GOLD_PURITIES.K22);
+      setPurity(GOLD_PURITIES.K24);
     } else if (selectedTab === BULLION_METALS.SILVER) {
       setPurity(SILVER_PURITIES.P999);
     } else if (selectedTab === BULLION_METALS.PLATINUM) {
@@ -395,6 +411,12 @@ export default function BullionClient({
           );
         })}
       </div>
+
+      {/* All-Time High & Correction Tracker */}
+      <BullionAthCorrectionCards
+        athData={athData}
+        onSelectMetal={handleSelectMetalFromAth}
+      />
 
       {/* Price Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

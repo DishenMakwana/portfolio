@@ -1,3 +1,5 @@
+import { Coins } from "lucide-react";
+
 export interface BullionRates {
   asOfDate: string;
   gold: {
@@ -56,6 +58,46 @@ export interface CustomChartTooltipProps {
     value: number;
   }>;
   label?: string;
+}
+
+export interface BullionAthMetric {
+  title: string;
+  purity: string;
+  unit: string;
+  currentValue: number;
+  currentDate: string;
+  athValue: number;
+  athDate: string;
+  dayDiff: number;
+  diff: number;
+  diffPercent: number;
+  subtitle: string;
+}
+
+export interface BullionAthData {
+  gold24K: BullionAthMetric;
+  gold22K: BullionAthMetric;
+  silver999: BullionAthMetric;
+  platinumPT950: BullionAthMetric;
+}
+
+export interface BullionAthCorrectionCardsProps {
+  athData: BullionAthData;
+  onSelectMetal?: (metal: BullionMetal, purity: string) => void;
+}
+
+export interface BullionCardConfig {
+  metric: BullionAthMetric;
+  metal: BullionMetal;
+  purity: string;
+  icon: typeof Coins;
+  iconBg: string;
+  iconColor: string;
+  borderColor: string;
+  hoverBorder: string;
+  gradFrom: string;
+  valueColor: string;
+  athColor: string;
 }
 
 export const BULLION_METALS = {
