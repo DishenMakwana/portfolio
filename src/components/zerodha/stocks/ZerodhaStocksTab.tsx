@@ -48,9 +48,33 @@ export default function ZerodhaStocksTab({
     return () => clearTimeout(timer);
   }, [stockSearch]);
 
-  const filteredStocks = stocks
-    .filter((s) => s.symbol.toLowerCase().includes(stockSearch.toLowerCase()))
-    .sort((a, b) => {
+  const filteredBase = useMemo(() => {
+    return stocks.filter((s) =>
+      s.symbol.toLowerCase().includes(stockSearch.toLowerCase())
+    );
+  }, [stocks, stockSearch]);
+
+  const rankMap = useMemo(() => {
+    const descSorted = [...filteredBase].sort((a, b) => {
+      const valA = a[stockSortField];
+      const valB = b[stockSortField];
+      if (typeof valA === "string" && typeof valB === "string") {
+        return valB.localeCompare(valA);
+      }
+      const numA = typeof valA === "number" ? valA : Number(valA) || 0;
+      const numB = typeof valB === "number" ? valB : Number(valB) || 0;
+      return numB - numA;
+    });
+
+    const map = new Map<string, number>();
+    descSorted.forEach((item, index) => {
+      map.set(item.symbol, index + 1);
+    });
+    return map;
+  }, [filteredBase, stockSortField]);
+
+  const filteredStocks = useMemo(() => {
+    return [...filteredBase].sort((a, b) => {
       const valA = a[stockSortField];
       const valB = b[stockSortField];
       if (typeof valA === "string" && typeof valB === "string") {
@@ -62,6 +86,7 @@ export default function ZerodhaStocksTab({
       const numB = typeof valB === "number" ? valB : Number(valB) || 0;
       return stockSortOrder === "asc" ? numA - numB : numB - numA;
     });
+  }, [filteredBase, stockSortField, stockSortOrder]);
 
   const stockTotals = useMemo(() => {
     if (filteredStocks.length === 0) return null;
@@ -134,7 +159,7 @@ export default function ZerodhaStocksTab({
             />
             <input
               type="text"
-              placeholder="Search stock symbol..."
+              placeholder="Search stocks by symbol..."
               value={stockSearch}
               onChange={(e) => setStockSearch(e.target.value)}
               className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full transition"
@@ -150,6 +175,9 @@ export default function ZerodhaStocksTab({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-850">
+                <th className="p-4 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 w-12 select-none">
+                  #
+                </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
                   onClick={() => toggleStockSort("symbol")}
@@ -232,6 +260,9 @@ export default function ZerodhaStocksTab({
                     onClick={() => router.push(`/fund/z_${s.id}`)}
                     className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                   >
+                    <td className="p-4 text-center font-mono text-xs font-bold text-slate-500">
+                      {rankMap.get(s.symbol) ?? "-"}
+                    </td>
                     {/* Stock name + ISIN */}
                     <td className="p-4">
                       <div className="font-bold text-slate-100 flex items-center gap-2">
@@ -308,7 +339,7 @@ export default function ZerodhaStocksTab({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-500">
+                  <td colSpan={10} className="p-8 text-center text-slate-500">
                     No stocks found matching search.
                   </td>
                 </tr>
@@ -316,6 +347,7 @@ export default function ZerodhaStocksTab({
 
               {stockTotals && (
                 <tr className="bg-slate-950/80 border-t border-slate-700 font-bold text-slate-200">
+                  <td className="p-4 text-center text-slate-500">-</td>
                   <td className="p-4 text-xs font-bold uppercase tracking-wider text-slate-400">
                     Total / Weighted Avg
                     <div className="text-[10px] text-slate-500 font-semibold normal-case mt-0.5">

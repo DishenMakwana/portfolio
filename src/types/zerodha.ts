@@ -1,4 +1,5 @@
 import type { TooltipContentProps } from "recharts";
+import type { AthCorrectionData } from "./overview";
 export interface ZerodhaHolding {
   id: number;
   reportId: number | null;
@@ -160,6 +161,7 @@ export interface ZerodhaDashboardData {
     niftyReturn: number;
   }[];
   insights: ZerodhaInsightsData;
+  athData?: AthCorrectionData;
 }
 
 export const ZERODHA_COLORS = [

@@ -32,6 +32,7 @@ import {
   type ZerodhaOverviewTabProps,
 } from "@/types/zerodha";
 import ZerodhaBenchmarkCards from "./ZerodhaBenchmarkCards";
+import OverviewAthCorrectionCards from "@/components/mutual-fund/overview/OverviewAthCorrectionCards";
 
 const CustomPerformanceTooltip = ({
   active,
@@ -192,6 +193,9 @@ export default function ZerodhaOverviewTab({
   return (
     <div className="space-y-6">
       <ZerodhaBenchmarkCards totals={totals} metricDeltas={data.metricDeltas} />
+      {data.athData && (
+        <OverviewAthCorrectionCards athData={data.athData} reportIdParam="" />
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Split & Top holdings */}
         <div className="lg:col-span-2 space-y-6">

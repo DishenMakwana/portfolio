@@ -45,7 +45,7 @@ export default function ZerodhaBenchmarkCards({
         variants={cardVariants}
         className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -55,7 +55,7 @@ export default function ZerodhaBenchmarkCards({
               <BarChart2 size={17} className="text-violet-400" />
             </div>
           </div>
-          <div className="text-xl font-extrabold text-violet-400 leading-tight tracking-tight">
+          <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
             {formatPercent(totals.benchmarkXirr)}
           </div>
           <div className="mt-2">
@@ -81,7 +81,7 @@ export default function ZerodhaBenchmarkCards({
       >
         <div
           className={`absolute inset-0 bg-gradient-to-br ${
-            isAlphaPositive ? "from-emerald-500/10" : "from-red-500/10"
+            isAlphaPositive ? "from-emerald-500/5" : "from-red-500/5"
           } to-transparent pointer-events-none`}
         />
         <div className="relative z-10">
@@ -102,11 +102,7 @@ export default function ZerodhaBenchmarkCards({
               />
             </div>
           </div>
-          <div
-            className={`text-xl font-extrabold leading-tight tracking-tight ${
-              isAlphaPositive ? "text-emerald-400" : "text-red-400"
-            }`}
-          >
+          <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
             {totals.alpha >= 0 ? "+" : ""}
             {totals.alpha.toFixed(2)}%
           </div>
@@ -138,7 +134,7 @@ export default function ZerodhaBenchmarkCards({
         variants={cardVariants}
         className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-amber-500/20 rounded-2xl p-5 shadow-xl hover:border-amber-500/40 hover:bg-slate-900 transition-all duration-200"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
