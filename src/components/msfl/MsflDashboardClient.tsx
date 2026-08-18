@@ -3,6 +3,7 @@
 import MsflLeaderboardChart from "@/components/msfl/MsflLeaderboardChart";
 import MsflHeroCards from "@/components/msfl/MsflHeroCards";
 import MsflBenchmarkAndSummaryCards from "@/components/msfl/MsflBenchmarkAndSummaryCards";
+import OverviewAthCorrectionCards from "@/components/mutual-fund/overview/OverviewAthCorrectionCards";
 import MsflHoldingsSection from "@/components/msfl/MsflHoldingsSection";
 import MsflSectorAndCapAnalysis from "@/components/msfl/MsflSectorAndCapAnalysis";
 import MsflPortfolioTimeSeriesChart from "@/components/msfl/MsflPortfolioTimeSeriesChart";
@@ -350,6 +351,14 @@ export default function MsflDashboardClient({
             holdingsCount={holdings.length}
             topPerformer={topPerformer}
           />
+
+          {/* All-Time High (ATH) & Correction Tracker */}
+          {msflData.athData && (
+            <OverviewAthCorrectionCards
+              athData={msflData.athData}
+              reportIdParam=""
+            />
+          )}
 
           {/* Portfolio Time Series Growth Chart */}
           <MsflPortfolioTimeSeriesChart
