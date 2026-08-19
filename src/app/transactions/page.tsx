@@ -22,6 +22,8 @@ export default async function TransactionsPage() {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Transactions"
+        iconName="arrow-left-right"
         reportsList={reportsList}
         selectedReport={selectedReport}
         unmappedCount={unmappedCount}

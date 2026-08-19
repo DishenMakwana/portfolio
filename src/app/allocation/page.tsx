@@ -21,6 +21,8 @@ export default async function AllocationPage({ searchParams }: PageProps) {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Asset Allocation"
+        iconName="pie-chart"
         reportsList={data.reportsList}
         selectedReport={data.selectedReport}
         unmappedCount={unmappedCount}

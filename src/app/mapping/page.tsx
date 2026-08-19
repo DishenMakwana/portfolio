@@ -19,6 +19,8 @@ export default async function MappingPage() {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Fund Mapping"
+        iconName="git-merge"
         reportsList={reportsList}
         selectedReport={selectedReport}
         unmappedCount={unmappedCount}

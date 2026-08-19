@@ -19,6 +19,8 @@ export default async function FamilyPage({ searchParams }: PageProps) {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Family Members"
+        iconName="users"
         reportsList={data.reportsList}
         selectedReport={data.selectedReport}
         unmappedCount={unmappedCount}

@@ -32,6 +32,8 @@ export default async function FutureProjectionPage() {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Future Projection"
+        iconName="rocket"
         reportsList={reportsList}
         selectedReport={selectedReport}
         unmappedCount={unmappedCount}

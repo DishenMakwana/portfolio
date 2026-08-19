@@ -23,6 +23,8 @@ export default async function OverviewPage({ searchParams }: PageProps) {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Overview"
+        iconName="layout-dashboard"
         reportsList={data.reportsList}
         selectedReport={data.selectedReport}
         unmappedCount={unmappedCount}
@@ -51,6 +53,7 @@ export default async function OverviewPage({ searchParams }: PageProps) {
               capAllocation={data.capAllocation}
               memberSummaries={data.memberSummaries}
               holdings={data.holdings}
+              athData={data.athData}
             />
           </Suspense>
         )}

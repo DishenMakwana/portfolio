@@ -1,6 +1,6 @@
 import { getFyTrackerData } from "@/lib/insightsService";
 import FyTrackerClient from "@/components/mutual-fund/fy-tracker/FyTrackerClient";
-import { CalendarRange } from "lucide-react";
+import HeaderClient from "@/components/shared/HeaderClient";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
@@ -10,14 +10,10 @@ export default async function FyTrackerPage() {
   const data = await getFyTrackerData();
   return (
     <>
-      <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
-        <div className="flex items-center gap-2">
-          <CalendarRange size={16} className="text-teal-400" />
-          <div className="text-sm text-slate-400 font-semibold uppercase tracking-wider">
-            FY Investment Tracker
-          </div>
-        </div>
-      </header>
+      <HeaderClient
+        title="Family Portfolio - FY Investment Tracker"
+        iconName="calendar-range"
+      />
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30 selection:text-teal-200">
         <Suspense
           fallback={

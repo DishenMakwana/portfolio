@@ -23,6 +23,8 @@ export default async function BullionPage() {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Gold & Silver"
+        iconName="coins"
         reportsList={reportsList}
         selectedReport={selectedReport}
         unmappedCount={unmappedCount}

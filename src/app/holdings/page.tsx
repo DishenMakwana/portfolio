@@ -21,6 +21,8 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - Holdings"
+        iconName="table"
         reportsList={data.reportsList}
         selectedReport={data.selectedReport}
         unmappedCount={unmappedCount}

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db/db";
-import { parseHistoryDate } from "@/helpers/dates";
+import { parseHistoryDate, parseToLocalMidnight } from "@/helpers/dates";
 import {
   holdingsSnapshot,
   schemes,
@@ -694,15 +694,17 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         };
 
   // 7. Generate comparison chart data (only 1Y for initial load; wider ranges fetched lazily)
-  const asOfLocal = parseHistoryDate(holding.asOfDate);
+  const asOfLocal = parseToLocalMidnight(holding.asOfDate);
   const oneYearAgo = new Date(
-    asOfLocal.getFullYear(),
-    asOfLocal.getMonth() - 12,
-    asOfLocal.getDate(),
-    0,
-    0,
-    0,
-    0
+    Date.UTC(
+      asOfLocal.getUTCFullYear(),
+      asOfLocal.getUTCMonth() - 12,
+      asOfLocal.getUTCDate(),
+      12,
+      0,
+      0,
+      0
+    )
   );
 
   const chartData =

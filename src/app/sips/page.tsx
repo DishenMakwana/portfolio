@@ -18,6 +18,8 @@ export default async function SipsPage() {
   return (
     <>
       <HeaderClient
+        title="Family Portfolio - My SIPs"
+        iconName="repeat"
         reportsList={reportsList}
         selectedReport={selectedReport}
         unmappedCount={unmappedCount}
