@@ -13,49 +13,57 @@ import {
 const schemaName = process.env.DB_SCHEMA || "portfolio";
 export const mySchema = pgSchema(schemaName);
 
-export const reports = mySchema.table("reports", {
-  id: serial("id").primaryKey(),
-  asOfDate: text("as_of_date").notNull(),
-  uploadedAt: text("uploaded_at").notNull(),
-  filename: text("filename").notNull(),
-  cagr: doublePrecision("cagr"), // Store parsed Grand Total CAGR
-  casId: text("cas_id"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const reports = mySchema.table(
+  "reports",
+  {
+    id: serial("id").primaryKey(),
+    asOfDate: text("as_of_date").notNull(),
+    uploadedAt: text("uploaded_at").notNull(),
+    filename: text("filename").notNull(),
+    cagr: doublePrecision("cagr"), // Store parsed Grand Total CAGR
+    casId: text("cas_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("reports_as_of_date_idx").on(table.asOfDate)]
+);
 
-export const familyMembers = mySchema.table("family_members", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  pan: text("pan"),
-  address: text("address"),
-  email: text("email"),
-  mobile: text("mobile"),
-  dematNominee: text("demat_nominee"),
-  dpId: text("dp_id"),
-  clientId: text("client_id"),
-  dpName: text("dp_name"),
-  boSubStatus: text("bo_sub_status"),
-  bsda: text("bsda"),
-  rgess: text("rgess"),
-  accountStatus: text("account_status"),
-  frozenStatus: text("frozen_status"),
-  boStatus: text("bo_status"),
-  nsdlId: text("nsdl_id"),
-  dob: text("dob"),
-  aadhaarStatus: text("aadhaar_status"),
-  linkedBankName: text("linked_bank_name"),
-  linkedBankIfsc: text("linked_bank_ifsc"),
-  linkedBankAccountNo: text("linked_bank_account_no"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const familyMembers = mySchema.table(
+  "family_members",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    pan: text("pan"),
+    address: text("address"),
+    email: text("email"),
+    mobile: text("mobile"),
+    dematNominee: text("demat_nominee"),
+    dpId: text("dp_id"),
+    clientId: text("client_id"),
+    dpName: text("dp_name"),
+    boSubStatus: text("bo_sub_status"),
+    bsda: text("bsda"),
+    rgess: text("rgess"),
+    accountStatus: text("account_status"),
+    frozenStatus: text("frozen_status"),
+    boStatus: text("bo_status"),
+    nsdlId: text("nsdl_id"),
+    dob: text("dob"),
+    aadhaarStatus: text("aadhaar_status"),
+    linkedBankName: text("linked_bank_name"),
+    linkedBankIfsc: text("linked_bank_ifsc"),
+    linkedBankAccountNo: text("linked_bank_account_no"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("family_members_pan_idx").on(table.pan)]
+);
 
 export const memberReportCagrs = mySchema.table(
   "member_report_cagrs",
@@ -85,6 +93,7 @@ export const schemes = mySchema.table(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
+    normalizedName: text("normalized_name"),
     category: text("category").notNull(),
     schemeCodeApi: text("scheme_code_api"),
     mappedAt: text("mapped_at"),
@@ -94,7 +103,11 @@ export const schemes = mySchema.table(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+  (table) => [
+    index("schemes_scheme_code_api_idx").on(table.schemeCodeApi),
+    index("schemes_normalized_name_idx").on(table.normalizedName),
+    index("schemes_category_idx").on(table.category),
+  ]
 );
 
 export const holdingsSnapshot = mySchema.table(
@@ -137,6 +150,12 @@ export const holdingsSnapshot = mySchema.table(
     index("holdings_snapshot_report_id_idx").on(table.reportId),
     index("holdings_snapshot_member_id_idx").on(table.memberId),
     index("holdings_snapshot_scheme_id_idx").on(table.schemeId),
+    index("holdings_snapshot_report_member_scheme_idx").on(
+      table.reportId,
+      table.memberId,
+      table.schemeId
+    ),
+    index("holdings_snapshot_folio_no_idx").on(table.folioNo),
   ]
 );
 
@@ -170,6 +189,9 @@ export const transactions = mySchema.table(
     index("transactions_stt_idx").on(table.stt),
     index("transactions_type_idx").on(table.type),
     index("transactions_txn_type_idx").on(table.transactionType),
+    index("transactions_folio_no_idx").on(table.folioNo),
+    index("transactions_scheme_date_idx").on(table.schemeId, table.date),
+    index("transactions_member_date_idx").on(table.memberId, table.date),
     index("transactions_holding_lookup_idx").on(
       table.memberId,
       table.schemeId,
@@ -267,17 +289,21 @@ export const schemeNavHistory = mySchema.table(
   ]
 );
 
-export const zerodhaReports = mySchema.table("zerodha_reports", {
-  id: serial("id").primaryKey(),
-  asOfDate: text("as_of_date").notNull(),
-  uploadedAt: text("uploaded_at").notNull(),
-  filename: text("filename").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const zerodhaReports = mySchema.table(
+  "zerodha_reports",
+  {
+    id: serial("id").primaryKey(),
+    asOfDate: text("as_of_date").notNull(),
+    uploadedAt: text("uploaded_at").notNull(),
+    filename: text("filename").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("zerodha_reports_as_of_date_idx").on(table.asOfDate)]
+);
 
 export const zerodhaHoldings = mySchema.table(
   "zerodha_holdings",
@@ -312,6 +338,10 @@ export const zerodhaHoldings = mySchema.table(
   (table) => [
     index("zerodha_holdings_report_id_idx").on(table.reportId),
     index("zerodha_holdings_scheme_id_idx").on(table.schemeId),
+    index("zerodha_holdings_report_scheme_idx").on(
+      table.reportId,
+      table.schemeId
+    ),
   ]
 );
 
@@ -320,6 +350,7 @@ export const zerodhaSchemes = mySchema.table(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
+    normalizedName: text("normalized_name"),
     category: text("category").notNull(),
     isin: text("isin"),
     holdingType: text("holding_type"),
@@ -336,6 +367,7 @@ export const zerodhaSchemes = mySchema.table(
   },
   (table) => [
     index("zerodha_schemes_scheme_code_api_idx").on(table.schemeCodeApi),
+    index("zerodha_schemes_normalized_name_idx").on(table.normalizedName),
   ]
 );
 
@@ -416,6 +448,11 @@ export const zerodhaTransactions = mySchema.table(
     index("zerodha_transactions_member_id_idx").on(table.memberId),
     index("zerodha_transactions_scheme_id_idx").on(table.schemeId),
     index("zerodha_transactions_date_idx").on(table.date),
+    index("zerodha_transactions_scheme_date_idx").on(
+      table.schemeId,
+      table.date
+    ),
+    index("zerodha_transactions_asset_type_idx").on(table.assetType),
   ]
 );
 
@@ -465,17 +502,21 @@ export const benchmarkNavHistory = mySchema.table(
   ]
 );
 
-export const msflReports = mySchema.table("msfl_reports", {
-  id: serial("id").primaryKey(),
-  asOfDate: text("as_of_date").notNull(),
-  uploadedAt: text("uploaded_at").notNull(),
-  filename: text("filename").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const msflReports = mySchema.table(
+  "msfl_reports",
+  {
+    id: serial("id").primaryKey(),
+    asOfDate: text("as_of_date").notNull(),
+    uploadedAt: text("uploaded_at").notNull(),
+    filename: text("filename").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("msfl_reports_as_of_date_idx").on(table.asOfDate)]
+);
 
 export const msflHoldings = mySchema.table(
   "msfl_holdings",
@@ -505,6 +546,7 @@ export const msflHoldings = mySchema.table(
   (table) => [
     index("msfl_holdings_report_id_idx").on(table.reportId),
     index("msfl_holdings_scheme_id_idx").on(table.schemeId),
+    index("msfl_holdings_report_scheme_idx").on(table.reportId, table.schemeId),
   ]
 );
 
@@ -513,6 +555,7 @@ export const msflSchemes = mySchema.table(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull().unique(),
+    normalizedName: text("normalized_name"),
     category: text("category").notNull(),
     isin: text("isin"),
     holdingType: text("holding_type"),
@@ -527,7 +570,10 @@ export const msflSchemes = mySchema.table(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("msfl_schemes_scheme_code_api_idx").on(table.schemeCodeApi)]
+  (table) => [
+    index("msfl_schemes_scheme_code_api_idx").on(table.schemeCodeApi),
+    index("msfl_schemes_normalized_name_idx").on(table.normalizedName),
+  ]
 );
 
 export const msflSchemeNavCacheMeta = mySchema.table(

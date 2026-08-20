@@ -1,0 +1,14 @@
+CREATE INDEX "family_members_pan_idx" ON "portfolio"."family_members" USING btree ("pan");--> statement-breakpoint
+CREATE INDEX "holdings_snapshot_report_member_scheme_idx" ON "portfolio"."holdings_snapshot" USING btree ("report_id","member_id","scheme_id");--> statement-breakpoint
+CREATE INDEX "holdings_snapshot_folio_no_idx" ON "portfolio"."holdings_snapshot" USING btree ("folio_no");--> statement-breakpoint
+CREATE INDEX "msfl_holdings_report_scheme_idx" ON "portfolio"."msfl_holdings" USING btree ("report_id","scheme_id");--> statement-breakpoint
+CREATE INDEX "msfl_reports_as_of_date_idx" ON "portfolio"."msfl_reports" USING btree ("as_of_date");--> statement-breakpoint
+CREATE INDEX "reports_as_of_date_idx" ON "portfolio"."reports" USING btree ("as_of_date");--> statement-breakpoint
+CREATE INDEX "schemes_category_idx" ON "portfolio"."schemes" USING btree ("category");--> statement-breakpoint
+CREATE INDEX "transactions_folio_no_idx" ON "portfolio"."transactions" USING btree ("folio_no");--> statement-breakpoint
+CREATE INDEX "transactions_scheme_date_idx" ON "portfolio"."transactions" USING btree ("scheme_id","date");--> statement-breakpoint
+CREATE INDEX "transactions_member_date_idx" ON "portfolio"."transactions" USING btree ("member_id","date");--> statement-breakpoint
+CREATE INDEX "zerodha_holdings_report_scheme_idx" ON "portfolio"."zerodha_holdings" USING btree ("report_id","scheme_id");--> statement-breakpoint
+CREATE INDEX "zerodha_reports_as_of_date_idx" ON "portfolio"."zerodha_reports" USING btree ("as_of_date");--> statement-breakpoint
+CREATE INDEX "zerodha_transactions_scheme_date_idx" ON "portfolio"."zerodha_transactions" USING btree ("scheme_id","date");--> statement-breakpoint
+CREATE INDEX "zerodha_transactions_asset_type_idx" ON "portfolio"."zerodha_transactions" USING btree ("asset_type");--> statement-breakpoint
