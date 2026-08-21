@@ -183,6 +183,13 @@
       "when": 1787141533728,
       "tag": "0025_solid_butterfly",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787308438956,
+      "tag": "0026_zippy_prodigy",
+      "breakpoints": true
     }
   ]
 }

@@ -667,3 +667,26 @@ export const bullionHistory = mySchema.table(
     index("bullion_history_date_idx").on(table.date),
   ]
 );
+
+export const analysisLinks = mySchema.table(
+  "analysis_links",
+  {
+    id: serial("id").primaryKey(),
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    domain: text("domain").notNull(),
+    faviconUrl: text("favicon_url"),
+    category: text("category").default("General").notNull(),
+    pinned: integer("pinned").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("analysis_links_category_idx").on(table.category),
+    index("analysis_links_created_at_idx").on(table.createdAt),
+  ]
+);
