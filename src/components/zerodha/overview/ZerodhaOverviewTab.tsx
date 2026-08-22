@@ -220,6 +220,9 @@ export default function ZerodhaOverviewTab({
                         paddingAngle={3}
                         dataKey="value"
                         strokeWidth={0}
+                        isAnimationActive={true}
+                        animationDuration={1000}
+                        animationEasing="ease-out"
                         onMouseEnter={(_, index) => setActiveAssetIdx(index)}
                         onMouseLeave={() => setActiveAssetIdx(null)}
                         shape={(
@@ -369,6 +372,9 @@ export default function ZerodhaOverviewTab({
                         paddingAngle={2}
                         dataKey="value"
                         strokeWidth={0}
+                        isAnimationActive={true}
+                        animationDuration={1000}
+                        animationEasing="ease-out"
                         onMouseEnter={(_, index) => setActiveSectorIdx(index)}
                         onMouseLeave={() => setActiveSectorIdx(null)}
                         shape={(
@@ -624,6 +630,7 @@ export default function ZerodhaOverviewTab({
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
+                    key={`zerodha-timeline-chart-${data.timelineData.length}`}
                     data={data.timelineData}
                     margin={{ top: 10, right: 10, left: 10, bottom: 30 }}
                   >
@@ -676,6 +683,10 @@ export default function ZerodhaOverviewTab({
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
                       activeDot={{ r: 5, fill: "#10b981" }}
+                      isAnimationActive={true}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
+                      animationBegin={100}
                     />
                     <Line
                       type="monotone"
@@ -685,6 +696,10 @@ export default function ZerodhaOverviewTab({
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: "#f59e0b", strokeWidth: 0 }}
                       activeDot={{ r: 5, fill: "#f59e0b" }}
+                      isAnimationActive={true}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
+                      animationBegin={200}
                     />
                     <Line
                       type="monotone"
@@ -695,6 +710,10 @@ export default function ZerodhaOverviewTab({
                       strokeDasharray="6 4"
                       dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 0 }}
                       activeDot={{ r: 5, fill: "#8b5cf6" }}
+                      isAnimationActive={true}
+                      animationDuration={1200}
+                      animationEasing="ease-out"
+                      animationBegin={300}
                     />
                   </LineChart>
                 </ResponsiveContainer>

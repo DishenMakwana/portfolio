@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Search } from "lucide-react";
-import { formatCurrency, formatPercent } from "@/lib/formatters";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { ZerodhaStocksTabProps } from "@/types/zerodha";

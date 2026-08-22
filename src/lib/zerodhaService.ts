@@ -9,6 +9,7 @@ import {
   reports,
 } from "../db/schema";
 import { eq, desc, asc, and, inArray, lte } from "drizzle-orm";
+import { normalizeSchemeName } from "@/helpers/schemeNormalize";
 import {
   ZerodhaDashboardData,
   ZerodhaBenchmarkReturns,
@@ -24,15 +25,16 @@ import {
   calculateCagr,
   calculateXirrFromNav,
   calculateAlpha,
-  isBuyTransactionType,
   getBenchmarkCodeForCategory,
   getBenchmarkFundNameForCode,
 } from "./alpha";
+import { isBuyTransactionType } from "@/helpers/transactions";
 import { fetchStockHistory, getNifty50IndexHistory } from "./stockApi";
 import {
   calculateAthCorrectionData,
   getNiftyAthAndCurrentPoints,
 } from "@/helpers/ath";
+import { isIndianMarketOpen } from "@/helpers/tradingDays";
 import {
   autoMapScheme,
   fetchMfDetails,
@@ -113,16 +115,22 @@ export async function saveZerodhaHoldingsReport(
   if (holdings.length > 0) {
     for (const h of holdings) {
       const schemeName = h.symbol;
+      const normalizedName = normalizeSchemeName(schemeName);
       let scheme = await db.query.zerodhaSchemes.findFirst({
         columns: {
           id: true,
           name: true,
+          normalizedName: true,
           isin: true,
           holdingType: true,
           sector: true,
           instrumentType: true,
         },
-        where: eq(zerodhaSchemes.name, schemeName),
+        where: (table, { eq, or }) =>
+          or(
+            eq(table.name, schemeName),
+            eq(table.normalizedName, normalizedName)
+          ),
       });
 
       if (!scheme) {
@@ -132,6 +140,7 @@ export async function saveZerodhaHoldingsReport(
             .insert(zerodhaSchemes)
             .values({
               name: schemeName,
+              normalizedName,
               category: h.instrumentType || "Mutual Fund",
               isin: h.isin,
               holdingType: h.holdingType,
@@ -153,6 +162,7 @@ export async function saveZerodhaHoldingsReport(
             .insert(zerodhaSchemes)
             .values({
               name: schemeName,
+              normalizedName,
               category: "Equity Stock",
               isin: h.isin,
               holdingType: h.holdingType,
@@ -169,6 +179,7 @@ export async function saveZerodhaHoldingsReport(
         await db
           .update(zerodhaSchemes)
           .set({
+            normalizedName: scheme.normalizedName || normalizedName,
             isin: scheme.isin || h.isin,
             holdingType: scheme.holdingType || h.holdingType,
             sector: scheme.sector || h.sector,
@@ -179,13 +190,15 @@ export async function saveZerodhaHoldingsReport(
 
       if (scheme) {
         schemeMap.set(schemeName, scheme.id);
+        schemeMap.set(normalizedName, scheme.id);
       }
     }
   }
 
   await db.insert(zerodhaHoldings).values(
     holdings.map((h) => {
-      const schemeId = schemeMap.get(h.symbol);
+      const schemeId =
+        schemeMap.get(h.symbol) || schemeMap.get(normalizeSchemeName(h.symbol));
       if (!schemeId) {
         throw new Error(`Scheme ID not found for symbol ${h.symbol}`);
       }
@@ -219,7 +232,7 @@ export async function deleteZerodhaHoldingsReport(
   await db.delete(zerodhaReports).where(eq(zerodhaReports.id, reportId));
 }
 
-export async function getZerodhaReports() {
+async function getZerodhaReports() {
   return await db.query.zerodhaReports.findMany({
     orderBy: [desc(zerodhaReports.asOfDate)],
   });
@@ -627,6 +640,8 @@ async function getZerodhaReportWeightedMetrics(
   };
 }
 
+const zerodhaDashboardCache = new Map<string, ZerodhaDashboardData>();
+
 export async function getZerodhaDashboardData(
   reportId?: number
 ): Promise<ZerodhaDashboardData> {
@@ -690,6 +705,13 @@ export async function getZerodhaDashboardData(
   const selectedReport = reportId
     ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
+
+  const marketOpen = isIndianMarketOpen();
+  const cacheKey = `zerodha:${selectedReport.id}:${selectedReport.asOfDate}:${reportsList.length}`;
+  const cached = zerodhaDashboardCache.get(cacheKey);
+  if (!marketOpen && cached) {
+    return cached;
+  }
 
   const rawHoldings = await db
     .select({
@@ -803,7 +825,7 @@ export async function getZerodhaDashboardData(
       const benchNavHistory = benchDetails?.data || [];
 
       const fundTxs = [...zTxs];
-      const hasBuyTx = fundTxs.some((tx: any) => isBuyTransactionType(tx.type));
+      const hasBuyTx = fundTxs.some((tx) => isBuyTransactionType(tx.type));
 
       if (!hasBuyTx && h.averagePrice > 0) {
         let ipoDate = selectedReport.asOfDate;
@@ -822,8 +844,8 @@ export async function getZerodhaDashboardData(
         }
 
         const totalSoldUnits = fundTxs
-          .filter((t: any) => t.type === "SELL")
-          .reduce((s: number, t: any) => s + (t.units || 0), 0);
+          .filter((t) => t.type === "SELL")
+          .reduce((s, t) => s + (t.units || 0), 0);
         const ipoUnits = h.quantity + totalSoldUnits;
         const ipoAmount = Math.round(ipoUnits * h.averagePrice * 100) / 100;
 
@@ -1410,7 +1432,7 @@ export async function getZerodhaDashboardData(
     maxNifty,
   });
 
-  return {
+  const result: ZerodhaDashboardData = {
     firstCasReportDate,
     reportsList,
     selectedReport,
@@ -1446,6 +1468,11 @@ export async function getZerodhaDashboardData(
     insights,
     athData,
   };
+
+  if (!marketOpen) {
+    zerodhaDashboardCache.set(cacheKey, result);
+  }
+  return result;
 }
 
 const zerodhaSchemeHistoryCache = new Map<
@@ -1739,6 +1766,7 @@ const zerodhaStockHistoryCache = new Map<
 export function clearAllZerodhaCaches() {
   zerodhaSchemeHistoryCache.clear();
   zerodhaStockHistoryCache.clear();
+  zerodhaDashboardCache.clear();
 }
 
 async function saveZerodhaStockCacheAndMapping(

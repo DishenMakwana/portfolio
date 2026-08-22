@@ -302,8 +302,32 @@ export interface ZerodhaAutoMapResult {
   confidence: number | null;
 }
 
+export interface StockSearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+  quoteType?: string;
+  industry?: string;
+}
+
+export interface YahooQuoteItem {
+  symbol: string;
+  shortname?: string;
+  longname?: string;
+  exchDisp?: string;
+  exchange?: string;
+  quoteType?: string;
+  typeDisp?: string;
+  industryDisp?: string;
+  sectorDisp?: string;
+}
+
 export interface PageProps {
-  searchParams: Promise<{ zerodhaReportId?: string }>;
+  searchParams: Promise<{
+    zerodhaReportId?: string;
+    reportId?: string;
+    tab?: string;
+  }>;
 }
 
 export const ZERODHA_COLOR_CLASSES = [
