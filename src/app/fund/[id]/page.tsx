@@ -19,7 +19,6 @@ import {
 import { eq, and, lte, desc, inArray } from "drizzle-orm";
 import {
   calculateAlpha,
-  isBuyTransactionType,
   getSchemeHistoryForDbCode,
   getBenchmarkHistory,
   calculateVolatilityMeasures,
@@ -30,13 +29,18 @@ import {
   getBenchmarkFundNameForCode,
   getBenchmarkNameForCode,
 } from "@/lib/alpha";
+import { isBuyTransactionType } from "@/helpers/transactions";
 import {
   getZerodhaSchemeHistoryForDbCode,
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
 import FundDetailsClient from "@/components/mutual-fund/fund-details/FundDetailsClient";
-import { FundPageProps, HoldingDetails } from "@/types/fund-details";
+import {
+  FundPageProps,
+  HoldingDetails,
+  FundTransactionItem,
+} from "@/types/fund-details";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Fund Details" };
@@ -377,7 +381,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   ]);
 
   // 2. Fetch transaction history and NAV histories in parallel
-  let zTxsPromise = Promise.resolve<any[]>([]);
+  let zTxsPromise = Promise.resolve<FundTransactionItem[]>([]);
   if (isZerodha && holding.schemeId) {
     zTxsPromise = (async () => {
       const matchingSchemeIds = holding.isin
@@ -481,7 +485,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
   // 3. Format transactions for XIRR/Alpha calculation
   // For Zerodha or MSFL holdings where no BUY transaction exists (e.g., IPO Allotments),
   // generate a synthetic BUY transaction from average purchase price and quantity.
-  const hasBuyTx = fundTxs.some((tx: any) => isBuyTransactionType(tx.type));
+  const hasBuyTx = fundTxs.some((tx: FundTransactionItem) =>
+    isBuyTransactionType(tx.type)
+  );
   if ((isZerodha || isMsfl) && !hasBuyTx && holding.purchaseNav > 0) {
     let ipoDate = holding.asOfDate;
     if (fundDetails?.data && fundDetails.data.length > 0) {
@@ -499,8 +505,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     }
 
     const totalSoldUnits = fundTxs
-      .filter((t: any) => t.type === "SELL")
-      .reduce((s: number, t: any) => s + (t.units || 0), 0);
+      .filter((t: FundTransactionItem) => t.type === "SELL")
+      .reduce((s: number, t: FundTransactionItem) => s + (t.units || 0), 0);
     const ipoUnits = holding.balanceUnits + totalSoldUnits;
     const ipoAmount = Math.round(ipoUnits * holding.purchaseNav * 100) / 100;
 
@@ -511,6 +517,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
       folioNo: holding.folioNo || null,
       date: ipoDate,
       type: "BUY",
+      transactionType: "BUY",
       rawTransactionType: "ipo_allotment",
       units: ipoUnits,
       nav: holding.purchaseNav,
@@ -522,21 +529,13 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     });
   }
 
-  const mappedTxs = fundTxs.map(
-    (tx: {
-      date: string;
-      type: string;
-      transactionType?: string | null;
-      amount: number;
-      units: number | null;
-    }) => ({
-      date: tx.date,
-      type: tx.type as "BUY" | "SELL",
-      transactionType: tx.transactionType || tx.type,
-      amount: tx.amount,
-      units: tx.units ?? undefined,
-    })
-  );
+  const mappedTxs = fundTxs.map((tx: FundTransactionItem) => ({
+    date: tx.date,
+    type: tx.type as "BUY" | "SELL",
+    transactionType: tx.transactionType || tx.type,
+    amount: tx.amount,
+    units: tx.units ?? undefined,
+  }));
 
   // Dynamically update stock holding latest NAV and asOfDate from Yahoo Finance history cache
   const fundNavHistory = fundDetails?.data || [];

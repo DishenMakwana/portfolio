@@ -2,6 +2,7 @@ import {
   getAllTransactions,
   getSchemes,
   getReports,
+  getReportHoldings,
 } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import TransactionsClient from "@/components/mutual-fund/transactions/TransactionsClient";
@@ -19,6 +20,15 @@ export default async function TransactionsPage() {
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
   const selectedReport = reportsList[0] || null;
 
+  let currentPortfolioValue = 0;
+  if (selectedReport) {
+    const holdings = await getReportHoldings(selectedReport.id);
+    currentPortfolioValue = holdings.reduce(
+      (acc, h) => acc + (h.currentValue || 0),
+      0
+    );
+  }
+
   return (
     <>
       <HeaderClient
@@ -35,7 +45,10 @@ export default async function TransactionsPage() {
             All mutual fund purchase and sell transaction entries
           </p>
         </div>
-        <TransactionsClient transactions={txRows} />
+        <TransactionsClient
+          transactions={txRows}
+          currentPortfolioValue={currentPortfolioValue}
+        />
       </main>
     </>
   );

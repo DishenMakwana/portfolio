@@ -12,9 +12,8 @@ export const metadata = { title: "Zerodha Portfolio" };
 
 export default async function ZerodhaPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const zerodhaReportId = params.zerodhaReportId
-    ? parseInt(params.zerodhaReportId, 10)
-    : undefined;
+  const rawReportId = params.reportId || params.zerodhaReportId;
+  const zerodhaReportId = rawReportId ? parseInt(rawReportId, 10) : undefined;
 
   const [data, allSchemes] = await Promise.all([
     getZerodhaDashboardData(zerodhaReportId),
