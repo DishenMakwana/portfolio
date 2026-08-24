@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { MsflHoldingsSectionProps } from "@/types/msfl";
 
@@ -20,6 +20,44 @@ export default function MsflHoldingsSection({
   laggingFunds,
 }: MsflHoldingsSectionProps) {
   const router = useRouter();
+
+  const stockTotals = useMemo(() => {
+    if (filteredHoldings.length === 0) return null;
+    const totalValueSum = filteredHoldings.reduce(
+      (sum, s) => sum + s.currentValue,
+      0
+    );
+    const totalInvestedSum = filteredHoldings.reduce(
+      (sum, s) => sum + s.investedValue,
+      0
+    );
+    const totalPnlSum = totalValueSum - totalInvestedSum;
+    const totalPnlPct =
+      totalInvestedSum > 0 ? (totalPnlSum / totalInvestedSum) * 100 : 0;
+    const avgXirr =
+      totalValueSum > 0
+        ? filteredHoldings.reduce(
+            (sum, s) => sum + (s.cagr ?? s.xirr ?? 0) * s.currentValue,
+            0
+          ) / totalValueSum
+        : 0;
+    const avgAlpha =
+      totalValueSum > 0
+        ? filteredHoldings.reduce(
+            (sum, s) => sum + (s.alpha ?? 0) * s.currentValue,
+            0
+          ) / totalValueSum
+        : 0;
+
+    return {
+      totalValueSum,
+      totalInvestedSum,
+      totalPnlSum,
+      totalPnlPct,
+      avgXirr,
+      avgAlpha,
+    };
+  }, [filteredHoldings]);
 
   const filteredBase = useMemo(() => {
     return holdings.filter((h) =>
@@ -166,18 +204,23 @@ export default function MsflHoldingsSection({
                       <div className="flex flex-col gap-0.5">
                         <div className="font-bold text-slate-100 flex items-center gap-2">
                           <span>{h.symbol}</span>
-                          {isUnlistedStock(h.symbol) && (
-                            <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase animate-pulse leading-none">
-                              Unlisted
-                            </span>
-                          )}
-                          {h.tradingStatus && h.tradingStatus !== "Active" && (
+                          {h.tradingStatus && h.tradingStatus !== "Active" ? (
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase leading-none border ${h.tradingStatus.includes("SUSPENDED") || h.tradingStatus.includes("DELETED") ? "bg-rose-950/80 text-rose-400 border-rose-800/40" : "bg-amber-950/80 text-amber-400 border-amber-800/40"}`}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase leading-none border ${
+                                h.tradingStatus.includes("SUSPENDED") ||
+                                h.tradingStatus.includes("DELETED") ||
+                                h.tradingStatus.includes("NOT LISTED")
+                                  ? "bg-rose-950/80 text-rose-400 border-rose-800/40"
+                                  : "bg-amber-950/80 text-amber-400 border-amber-800/40"
+                              }`}
                             >
                               {h.tradingStatus}
                             </span>
-                          )}
+                          ) : isUnlistedStock(h.symbol) ? (
+                            <span className="bg-rose-950/80 text-rose-400 border border-rose-800/40 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase leading-none">
+                              Unlisted
+                            </span>
+                          ) : null}
                         </div>
                         {h.isin && (
                           <span className="text-[10px] text-slate-500 tracking-wider">
@@ -258,6 +301,59 @@ export default function MsflHoldingsSection({
                   <td colSpan={11} className="p-8 text-center text-slate-500">
                     No stocks found matching search query.
                   </td>
+                </tr>
+              )}
+
+              {stockTotals && (
+                <tr className="bg-slate-950/80 border-t border-slate-700 font-bold text-slate-200">
+                  <td className="p-4 text-center text-slate-500">-</td>
+                  <td className="p-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Total / Weighted Avg
+                    <div className="text-[10px] text-slate-500 font-semibold normal-case mt-0.5">
+                      {filteredHoldings.length}{" "}
+                      {filteredHoldings.length === 1 ? "Stock" : "Stocks"}
+                    </div>
+                  </td>
+                  <td className="p-4 text-right text-slate-400">-</td>
+                  <td className="p-4 text-right text-slate-400">-</td>
+                  <td className="p-4 text-right text-slate-400">-</td>
+                  <td className="p-4 text-right text-slate-300 font-bold">
+                    {formatCurrency(stockTotals.totalInvestedSum)}
+                  </td>
+                  <td className="p-4 text-right text-teal-400 text-base font-black">
+                    {formatCurrency(stockTotals.totalValueSum)}
+                  </td>
+                  <td className="p-4 text-right">
+                    <div
+                      className={
+                        stockTotals.totalPnlSum >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                      }
+                    >
+                      {formatCurrency(stockTotals.totalPnlSum)}
+                    </div>
+                    <div
+                      className={`text-[11px] ${stockTotals.totalPnlSum >= 0 ? "text-emerald-500/80" : "text-red-500/80"}`}
+                    >
+                      {stockTotals.totalPnlPct >= 0 ? "+" : ""}
+                      {stockTotals.totalPnlPct.toFixed(1)}% Abs
+                    </div>
+                  </td>
+                  <td
+                    className={`p-4 text-right ${stockTotals.avgXirr >= 0 ? "text-teal-400" : "text-red-400"}`}
+                  >
+                    {formatPercent(stockTotals.avgXirr)}
+                  </td>
+                  <td className="p-4 text-right">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs ${stockTotals.avgAlpha >= 0 ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/40" : "bg-red-950/80 text-red-400 border border-red-800/40"}`}
+                    >
+                      {stockTotals.avgAlpha >= 0 ? "+" : ""}
+                      {stockTotals.avgAlpha.toFixed(2)}%
+                    </span>
+                  </td>
+                  <td className="p-4 text-center text-slate-500">-</td>
                 </tr>
               )}
             </tbody>

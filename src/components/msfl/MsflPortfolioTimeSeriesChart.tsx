@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import {
   AreaChart,
   Area,
@@ -47,7 +48,12 @@ export default function MsflPortfolioTimeSeriesChart({
   });
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -86,8 +92,9 @@ export default function MsflPortfolioTimeSeriesChart({
       <div className="h-[290px] w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
+            key={`msfl-chart-${formattedChartData.length}`}
             data={formattedChartData}
-            margin={{ top: 15, right: 20, left: 10, bottom: 25 }}
+            margin={{ top: 10, right: 15, left: 8, bottom: 18 }}
           >
             <defs>
               <linearGradient
@@ -108,38 +115,38 @@ export default function MsflPortfolioTimeSeriesChart({
             <XAxis
               dataKey="formattedDate"
               stroke="#64748b"
-              fontSize={11}
+              fontSize={10}
               tickLine={false}
               axisLine={false}
-              height={40}
+              height={34}
+              tick={{ dy: 3 }}
             >
               <Label
                 value="Snapshot Date"
-                offset={-5}
+                offset={-8}
                 position="insideBottom"
                 fill="#94a3b8"
-                fontSize={11}
-                fontWeight={700}
+                fontSize={10}
+                fontWeight={600}
               />
             </XAxis>
             <YAxis
               stroke="#64748b"
-              fontSize={11}
+              fontSize={10}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(val) => `₹${(val / 1000).toFixed(0)}k`}
-              width={65}
+              tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`}
+              width={56}
             >
               <Label
                 value="Portfolio Valuation (₹)"
                 angle={-90}
                 position="insideLeft"
-                style={{
-                  textAnchor: "middle",
-                  fill: "#94a3b8",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
+                offset={2}
+                fill="#94a3b8"
+                fontSize={10}
+                fontWeight={600}
+                style={{ textAnchor: "middle" }}
               />
             </YAxis>
             <Tooltip
@@ -158,23 +165,35 @@ export default function MsflPortfolioTimeSeriesChart({
                         <Calendar size={12} className="text-teal-400" />
                         {data.formattedDate}
                       </span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          gainPositive
+                            ? "bg-emerald-500/20 text-emerald-300"
+                            : "bg-rose-500/20 text-rose-300"
+                        }`}
+                      >
+                        {gainPositive ? "Profit" : "Loss"}
+                      </span>
                     </div>
-                    <div className="flex justify-between items-center text-slate-200">
-                      <span>Valuation:</span>
-                      <span className="font-bold text-emerald-400">
+
+                    <div className="flex items-center justify-between gap-4 pt-1">
+                      <span className="text-slate-400">Valuation:</span>
+                      <span className="font-bold text-slate-100 font-mono">
                         {formatCurrency(data.currentValue)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-slate-200">
-                      <span>Invested:</span>
-                      <span className="font-semibold text-slate-300">
+
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-slate-400">Invested:</span>
+                      <span className="font-semibold text-slate-300 font-mono">
                         {formatCurrency(data.invested)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-slate-200 border-t border-slate-800/60 pt-1">
-                      <span>Profit / Loss:</span>
+
+                    <div className="flex items-center justify-between gap-4 border-t border-slate-800/80 pt-1">
+                      <span className="text-slate-400">Gain/Loss:</span>
                       <span
-                        className={`font-extrabold ${
+                        className={`font-extrabold font-mono ${
                           gainPositive ? "text-emerald-400" : "text-rose-400"
                         }`}
                       >
@@ -193,6 +212,10 @@ export default function MsflPortfolioTimeSeriesChart({
               strokeWidth={2.5}
               fillOpacity={1}
               fill="url(#msflValuationGrad)"
+              isAnimationActive={true}
+              animationDuration={1200}
+              animationEasing="ease-out"
+              animationBegin={100}
             />
             <Area
               type="monotone"
@@ -203,10 +226,14 @@ export default function MsflPortfolioTimeSeriesChart({
               strokeDasharray="4 4"
               fillOpacity={1}
               fill="url(#msflInvestedGrad)"
+              isAnimationActive={true}
+              animationDuration={1200}
+              animationEasing="ease-out"
+              animationBegin={200}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </motion.div>
   );
 }

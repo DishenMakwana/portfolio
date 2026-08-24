@@ -1,18 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { parseMsflHoldings } from "@/lib/msflParser";
 import {
   saveMsflHoldingsReport,
   deleteMsflHoldingsReport,
-  getMsflDashboardData,
   updateMsflSchemeCode,
 } from "@/lib/msflService";
-import { db } from "@/db/db";
-import { msflSchemes } from "@/db/schema";
+import { purgeAllApplicationCaches } from "@/actions/portfolio";
 import type { ActionResult } from "@/types/portfolio";
-import type { AutoMapMsflSchemeResult } from "@/types/msfl";
-import { eq } from "drizzle-orm";
 
 export async function uploadMsflHoldingsAction(
   formData: FormData
@@ -23,29 +18,30 @@ export async function uploadMsflHoldingsAction(
       return { success: false, error: "No file uploaded" };
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     const parsed = parseMsflHoldings(buffer, file.name);
 
-    if (parsed.holdings.length === 0) {
+    if (!parsed.holdings.length) {
       return {
         success: false,
-        error:
-          "No valid stock holdings found. Please ensure the uploaded sheet is a valid MSFL Holdings report containing the 'Holding_Report' tab.",
+        error: "No holdings found in the MSFL file",
       };
     }
 
+    const filename = file.name;
     const reportId = await saveMsflHoldingsReport(
       parsed.asOfDate,
-      file.name,
+      filename,
       parsed.holdings
     );
 
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("MSFL Upload Action Error:", error);
     const errorMsg =
-      error instanceof Error ? error.message : "Failed to parse file";
+      error instanceof Error ? error.message : "Failed to upload MSFL holdings";
     return { success: false, error: errorMsg };
   }
 }
@@ -55,7 +51,7 @@ export async function deleteMsflHoldingsAction(
 ): Promise<ActionResult> {
   try {
     await deleteMsflHoldingsReport(reportId);
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("MSFL Delete Action Error:", error);
@@ -70,83 +66,18 @@ export async function deleteMsflHoldingsAction(
   }
 }
 
-export async function getMsflDashboardAction(
-  reportId?: number
-): Promise<ReturnType<typeof getMsflDashboardData>> {
-  try {
-    return await getMsflDashboardData(reportId);
-  } catch (error: unknown) {
-    console.error("MSFL Get Dashboard Data Error:", error);
-    const errorMsg =
-      error instanceof Error
-        ? error.message
-        : "Failed to fetch MSFL dashboard data";
-    throw new Error(errorMsg);
-  }
-}
-
 export async function updateMsflSchemeMappingAction(
   schemeId: number,
   code: string | null
 ): Promise<ActionResult> {
   try {
     await updateMsflSchemeCode(schemeId, code);
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("updateMsflSchemeMappingAction Error:", error);
     const errorMsg =
       error instanceof Error ? error.message : "Failed to update mapping";
     return { success: false, error: errorMsg };
-  }
-}
-
-export async function autoMapAllMsflSchemesAction(
-  onlyUnmapped = true
-): Promise<AutoMapMsflSchemeResult[]> {
-  try {
-    const allSchemes = await db.query.msflSchemes.findMany({
-      columns: {
-        id: true,
-        name: true,
-        isin: true,
-        schemeCodeApi: true,
-      },
-    });
-    const results = [];
-
-    for (const s of allSchemes) {
-      if (onlyUnmapped && s.schemeCodeApi) {
-        results.push({
-          schemeId: s.id,
-          schemeName: s.name,
-          status: "already_mapped",
-          schemeCode: s.schemeCodeApi,
-        });
-        continue;
-      }
-
-      const ticker = `${s.name}.NS`;
-      await db
-        .update(msflSchemes)
-        .set({
-          schemeCodeApi: ticker,
-          mappedAt: new Date().toISOString(),
-        })
-        .where(eq(msflSchemes.id, s.id));
-
-      results.push({
-        schemeId: s.id,
-        schemeName: s.name,
-        status: "mapped",
-        schemeCode: ticker,
-      });
-    }
-
-    revalidatePath("/zerodha");
-    return results;
-  } catch (error: unknown) {
-    console.error("autoMapAllMsflSchemesAction Error:", error);
-    return [];
   }
 }

@@ -1,3 +1,5 @@
+import type { AthCorrectionData } from "./overview";
+
 export type MsflSortField =
   | "symbol"
   | "quantity"
@@ -136,6 +138,7 @@ export interface MsflDashboardData {
   sectorBreakdown: MsflSectorBreakdownItem[];
   marketCapBreakdown: MsflMarketCapBreakdownItem[];
   portfolioTimeSeries: MsflTimeSeriesPoint[];
+  athData?: AthCorrectionData;
 }
 
 export interface MsflDashboardClientProps {
@@ -145,13 +148,6 @@ export interface MsflDashboardClientProps {
 
 export interface PageProps {
   searchParams: Promise<{ msflReportId?: string }>;
-}
-
-export interface AutoMapMsflSchemeResult {
-  schemeId: number;
-  schemeName: string;
-  status: string;
-  schemeCode: string | null;
 }
 
 export interface MsflLeaderboardChartProps {

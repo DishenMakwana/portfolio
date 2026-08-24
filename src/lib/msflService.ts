@@ -7,7 +7,13 @@ import {
   msflSchemeNavHistory,
 } from "../db/schema";
 import { asc, desc, eq } from "drizzle-orm";
-import { fetchStockHistory } from "./stockApi";
+import { normalizeSchemeName } from "@/helpers/schemeNormalize";
+import { fetchStockHistory, getNifty50IndexHistory } from "./stockApi";
+import {
+  calculateAthCorrectionData,
+  getNiftyAthAndCurrentPoints,
+} from "@/helpers/ath";
+import { isIndianMarketOpen } from "@/helpers/tradingDays";
 import {
   getBenchmarkHistory,
   parseAndSortNavHistory,
@@ -196,23 +202,33 @@ export async function saveMsflHoldingsReport(
     .select({
       id: msflSchemes.id,
       name: msflSchemes.name,
+      normalizedName: msflSchemes.normalizedName,
     })
     .from(msflSchemes);
-  const existingNames = new Set(schemesList.map((s) => s.name));
+  const existingNames = new Set(
+    schemesList.map((s) => s.name.trim().toLowerCase())
+  );
+  const existingNormNames = new Set(
+    schemesList.map((s) => s.normalizedName || normalizeSchemeName(s.name))
+  );
 
   // Insert novel schemes with standard Yahoo Finance suffix (.NS)
   for (const h of holdings) {
-    if (!existingNames.has(h.symbol)) {
+    const symbolKey = h.symbol.trim().toLowerCase();
+    const normKey = normalizeSchemeName(h.symbol);
+    if (!existingNames.has(symbolKey) && !existingNormNames.has(normKey)) {
       await db
         .insert(msflSchemes)
         .values({
           name: h.symbol,
+          normalizedName: normKey,
           category: "Stock",
           schemeCodeApi: `${h.symbol}.NS`,
           mappedAt: new Date().toISOString(),
         })
         .onConflictDoNothing();
-      existingNames.add(h.symbol);
+      existingNames.add(symbolKey);
+      existingNormNames.add(normKey);
     }
   }
 
@@ -220,15 +236,22 @@ export async function saveMsflHoldingsReport(
     .select({
       id: msflSchemes.id,
       name: msflSchemes.name,
+      normalizedName: msflSchemes.normalizedName,
     })
     .from(msflSchemes);
   const schemeMap = new Map<string, number>();
   for (const s of updatedSchemesList) {
-    schemeMap.set(s.name, s.id);
+    schemeMap.set(s.name.trim().toLowerCase(), s.id);
+    if (s.normalizedName) {
+      schemeMap.set(s.normalizedName, s.id);
+    }
+    schemeMap.set(normalizeSchemeName(s.name), s.id);
   }
 
   const holdingsToSave = holdings.map((h) => {
-    const schemeId = schemeMap.get(h.symbol);
+    const schemeId =
+      schemeMap.get(h.symbol.trim().toLowerCase()) ||
+      schemeMap.get(normalizeSchemeName(h.symbol));
     if (!schemeId) {
       throw new Error(`Scheme ID not found for MSFL symbol ${h.symbol}`);
     }
@@ -246,6 +269,41 @@ export async function saveMsflHoldingsReport(
       tradingStatus: h.tradingStatus || null,
     };
   });
+
+  // Automatically preserve unlisted/suspended demat stocks from prior snapshots
+  const previousUnlisted = await db
+    .select({
+      holding: msflHoldings,
+      schemeName: msflSchemes.name,
+    })
+    .from(msflHoldings)
+    .innerJoin(msflSchemes, eq(msflHoldings.schemeId, msflSchemes.id))
+    .where(eq(msflHoldings.tradingStatus, "NOT LISTED"));
+
+  const uploadedSymbols = new Set(holdings.map((h) => h.symbol));
+  const seenUnlisted = new Set<string>();
+
+  for (const row of previousUnlisted) {
+    if (
+      !uploadedSymbols.has(row.schemeName) &&
+      !seenUnlisted.has(row.schemeName)
+    ) {
+      seenUnlisted.add(row.schemeName);
+      holdingsToSave.push({
+        reportId,
+        schemeId: row.holding.schemeId,
+        quantity: row.holding.quantity,
+        averagePrice: row.holding.averagePrice,
+        currentPrice: row.holding.currentPrice,
+        investedValue: row.holding.investedValue,
+        currentValue: row.holding.currentValue,
+        unrealizedPnl: row.holding.unrealizedPnl,
+        unrealizedPnlPct: row.holding.unrealizedPnlPct,
+        faceValue: row.holding.faceValue,
+        tradingStatus: row.holding.tradingStatus,
+      });
+    }
+  }
 
   const chunkSize = 50;
   for (let i = 0; i < holdingsToSave.length; i += chunkSize) {
@@ -266,9 +324,11 @@ const msflStockHistoryCache = new Map<
   string,
   Promise<MfDetailsResponse | null>
 >();
+const msflDashboardCache = new Map<string, MsflDashboardData>();
 
 export function clearAllMsflCaches() {
   msflStockHistoryCache.clear();
+  msflDashboardCache.clear();
 }
 
 async function saveMsflStockCacheAndMapping(
@@ -618,6 +678,13 @@ export async function getMsflDashboardData(
     ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
 
+  const marketOpen = isIndianMarketOpen();
+  const cacheKey = `msfl:${selectedReport.id}:${selectedReport.asOfDate}:${reportsList.length}`;
+  const cached = msflDashboardCache.get(cacheKey);
+  if (!marketOpen && cached) {
+    return cached;
+  }
+
   const [rawHoldings, schemesList, niftyHistory] = await Promise.all([
     db
       .select({
@@ -658,14 +725,29 @@ export async function getMsflDashboardData(
     rawHoldings.map(async (h) => {
       const symbol = h.symbol || "";
       const scheme = schemesList.find((s) => s.name === symbol);
-      const ticker = scheme?.schemeCodeApi || `${symbol}.NS`;
+      const isUnlisted =
+        h.tradingStatus === "NOT LISTED" ||
+        h.tradingStatus?.includes("SUSPENDED") ||
+        scheme?.schemeCodeApi === null;
+
+      const ticker = isUnlisted
+        ? null
+        : scheme?.schemeCodeApi || `${symbol}.NS`;
 
       // Read sector & marketCapCategory exclusively from DB scheme record
       const sector = scheme?.sector || "Unclassified";
-      const marketCapCategory =
-        (scheme?.marketCapCategory as any) || "Small Cap";
+      const marketCapCategory:
+        "Large Cap" | "Mid Cap" | "Small Cap" | "Micro Cap" =
+        scheme?.marketCapCategory === "Large Cap" ||
+        scheme?.marketCapCategory === "Mid Cap" ||
+        scheme?.marketCapCategory === "Small Cap" ||
+        scheme?.marketCapCategory === "Micro Cap"
+          ? scheme.marketCapCategory
+          : "Small Cap";
 
-      const stockDetails = await getMsflStockHistoryForSymbol(ticker);
+      const stockDetails = ticker
+        ? await getMsflStockHistoryForSymbol(ticker)
+        : null;
       if (stockDetails && stockDetails.data && stockDetails.data.length > 0) {
         const metrics = calculateFundMetrics(
           h.averagePrice,
@@ -746,8 +828,22 @@ export async function getMsflDashboardData(
   const timelineData = [];
   const chronologicalReports = [...reportsList].reverse();
 
+  let maxInvested = { value: 0, date: selectedReport.asOfDate };
+  let maxValue = { value: 0, date: selectedReport.asOfDate };
+  let maxGain = { value: 0, date: selectedReport.asOfDate };
+
   for (const r of chronologicalReports) {
     const t = await getMsflSnapshotTotals(r.id);
+
+    if (t.invested > maxInvested.value) {
+      maxInvested = { value: t.invested, date: r.asOfDate };
+    }
+    if (t.currentValue > maxValue.value) {
+      maxValue = { value: t.currentValue, date: r.asOfDate };
+    }
+    if (t.gain > maxGain.value) {
+      maxGain = { value: t.gain, date: r.asOfDate };
+    }
     const n = calculateBenchmarkReturns(r.asOfDate, niftyData);
 
     const reportDateIso = parseIsoDate(r.asOfDate);
@@ -957,7 +1053,27 @@ export async function getMsflDashboardData(
     };
   });
 
-  return {
+  // Benchmark Nifty 50 Spot Index ATH & Current Points
+  const niftyIndexDetails = await getNifty50IndexHistory("5y");
+  const bmData = niftyIndexDetails?.data || [];
+  const { maxNifty, currentNifty } = getNiftyAthAndCurrentPoints(
+    selectedReport.asOfDate,
+    bmData
+  );
+
+  const athData = calculateAthCorrectionData({
+    currentInvested: totals.invested,
+    currentValue: totals.currentValue,
+    currentGain: totals.gain,
+    currentDate: selectedReport.asOfDate,
+    maxInvested,
+    maxValue,
+    maxGain,
+    currentNifty,
+    maxNifty,
+  });
+
+  const result = {
     reportsList,
     selectedReport,
     holdings,
@@ -968,5 +1084,11 @@ export async function getMsflDashboardData(
     sectorBreakdown,
     marketCapBreakdown,
     portfolioTimeSeries,
+    athData,
   };
+
+  if (!marketOpen) {
+    msflDashboardCache.set(cacheKey, result);
+  }
+  return result;
 }
