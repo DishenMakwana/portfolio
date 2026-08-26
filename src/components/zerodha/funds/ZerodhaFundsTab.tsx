@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search } from "lucide-react";
+import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import {
   formatCurrency,
   formatPercent,
@@ -35,14 +35,22 @@ export default function ZerodhaFundsTab({
     const timer = setTimeout(() => {
       const currentQ = searchParams.get("q") || "";
       if (currentQ !== fundSearch) {
-        const current = new URLSearchParams(searchParams.toString());
+        const searchString =
+          typeof window !== "undefined"
+            ? window.location.search
+            : searchParams.toString();
+        const current = new URLSearchParams(searchString);
         if (fundSearch) {
           current.set("q", fundSearch);
         } else {
           current.delete("q");
         }
         const query = current.toString();
-        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+        const url = `${pathname}${query ? `?${query}` : ""}`;
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", url);
+        }
+        router.replace(url, {
           scroll: false,
         });
       }
@@ -170,19 +178,12 @@ export default function ZerodhaFundsTab({
       <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
         {/* Search controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-800/60">
-          <div className="relative max-w-sm w-full">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-            <input
-              type="text"
-              placeholder="Search scheme name..."
-              value={fundSearch}
-              onChange={(e) => setFundSearch(e.target.value)}
-              className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full transition"
-            />
-          </div>
+          <SearchFilterBar
+            value={fundSearch}
+            onChange={setFundSearch}
+            placeholder="Search scheme name..."
+            className="max-w-sm w-full"
+          />
           <div className="text-xs text-slate-500 font-bold pr-1">
             Showing {filteredFunds.length} of {funds.length} funds
           </div>

@@ -10,8 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Search,
 } from "lucide-react";
+import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import Link from "next/link";
 import type { ZerodhaSnapshotsTabProps } from "@/types/zerodha";
 import {
@@ -102,14 +102,22 @@ export default function ZerodhaSnapshotsTab({
     const timer = setTimeout(() => {
       const currentQ = searchParams.get("q") || "";
       if (currentQ !== searchQuery) {
-        const current = new URLSearchParams(searchParams.toString());
+        const searchString =
+          typeof window !== "undefined"
+            ? window.location.search
+            : searchParams.toString();
+        const current = new URLSearchParams(searchString);
         if (searchQuery) {
           current.set("q", searchQuery);
         } else {
           current.delete("q");
         }
         const query = current.toString();
-        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+        const url = `${pathname}${query ? `?${query}` : ""}`;
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", url);
+        }
+        router.replace(url, {
           scroll: false,
         });
       }
@@ -433,19 +441,11 @@ export default function ZerodhaSnapshotsTab({
             <div className="flex flex-col h-full">
               {/* Search Bar */}
               <div className="p-4 border-b border-slate-800/80 bg-slate-900/40">
-                <div className="relative">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Search uploaded files by date, name, or ID..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-950/80 border border-slate-800/80 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500/50 transition font-medium"
-                  />
-                </div>
+                <SearchFilterBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search uploaded files by date, name, or ID..."
+                />
               </div>
 
               {/* List Container */}

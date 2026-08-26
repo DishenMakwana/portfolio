@@ -587,16 +587,20 @@ export default function ZerodhaOverviewTab({
 
           {/* Portfolio Performance Chart */}
           <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  <Activity className="text-teal-400" size={18} />
-                  Portfolio Performance
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Growth comparison of Equity, Mutual Funds, and Nifty 50 Index
-                  (Base 1,000)
-                </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3.5 border-b border-slate-800/80 mb-5 gap-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+                  <Activity size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-100 text-sm sm:text-base leading-tight">
+                    Portfolio Performance
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Growth comparison of Equity, Mutual Funds, and Nifty 50
+                    Index (Base 1,000)
+                  </p>
+                </div>
               </div>
               {/* Legend */}
               <div className="flex items-center gap-4 text-xs font-semibold">
@@ -632,46 +636,45 @@ export default function ZerodhaOverviewTab({
                   <LineChart
                     key={`zerodha-timeline-chart-${data.timelineData.length}`}
                     data={data.timelineData}
-                    margin={{ top: 10, right: 10, left: 10, bottom: 30 }}
+                    margin={{ top: 10, right: 15, left: 8, bottom: 18 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis
                       dataKey="date"
                       stroke="#475569"
-                      fontSize={11}
+                      fontSize={10}
                       tickLine={false}
-                      height={45}
-                      tick={{ dy: 2 }}
+                      height={34}
+                      tick={{ dy: 3 }}
                     >
                       <Label
                         value="Date"
                         position="insideBottom"
-                        offset={0}
+                        offset={-8}
                         fill="#94a3b8"
-                        fontSize={11}
-                        fontWeight={700}
+                        fontSize={10}
+                        fontWeight={600}
                       />
                     </XAxis>
                     <YAxis
                       stroke="#475569"
-                      fontSize={11}
+                      fontSize={10}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={(tick) =>
                         `${Number(tick).toLocaleString()}`
                       }
-                      width={75}
+                      width={56}
                     >
                       <Label
                         value="Portfolio Value (₹)"
                         angle={-90}
                         position="insideLeft"
-                        style={{
-                          textAnchor: "middle",
-                          fill: "#94a3b8",
-                          fontSize: 11,
-                          fontWeight: 700,
-                        }}
+                        offset={2}
+                        fill="#94a3b8"
+                        fontSize={10}
+                        fontWeight={600}
+                        style={{ textAnchor: "middle" }}
                       />
                     </YAxis>
                     <Tooltip content={<CustomPerformanceTooltip />} />

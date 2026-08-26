@@ -1480,9 +1480,7 @@ const zerodhaSchemeHistoryCache = new Map<
   Promise<MfDetailsResponse | null>
 >();
 
-export function normaliseSchemeCode(
-  code: string | null | undefined
-): string | null {
+function normaliseSchemeCode(code: string | null | undefined): string | null {
   if (!code) return null;
   const match = code.match(/\d+/);
   return match ? match[0] : null;

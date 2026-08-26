@@ -34,11 +34,9 @@ export default function ZerodhaCagrLeaderboardChart({
 
   const maxCagr = Math.max(...holdings.map((m) => m.cagr), 0);
   const minCagr = Math.min(...holdings.map((m) => m.cagr), 0);
-  const chartH = 300;
-  const barW = 60;
-  const minGap = 28;
-  const padX = 65;
-  const padY = 40;
+  const chartH = 280;
+  const padX = 55;
+  const padY = 24;
   const benchmark = niftyBenchmark;
 
   // Set bounds for Y scale
@@ -53,15 +51,19 @@ export default function ZerodhaCagrLeaderboardChart({
   const benchmarkY = getY(benchmark);
 
   const n = holdings.length;
-  const neededW = padX * 2 + n * (barW + minGap) - minGap;
-  const totalW = Math.max(800, neededW);
-  const gap = n > 1 ? (totalW - padX * 2 - n * barW) / (n - 1) : 30;
+  // Total canvas width based on 1000px viewport, allocating bars and gaps to fill the available space evenly
+  const totalW = 1000;
+  const usableW = totalW - padX * 2;
+  const barW = Math.min(68, Math.max(42, (usableW * 0.65) / Math.max(1, n)));
+  const totalBarW = barW * n;
+  const gap = n > 1 ? (usableW - totalBarW) / (n - 1) : 0;
 
   return (
-    <div className="overflow-x-auto select-none relative">
+    <div className="w-full select-none relative">
       <svg
-        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 60}`}
-        className="w-full min-w-[700px] h-[440px]"
+        viewBox={`0 0 ${totalW} ${chartH + padY * 2 + 35}`}
+        className="w-full h-auto max-h-[420px]"
+        preserveAspectRatio="xMidYMid meet"
       >
         {/* Grid lines */}
         {[-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50, 75, 100, 150].map(
@@ -278,21 +280,21 @@ export default function ZerodhaCagrLeaderboardChart({
         {/* Axis Titles */}
         <text
           x={totalW / 2}
-          y={padY + chartH + 45}
+          y={padY + chartH + 34}
           textAnchor="middle"
-          fontSize="11"
-          fontWeight="bold"
+          fontSize="10"
+          fontWeight="600"
           fill="#94a3b8"
         >
           Stock / ETF Holding
         </text>
         <text
-          transform={`rotate(-90 ${15} ${padY + chartH / 2})`}
-          x={15}
+          transform={`rotate(-90 ${16} ${padY + chartH / 2})`}
+          x={16}
           y={padY + chartH / 2}
           textAnchor="middle"
-          fontSize="11"
-          fontWeight="bold"
+          fontSize="10"
+          fontWeight="600"
           fill="#94a3b8"
         >
           CAGR Return (%)

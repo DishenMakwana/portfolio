@@ -37,28 +37,28 @@ const CAP_CONFIG: Record<
     bg: "bg-blue-950/40 hover:bg-blue-950/60",
     text: "text-blue-400",
     border: "border-blue-800/40",
-    desc: "Established industry leaders (> ₹20k Cr)",
+    desc: "Top 100 companies by market cap (> ~₹1,06,000 Cr)",
   },
   "Mid Cap": {
     label: "Mid Cap",
     bg: "bg-teal-950/40 hover:bg-teal-950/60",
     text: "text-teal-400",
     border: "border-teal-800/40",
-    desc: "High-growth candidates (₹5k - ₹20k Cr)",
+    desc: "101st to 250th companies (~₹33,500 Cr - ₹1,06,000 Cr)",
   },
   "Small Cap": {
     label: "Small Cap",
     bg: "bg-amber-950/40 hover:bg-amber-950/60",
     text: "text-amber-400",
     border: "border-amber-800/40",
-    desc: "Emerging small businesses (₹1k - ₹5k Cr)",
+    desc: "251st company onwards (< ~₹33,500 Cr)",
   },
   "Micro Cap": {
     label: "Micro Cap",
     bg: "bg-rose-950/40 hover:bg-rose-950/60",
     text: "text-rose-400",
     border: "border-rose-800/40",
-    desc: "High volatility early opportunities (< ₹1k Cr)",
+    desc: "501st company onwards / Micro-cap universe (< ~₹5,000 Cr)",
   },
 };
 
@@ -115,6 +115,9 @@ export default function ZerodhaSectorAndCapAnalysis({
                   paddingAngle={3}
                   dataKey="value"
                   strokeWidth={0}
+                  isAnimationActive={true}
+                  animationDuration={1000}
+                  animationEasing="ease-out"
                   onMouseEnter={(_, index) => setActiveIndex(index)}
                   onMouseLeave={() => setActiveIndex(null)}
                   shape={(

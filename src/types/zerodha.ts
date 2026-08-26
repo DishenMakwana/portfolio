@@ -1,6 +1,7 @@
 import type { TooltipContentProps } from "recharts";
 import type { AthCorrectionData } from "./overview";
-export interface ZerodhaHolding {
+
+interface ZerodhaHolding {
   id: number;
   reportId: number | null;
   holdingType: string;
@@ -174,9 +175,6 @@ export const ZERODHA_COLORS = [
   "#ef4444",
 ];
 
-export type ZerodhaTab =
-  "overview" | "insights" | "stocks" | "funds" | "mapping" | "files";
-
 export type ZerodhaStockSortField =
   | "symbol"
   | "quantity"
@@ -230,7 +228,7 @@ export interface ZerodhaBenchmarkCardsProps {
   benchmarkLabel?: string;
 }
 
-export interface ZerodhaPerformancePoint {
+interface ZerodhaPerformancePoint {
   date: string;
   equity: number;
   equityReturn: number;
@@ -279,7 +277,7 @@ export interface ZerodhaInsightsTabProps {
   data: ZerodhaDashboardData;
 }
 
-export interface SnapshotReport {
+interface SnapshotReport {
   id: number;
   asOfDate: string;
   filename: string;
@@ -340,9 +338,9 @@ export const ZERODHA_COLOR_CLASSES = [
   "bg-red-500",
 ];
 
-export type ZerodhaCagrAssetType = "mutual_fund" | "equity";
+type ZerodhaCagrAssetType = "mutual_fund" | "equity";
 
-export interface ZerodhaHoldingWithCagr {
+interface ZerodhaHoldingWithCagr {
   symbol: string;
   cagr: number;
   currentValue: number;

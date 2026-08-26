@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search } from "lucide-react";
+import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isUnlistedStock } from "@/lib/stockApi";
@@ -33,14 +33,22 @@ export default function ZerodhaStocksTab({
     const timer = setTimeout(() => {
       const currentQ = searchParams.get("q") || "";
       if (currentQ !== stockSearch) {
-        const current = new URLSearchParams(searchParams.toString());
+        const searchString =
+          typeof window !== "undefined"
+            ? window.location.search
+            : searchParams.toString();
+        const current = new URLSearchParams(searchString);
         if (stockSearch) {
           current.set("q", stockSearch);
         } else {
           current.delete("q");
         }
         const query = current.toString();
-        router.replace(`${pathname}${query ? `?${query}` : ""}`, {
+        const url = `${pathname}${query ? `?${query}` : ""}`;
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", url);
+        }
+        router.replace(url, {
           scroll: false,
         });
       }
@@ -152,19 +160,12 @@ export default function ZerodhaStocksTab({
       <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
         {/* Search bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-800/60">
-          <div className="relative max-w-sm w-full">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-            <input
-              type="text"
-              placeholder="Search stocks by symbol..."
-              value={stockSearch}
-              onChange={(e) => setStockSearch(e.target.value)}
-              className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full transition"
-            />
-          </div>
+          <SearchFilterBar
+            value={stockSearch}
+            onChange={setStockSearch}
+            placeholder="Search stocks by symbol..."
+            className="max-w-sm w-full"
+          />
           <div className="text-xs text-slate-500 font-bold pr-1">
             Showing {filteredStocks.length} of {stocks.length} stocks
           </div>

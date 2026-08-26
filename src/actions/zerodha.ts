@@ -1,18 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { parseZerodhaHoldings } from "@/lib/zerodhaParser";
 import {
   saveZerodhaHoldingsReport,
   deleteZerodhaHoldingsReport,
-  getZerodhaDashboardData,
   updateZerodhaSchemeCode,
 } from "@/lib/zerodhaService";
+import { purgeAllApplicationCaches } from "@/actions/portfolio";
+
 import { db } from "@/db/db";
 import { zerodhaSchemes } from "@/db/schema";
 import { autoMapScheme } from "@/lib/mfApi";
+import { searchStockSymbols } from "@/lib/stockApi";
 import { eq } from "drizzle-orm";
-import { ZerodhaAutoMapResult } from "@/types/zerodha";
+import type { ZerodhaAutoMapResult, StockSearchResult } from "@/types/zerodha";
 import type { ActionResult } from "@/types/portfolio";
 
 export async function uploadZerodhaHoldingsAction(
@@ -41,7 +42,8 @@ export async function uploadZerodhaHoldingsAction(
       parsed.holdings
     );
 
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
+
     return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("Zerodha Upload Action Error:", error);
@@ -56,7 +58,7 @@ export async function deleteZerodhaHoldingsAction(
 ): Promise<ActionResult> {
   try {
     await deleteZerodhaHoldingsReport(reportId);
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("Zerodha Delete Action Error:", error);
@@ -71,26 +73,13 @@ export async function deleteZerodhaHoldingsAction(
   }
 }
 
-export async function getZerodhaDashboardAction(
-  reportId?: number
-): Promise<ReturnType<typeof getZerodhaDashboardData>> {
-  try {
-    return await getZerodhaDashboardData(reportId);
-  } catch (error: unknown) {
-    console.error("Zerodha Get Dashboard Data Error:", error);
-    const errorMsg =
-      error instanceof Error ? error.message : "Failed to fetch dashboard data";
-    throw new Error(errorMsg);
-  }
-}
-
 export async function updateZerodhaSchemeMappingAction(
   schemeId: number,
   code: string | null
 ): Promise<ActionResult> {
   try {
     await updateZerodhaSchemeCode(schemeId, code);
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("updateZerodhaSchemeMappingAction Error:", error);
@@ -167,7 +156,7 @@ export async function autoMapAllZerodhaSchemesAction(
       }
     }
 
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return results;
   } catch (error: unknown) {
     console.error("autoMapAllZerodhaSchemesAction Error:", error);
@@ -185,12 +174,26 @@ export async function updateZerodhaSchemeCategoryAction(
       .set({ category })
       .where(eq(zerodhaSchemes.id, schemeId));
 
-    revalidatePath("/zerodha");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("updateZerodhaSchemeCategoryAction Error:", error);
     const errorMsg =
       error instanceof Error ? error.message : "Failed to update category";
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function searchStockApiAction(
+  query: string
+): Promise<ActionResult<StockSearchResult[]>> {
+  try {
+    const data = await searchStockSymbols(query);
+    return { success: true, data };
+  } catch (error: unknown) {
+    console.error("searchStockApiAction Error:", error);
+    const errorMsg =
+      error instanceof Error ? error.message : "Failed to search stock symbols";
     return { success: false, error: errorMsg };
   }
 }

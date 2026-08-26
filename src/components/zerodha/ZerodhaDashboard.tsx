@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
@@ -11,6 +11,7 @@ import {
   TrendingUp,
   TrendingDown,
   ChevronDown,
+  ChevronsUpDown,
   IndianRupee,
   Activity,
   Target,
@@ -30,9 +31,10 @@ import { toast } from "react-hot-toast";
 import {
   formatCurrency,
   formatCurrencyWithDecimals as formatPrice,
-  formatDate,
 } from "@/helpers/formatters";
 import { ZERODHA_COLORS } from "@/types/zerodha";
+import HeaderClient from "@/components/shared/HeaderClient";
+import ConfirmationModal from "@/components/shared/ConfirmationModal";
 import type {
   ZerodhaDashboardProps,
   ZerodhaFundSortField,
@@ -76,7 +78,6 @@ export default function ZerodhaDashboard({
 }: ZerodhaDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
 
   const rawTab = searchParams.get("tab");
   const activeTab: ZerodhaTab =
@@ -88,9 +89,17 @@ export default function ZerodhaDashboard({
       : "overview";
 
   const setActiveTab = (tab: ZerodhaTab) => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString()
+    );
     params.set("tab", tab);
-    router.replace(`/zerodha?${params.toString()}`, { scroll: false });
+    const url = `/zerodha?${params.toString()}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
   };
 
   const [isUploading, setIsUploading] = useState(false);
@@ -118,7 +127,12 @@ export default function ZerodhaDashboard({
         <ChevronDown size={12} className="inline ml-1 text-teal-400" />
       );
     }
-    return <ChevronDown size={12} className="inline ml-1 opacity-20" />;
+    return (
+      <ChevronsUpDown
+        size={12}
+        className="inline ml-1 text-slate-500 opacity-60"
+      />
+    );
   };
 
   // Search & Filter state for Funds Table
@@ -144,21 +158,17 @@ export default function ZerodhaDashboard({
         <ChevronDown size={12} className="inline ml-1 text-teal-400" />
       );
     }
-    return <ChevronDown size={12} className="inline ml-1 opacity-20" />;
+    return (
+      <ChevronsUpDown
+        size={12}
+        className="inline ml-1 text-slate-500 opacity-60"
+      />
+    );
   };
 
   const reportsList = data.reportsList || [];
-  const selectedReport = data.selectedReport;
   const holdings = data.holdings || [];
   const totals = data.totals;
-
-  const handleReportChange = (reportId: string) => {
-    startTransition(() => {
-      const params = new URLSearchParams(window.location.search);
-      params.set("zerodhaReportId", reportId);
-      router.push(`/zerodha?${params.toString()}`);
-    });
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -179,20 +189,25 @@ export default function ZerodhaDashboard({
     e.target.value = "";
   };
 
-  const handleDeleteReport = async (id: number) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this snapshot? All holdings will be permanently removed."
-      )
-    ) {
-      return;
-    }
-    const res = await deleteZerodhaHoldingsAction(id);
+  const [deletingReportId, setDeletingReportId] = useState<number | null>(null);
+  const [isPendingDelete, setIsPendingDelete] = useState(false);
+
+  const handleDeleteReport = (id: number) => {
+    setDeletingReportId(id);
+  };
+
+  const handleConfirmDeleteReport = async () => {
+    if (deletingReportId === null) return;
+    setIsPendingDelete(true);
+    const res = await deleteZerodhaHoldingsAction(deletingReportId);
+    setIsPendingDelete(false);
+    setDeletingReportId(null);
     if (res.success) {
+      toast.success("Zerodha snapshot deleted successfully");
       router.refresh();
       router.push("/zerodha");
     } else {
-      alert(res.error || "Delete failed");
+      toast.error(res.error || "Delete failed");
     }
   };
 
@@ -277,19 +292,21 @@ export default function ZerodhaDashboard({
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0">
       {/* Dynamic Top Header Bar */}
-      <header className="h-14 shrink-0 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-xl z-10">
-        <div className="flex items-center gap-2.5">
-          <Briefcase size={16} className="text-teal-400" />
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-            Zerodha Portfolio
-          </span>
-          <span className="text-slate-600 font-bold text-xs">/</span>
-          <div className="flex items-center gap-1.5 text-xs text-teal-300 font-extrabold tracking-wider uppercase bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-md shadow-sm">
-            <MetaIcon size={13} className="text-teal-400" />
-            <span>{currentMeta.label}</span>
+      <HeaderClient
+        leftContent={
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Briefcase size={18} className="text-teal-400 shrink-0" />
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+              Zerodha Portfolio
+            </span>
+            <span className="text-slate-600 font-bold text-xs">/</span>
+            <div className="flex items-center gap-1.5 text-xs text-teal-300 font-extrabold tracking-wider uppercase bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-md shadow-sm">
+              <MetaIcon size={14} className="text-teal-400" />
+              <span>{currentMeta.label}</span>
+            </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -304,41 +321,6 @@ export default function ZerodhaDashboard({
               Personal stock and mutual fund holdings separate from family
               investments.
             </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Dropdown snapshot selector */}
-            <div className="relative">
-              <select
-                value={selectedReport?.id || ""}
-                onChange={(e) => handleReportChange(e.target.value)}
-                className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-9 h-[38px] transition"
-              >
-                {reportsList.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    #{r.id} - {formatDate(r.asOfDate)}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                <ChevronDown size={14} />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-950 font-bold px-4 py-1.5 rounded-xl shadow-lg cursor-pointer transition text-sm h-[38px]">
-              {isUploading ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Upload size={14} />
-              )}
-              <span>Upload</span>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
           </div>
         </div>
 
@@ -552,6 +534,38 @@ export default function ZerodhaDashboard({
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal for Deleting Zerodha Snapshot */}
+      {(() => {
+        const reportToDelete = reportsList.find(
+          (r) => r.id === deletingReportId
+        );
+        return (
+          <ConfirmationModal
+            isOpen={deletingReportId !== null}
+            onClose={() => setDeletingReportId(null)}
+            onConfirm={handleConfirmDeleteReport}
+            title="Delete Zerodha Snapshot?"
+            description={`Are you sure you want to permanently delete the Zerodha snapshot for ${
+              reportToDelete
+                ? new Date(reportToDelete.asOfDate).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    }
+                  )
+                : "this report"
+            }?`}
+            warningNote="All equity and mutual fund holdings, valuations, and portfolio calculations for this snapshot will be permanently removed."
+            confirmText="Delete Snapshot"
+            cancelText="Cancel"
+            variant="danger"
+            isPending={isPendingDelete}
+          />
+        );
+      })()}
     </div>
   );
 }
