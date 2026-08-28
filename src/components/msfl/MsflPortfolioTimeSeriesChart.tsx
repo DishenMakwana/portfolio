@@ -54,18 +54,20 @@ export default function MsflPortfolioTimeSeriesChart({
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-xl backdrop-blur-md space-y-4"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp size={18} className="text-emerald-400" />
-            <h3 className="font-bold text-slate-100 text-sm sm:text-base">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-3.5 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+            <TrendingUp size={16} />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-100 text-sm sm:text-base leading-tight">
               Portfolio Growth & Valuation Time Series
             </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Historical portfolio valuation trajectory across uploaded snapshot
+              dates
+            </p>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Historical portfolio valuation trajectory across uploaded snapshot
-            dates
-          </p>
         </div>
 
         <div className="flex items-center gap-4 text-xs">

@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
+import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { MsflHoldingsSectionProps } from "@/types/msfl";
@@ -89,19 +90,12 @@ export default function MsflHoldingsSection({
       {/* Holdings Table */}
       <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-800/60">
-          <div className="relative max-w-sm w-full">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-            <input
-              type="text"
-              placeholder="Search stock symbol..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 pl-9 pr-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 w-full transition"
-            />
-          </div>
+          <SearchFilterBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search stock symbol..."
+            className="max-w-sm w-full"
+          />
           <div className="text-xs text-slate-500 font-bold pr-1">
             Showing {filteredHoldings.length} of {holdings.length} stocks
           </div>

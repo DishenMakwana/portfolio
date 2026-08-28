@@ -7,6 +7,7 @@ import OverviewAthCorrectionCards from "@/components/mutual-fund/overview/Overvi
 import MsflHoldingsSection from "@/components/msfl/MsflHoldingsSection";
 import MsflSectorAndCapAnalysis from "@/components/msfl/MsflSectorAndCapAnalysis";
 import MsflPortfolioTimeSeriesChart from "@/components/msfl/MsflPortfolioTimeSeriesChart";
+import ConfirmationModal from "@/components/shared/ConfirmationModal";
 import { useState, useTransition, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -17,6 +18,7 @@ import {
   BarChart3,
   ChevronUp,
   ChevronDown,
+  ChevronsUpDown,
   Sparkles,
   TrendingUp,
   Search,
@@ -46,6 +48,7 @@ export default function MsflDashboardClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const initialQ = searchParams.get("q") || "";
   const initialSort =
@@ -68,7 +71,11 @@ export default function MsflDashboardClient({
   }, [searchParams]);
 
   const updateUrl = (updates: Record<string, string | null>) => {
-    const current = new URLSearchParams(searchParams.toString());
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
     for (const [key, value] of Object.entries(updates)) {
       if (value === null || value === "") {
         current.delete(key);
@@ -77,7 +84,11 @@ export default function MsflDashboardClient({
       }
     }
     const query = current.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    const url = `${pathname}${query ? `?${query}` : ""}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
   };
 
   useEffect(() => {
@@ -109,7 +120,12 @@ export default function MsflDashboardClient({
         <ChevronDown size={12} className="inline ml-1 text-teal-400" />
       );
     }
-    return <ChevronDown size={12} className="inline ml-1 opacity-20" />;
+    return (
+      <ChevronsUpDown
+        size={12}
+        className="inline ml-1 text-slate-500 opacity-60"
+      />
+    );
   };
 
   // Mapping modal states
@@ -187,20 +203,20 @@ export default function MsflDashboardClient({
   };
 
   // Delete Snapshot Handler
-  const handleDeleteSnapshot = async () => {
+  const handleConfirmDeleteSnapshot = async () => {
     if (!selectedReport) return;
-    if (!confirm("Are you sure you want to delete this MSFL report snapshot?"))
-      return;
 
     startTransition(async () => {
       const res = await deleteMsflHoldingsAction(selectedReport.id);
+      setIsDeleteModalOpen(false);
       if (res.success) {
+        toast.success("MSFL report snapshot deleted successfully");
         router.refresh();
         const params = new URLSearchParams(window.location.search);
         params.delete("msflReportId");
         router.push(`${window.location.pathname}?${params.toString()}`);
       } else {
-        alert(res.error || "Failed to delete snapshot");
+        toast.error(res.error || "Failed to delete snapshot");
       }
     });
   };
@@ -326,7 +342,7 @@ export default function MsflDashboardClient({
                 </div>
               </div>
               <button
-                onClick={handleDeleteSnapshot}
+                onClick={() => setIsDeleteModalOpen(true)}
                 className="p-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition cursor-pointer h-[38px] w-[38px] flex items-center justify-center"
                 title="Delete Snapshot"
               >
@@ -674,6 +690,27 @@ export default function MsflDashboardClient({
           </div>
         </div>
       )}
+      {/* Confirmation Modal for Deleting MSFL Snapshot */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDeleteSnapshot}
+        title="Delete MSFL Snapshot?"
+        description={`Are you sure you want to permanently delete the MSFL snapshot for ${
+          selectedReport
+            ? new Date(selectedReport.asOfDate).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "this report"
+        }?`}
+        warningNote="All stock holdings, valuations, and profit calculations for this MSFL snapshot will be permanently removed."
+        confirmText="Delete Snapshot"
+        cancelText="Cancel"
+        variant="danger"
+        isPending={isPending}
+      />
     </div>
   );
 }
