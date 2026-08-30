@@ -60,21 +60,23 @@ export async function fetchChartData(
   const startDate =
     months !== null
       ? new Date(
-          asOfLocal.getFullYear(),
-          asOfLocal.getMonth() - months,
-          asOfLocal.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            asOfLocal.getUTCFullYear(),
+            asOfLocal.getUTCMonth() - months,
+            asOfLocal.getUTCDate(),
+            12,
+            0,
+            0,
+            0
+          )
         )
       : undefined;
 
   let startDateString: string | undefined = undefined;
   if (startDate) {
-    const y = startDate.getFullYear();
-    const m = String(startDate.getMonth() + 1).padStart(2, "0");
-    const d = String(startDate.getDate()).padStart(2, "0");
+    const y = startDate.getUTCFullYear();
+    const m = String(startDate.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(startDate.getUTCDate()).padStart(2, "0");
     startDateString = `${y}-${m}-${d}`;
   }
 
