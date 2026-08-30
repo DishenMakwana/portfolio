@@ -57,6 +57,9 @@ export default function OverviewAllocationPanels({
                 paddingAngle={3}
                 dataKey="value"
                 strokeWidth={0}
+                isAnimationActive={true}
+                animationDuration={1000}
+                animationEasing="ease-out"
                 onMouseEnter={(_, index) => setActiveIndex(index)}
                 onMouseLeave={() => setActiveIndex(null)}
                 shape={(

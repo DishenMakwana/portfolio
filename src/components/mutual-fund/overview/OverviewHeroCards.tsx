@@ -4,7 +4,11 @@ import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Shield, IndianRupee, TrendingUp, TrendingDown } from "lucide-react";
-import { formatCurrency, formatMetricDiff } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatMetricDiff,
+  getFundDetailsUrl,
+} from "@/helpers/formatters";
 import type { OverviewHeroCardsProps } from "@/types/overview";
 
 const cardVariants: Variants = {
@@ -133,9 +137,7 @@ export default function OverviewHeroCards({
         onClick={() =>
           topFund &&
           router.push(
-            topFund.id < 0
-              ? `/fund/sold_${Math.abs(topFund.id)}`
-              : `/fund/${topFund.id}`
+            getFundDetailsUrl(topFund.id, (topFund.currentValue ?? 0) <= 0.0001)
           )
         }
         className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl ${topFund ? "cursor-pointer hover:border-teal-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]" : ""}`}
@@ -170,9 +172,10 @@ export default function OverviewHeroCards({
         onClick={() =>
           worstFund &&
           router.push(
-            worstFund.id < 0
-              ? `/fund/sold_${Math.abs(worstFund.id)}`
-              : `/fund/${worstFund.id}`
+            getFundDetailsUrl(
+              worstFund.id,
+              (worstFund.currentValue ?? 0) <= 0.0001
+            )
           )
         }
         className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-red-500/20 rounded-2xl p-5 shadow-xl ${worstFund ? "cursor-pointer hover:border-red-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]" : ""}`}
