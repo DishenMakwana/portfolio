@@ -289,6 +289,34 @@ export const schemeNavHistory = mySchema.table(
   ]
 );
 
+export const schemeCategoryRankings = mySchema.table(
+  "scheme_category_rankings",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull().unique(),
+    schemeName: text("scheme_name").notNull(),
+    categoryName: text("category_name").notNull(),
+    growwSlug: text("groww_slug"),
+    annualisedData: text("annualised_data"), // JSON string { horizons, fundReturns, categoryAvg, categoryRank }
+    absoluteData: text("absolute_data"), // JSON string { horizons, fundReturns, categoryAvg, categoryRank }
+    advancedRatiosData: text("advanced_ratios_data"), // JSON string { top5, top20, peRatio, pbRatio, alpha, beta, sharpe, sortino }
+    marketCapData: text("market_cap_data"), // JSON string { largeCap, midCap, smallCap }
+    assetAllocationData: text("asset_allocation_data"), // JSON string { equity, debt, cash, realEstate, commodities, hedgedEquity, others, rawBreakdown }
+    exitLoadTaxData: text("exit_load_tax_data"), // JSON string { exitLoad, stampDuty, taxImplication }
+    expenseRatio: doublePrecision("expense_ratio"),
+    lastScrapedAt: text("last_scraped_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("scheme_category_rankings_scheme_code_idx").on(table.schemeCode),
+    index("scheme_category_rankings_category_name_idx").on(table.categoryName),
+  ]
+);
+
 export const zerodhaReports = mySchema.table(
   "zerodha_reports",
   {

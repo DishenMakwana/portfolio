@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio"."scheme_category_rankings" ADD COLUMN "exit_load_tax_data" text;
