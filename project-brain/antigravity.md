@@ -11,25 +11,31 @@ This document establishes the code organization, refactoring, async performance,
 *   **Centralize Shared Types**: Move all reusable interfaces, type aliases, enums, and schema types out of page/component files and into the `src/types/` folder.
 *   **File Organization**: Organize files by feature or domain (e.g., `insights.ts`, `zerodha.ts`, `portfolio.ts`, `fund-details.ts`).
 *   **Strict Types**: Do not use the `any` keyword. Ensure strict typing for all variables, function arguments, and return types.
+*   **Top-Level Imports Only**: All imports (both value and type imports) MUST be placed at the very top of the file before any constants, types, or functions. Never use inline type imports (e.g., `prop?: import("...").Type`). Always define `import type { Type } from "@/types/...";` at the top.
 *   **Local Exception**: A type or interface may remain local to a file only if it is used exclusively in that file and is highly unlikely to be reused.
 
-## 3. Directory Layout & Structure
+## 3. Top-Level Imports & Constant Declarations
+*   **Top-Level Imports**: All static imports must reside at the very top of every file before any code, variables, or function declarations.
+*   **No Inline Type Imports**: Prohibit inline namespace or dynamic type syntax such as `import("./path").TypeName`. Always import named types explicitly at the top of the file.
+*   **Top-Level Module Constants**: Declare global variables, maps, formatters, and constants at the top of the file, never inside or between functions.
+
+## 4. Directory Layout & Structure
 *   **Separate Concerns**: Keep the `src/app/` directory focused solely on Next.js routing and page-level container layout.
 *   **Modular Component Folders**: Components should live in structured directories under `src/components/` (e.g., `src/components/shared/` for reusable components, `src/components/mutual-fund/` for main MF modules, `src/components/zerodha/` for Zerodha portfolio screens).
 *   **Tab-Level Nesting**: If a dashboard module (such as Zerodha or Insights) contains multiple tabs, create a sub-folder named after the tab (e.g., `src/components/zerodha/overview/`, `src/components/zerodha/stocks/`) to store its tab-specific sub-components.
 
-## 4. Async Concurrency & Page Load Performance
+## 5. Async Concurrency & Page Load Performance
 *   **No Sequential Database Awaits**: Never execute independent database queries or server actions sequentially. Always combine independent queries into a single `Promise.all([ ... ])` batch.
 *   **Parallel NAV & Metadata Fetching**: In NAV cache functions (`getSchemeHistoryForDbCode`, `getBenchmarkHistory`), execute cache metadata (`findFirst`) and history (`findMany`) queries concurrently.
 *   **Parallel Metric Computations**: Calculate current report and previous report metrics (`calculateAlpha`) in parallel using `Promise.all`.
 *   **Pre-Fetch Lookups**: Pre-fetch shared lookup datasets (e.g., `familyMembers` and `schemes`) in the initial `Promise.all` batch at the top of server actions to eliminate N+1 query overhead.
 
-## 5. Chart & Visual UI Standards
+## 6. Chart & Visual UI Standards
 *   **Y-Axis Headroom Padding**: Always calculate dynamic `yDomain` for line/area charts with a minimum **15% top & bottom headroom padding** (`Math.max(range * 0.15, 5)`) to prevent peak (High) and trough (Low) reference dots/badges from clipping against SVG canvas boundaries.
 *   **Smart SVG Edge Detection**: Position SVG label badges dynamically with edge-detection checks (`x > 620`) to prevent right-edge container clipping.
 *   **Adaptive Marker De-Cluttering**: When marker counts exceed threshold (e.g., > 8 transaction dots), suppress inline text labels and reduce dot radius (`r=3.5`, `opacity=0.7`) to maintain high-contrast readability of peak/trough badges.
 
-## 6. Verification Checklists
+## 7. Verification Checklists
 *   **Static Analysis**: Always run `npm run lint` to check for linter or unused variable warnings.
 *   **Code Formatting**: Always run `npm run format` to ensure Prettier/formatting compliance before pushing.
 *   **Production Build**: Verify all changes by running `npm run build` to guarantee successful Next.js Turbopack compilation.

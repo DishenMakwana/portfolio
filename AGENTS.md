@@ -22,7 +22,7 @@ Whenever you modify or add any code files in this project, you MUST run verifica
 # TypeScript & Code Cleanliness Requirements
 1. **No `any` Keyword**: Strictly type all variables, function arguments, and return types across the codebase.
 2. **Unused Imports & Variables**: Maintain `"noUnusedLocals": true` and `"noUnusedParameters": true` compliance. Check for and remove all unused variables, parameters, and imports.
-3. **Top-Level Static Imports**: Define all static imports at the top level of files before any code, variables, or functions.
+3. **Top-Level Static Imports**: Define all static value and type imports strictly at the top level of files before any code, variables, types, or functions. Never use inline type imports (e.g., `import("./path").Type`). Always import named types explicitly at the top of the file.
 4. **Top-Level Constants**: Define all global variables and module-level constants at the top level, not inside or between functions.
 5. **Centralized Types**: All interface, type, and enum declarations must reside in `src/types/`, organized by domain (e.g., `insights.ts`, `valuation.ts`, `summary.ts`). Avoid inline object type declarations with more than 3 properties in function signatures.
 6. **Centralized Helpers**: All formatters, date utilities, calculations, and business logic helper functions must reside in `src/helpers/` in responsibility-driven files (e.g., `formatters.ts`, `dates.ts`, `allocation.ts`, `transactions.ts`). Never define local formatting helpers (`fmtIN`, `pct2`, `formatDate`) inside page or component files.

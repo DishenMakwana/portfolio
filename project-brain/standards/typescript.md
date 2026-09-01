@@ -11,6 +11,8 @@
 *   Unused variables, parameters, or imports are strictly prohibited and must be removed from the files.
 
 ## Import & Variable Organization
-*   Static imports must always be defined at the top level of the file. Do not use dynamic/conditional `import()` statements inside function bodies or loops unless absolutely required for runtime lazy-loading.
-*   Global variables and module-level constants must be declared at the top of the file, not inline between functions or code blocks.
+*   **Top-Level Static Imports**: All static value and type imports must strictly reside at the very top level of the file before any code, variables, types, or functions.
+*   **No Inline Type Imports**: Never use inline dynamic type imports (e.g. `field?: import("./module").Type`). Always declare explicit top-level type imports (e.g. `import type { Type } from "./module";`).
+*   **No Function-Body Imports**: Do not use dynamic/conditional `import()` statements inside function bodies or loops unless explicitly required for client-side code-splitting or runtime dynamic modules.
+*   **Top-Level Constants**: Global variables, schemas, configuration maps, and module-level constants must be declared at the top of the file, not inline between functions or code blocks.
 
