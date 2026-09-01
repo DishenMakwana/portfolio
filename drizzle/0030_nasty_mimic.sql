@@ -1,0 +1,35 @@
+CREATE TABLE "portfolio"."stock_fundamentals" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"symbol" text NOT NULL,
+	"search_id" text,
+	"display_name" text,
+	"industry_name" text,
+	"logo_url" text,
+	"founded_year" text,
+	"managing_director" text,
+	"business_summary" text,
+	"market_cap" text,
+	"pe_ratio" double precision,
+	"pb_ratio" double precision,
+	"industry_pe" double precision,
+	"debt_to_equity" double precision,
+	"roe" double precision,
+	"eps" double precision,
+	"dividend_yield" double precision,
+	"book_value" double precision,
+	"face_value" double precision,
+	"revenue_growth_1y" text,
+	"revenue_growth_3y" text,
+	"profit_growth_1y" text,
+	"profit_growth_3y" text,
+	"year_high" double precision,
+	"year_low" double precision,
+	"shareholding_data" text,
+	"last_scraped_at" timestamp DEFAULT now() NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "stock_fundamentals_symbol_unique" UNIQUE("symbol")
+);
+--> statement-breakpoint
+CREATE INDEX "stock_fundamentals_symbol_idx" ON "portfolio"."stock_fundamentals" USING btree ("symbol");--> statement-breakpoint
+CREATE INDEX "stock_fundamentals_search_id_idx" ON "portfolio"."stock_fundamentals" USING btree ("search_id");

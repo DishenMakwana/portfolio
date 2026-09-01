@@ -718,3 +718,82 @@ export const analysisLinks = mySchema.table(
     index("analysis_links_created_at_idx").on(table.createdAt),
   ]
 );
+
+export const benchmarkCategoryRatios = mySchema.table(
+  "benchmark_category_ratios",
+  {
+    id: serial("id").primaryKey(),
+    categoryName: text("category_name").notNull().unique(),
+    source: text("source").default("calculated_db").notNull(), // 'calculated_db' | 'scraped_external' | 'hybrid'
+    top5: text("top5"), // e.g. "28.5%"
+    top20: text("top20"), // e.g. "64.2%"
+    peRatio: doublePrecision("pe_ratio"),
+    pbRatio: doublePrecision("pb_ratio"),
+    alpha: doublePrecision("alpha"),
+    beta: doublePrecision("beta"),
+    sharpe: doublePrecision("sharpe"),
+    sortino: doublePrecision("sortino"),
+    stdDev: doublePrecision("std_dev"),
+    rSquared: doublePrecision("r_squared"),
+    sampleFundCount: integer("sample_fund_count").default(0).notNull(),
+    lastSyncedAt: text("last_synced_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("benchmark_category_ratios_cat_name_idx").on(table.categoryName),
+    index("benchmark_category_ratios_source_idx").on(table.source),
+  ]
+);
+
+export const stockFundamentals = mySchema.table(
+  "stock_fundamentals",
+  {
+    id: serial("id").primaryKey(),
+    symbol: text("symbol").notNull().unique(), // e.g. "ASHOKLEY.NS" or "ASHOKLEY"
+    searchId: text("search_id"), // e.g. "ashok-leyland-ltd"
+    displayName: text("display_name"),
+    industryName: text("industry_name"),
+    logoUrl: text("logo_url"),
+    foundedYear: text("founded_year"),
+    managingDirector: text("managing_director"),
+    businessSummary: text("business_summary"),
+
+    // 10 Fundamentals
+    marketCap: text("market_cap"),
+    peRatio: doublePrecision("pe_ratio"),
+    pbRatio: doublePrecision("pb_ratio"),
+    industryPe: doublePrecision("industry_pe"),
+    debtToEquity: doublePrecision("debt_to_equity"),
+    roe: doublePrecision("roe"),
+    eps: doublePrecision("eps"),
+    dividendYield: doublePrecision("dividend_yield"),
+    bookValue: doublePrecision("book_value"),
+    faceValue: doublePrecision("face_value"),
+
+    // Financial Growth
+    revenueGrowth1Y: text("revenue_growth_1y"),
+    revenueGrowth3Y: text("revenue_growth_3y"),
+    profitGrowth1Y: text("profit_growth_1y"),
+    profitGrowth3Y: text("profit_growth_3y"),
+
+    // Price Range & Shareholding
+    yearHigh: doublePrecision("year_high"),
+    yearLow: doublePrecision("year_low"),
+    shareholdingData: text("shareholding_data"), // JSON string
+
+    lastScrapedAt: timestamp("last_scraped_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("stock_fundamentals_symbol_idx").on(table.symbol),
+    index("stock_fundamentals_search_id_idx").on(table.searchId),
+  ]
+);
