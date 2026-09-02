@@ -16,20 +16,18 @@ interface PageProps {
 }
 
 export default async function NiftyAnalysisPage({ searchParams }: PageProps) {
-  const [params, reportsList, allSchemes] = await Promise.all([
-    searchParams,
+  const params = await searchParams;
+  const targetReportId = params.reportId
+    ? parseInt(params.reportId, 10)
+    : undefined;
+
+  const [reportsList, allSchemes, niftyData] = await Promise.all([
     getReports(),
     getSchemes(),
+    getNiftyAnalysisData(targetReportId),
   ]);
 
-  const selectedReportId = params.reportId
-    ? parseInt(params.reportId, 10)
-    : reportsList[0]?.id;
-
-  const [niftyData] = await Promise.all([
-    getNiftyAnalysisData(selectedReportId),
-  ]);
-
+  const selectedReportId = targetReportId || reportsList[0]?.id;
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
   const selectedReport =
     reportsList.find((r) => r.id === selectedReportId) ||

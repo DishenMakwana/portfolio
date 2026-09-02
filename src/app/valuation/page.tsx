@@ -17,18 +17,18 @@ interface PageProps {
 }
 
 export default async function ValuationPage({ searchParams }: PageProps) {
-  const [params, reportsList, allSchemes] = await Promise.all([
-    searchParams,
+  const params = await searchParams;
+  const targetReportId = params.reportId
+    ? parseInt(params.reportId, 10)
+    : undefined;
+
+  const [reportsList, allSchemes, valuationData] = await Promise.all([
     getReports(),
     getSchemes(),
+    getValuationData(targetReportId),
   ]);
 
-  const selectedReportId = params.reportId
-    ? parseInt(params.reportId, 10)
-    : reportsList[0]?.id;
-
-  const valuationData = await getValuationData(selectedReportId, reportsList);
-
+  const selectedReportId = targetReportId || reportsList[0]?.id;
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
   const selectedReport =
     reportsList.find((r) => r.id === selectedReportId) ||

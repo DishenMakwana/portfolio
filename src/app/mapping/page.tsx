@@ -1,4 +1,4 @@
-import { getSchemes } from "@/lib/portfolioService";
+import { getSchemesWithFolioStats } from "@/lib/portfolioService";
 import { getReports } from "@/lib/portfolioService";
 import MappingTab from "@/components/mutual-fund/mapping/MappingTab";
 import HeaderClient from "@/components/shared/HeaderClient";
@@ -8,7 +8,7 @@ export const metadata = { title: "Fund Mapping" };
 
 export default async function MappingPage() {
   const [allSchemes, reportsList] = await Promise.all([
-    getSchemes(),
+    getSchemesWithFolioStats(),
     getReports(),
   ]);
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;

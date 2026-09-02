@@ -1,5 +1,6 @@
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
+import { getAllSchemeCategoryRankingsMap } from "@/lib/fundRankingService";
 import HoldingsTab from "@/components/mutual-fund/holdings/HoldingsTab";
 import HeaderClient from "@/components/shared/HeaderClient";
 import { PageProps } from "@/types/holdings";
@@ -12,9 +13,10 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
   const reportId = params.reportId ? parseInt(params.reportId, 10) : undefined;
   const initialMember = params.member || "All";
 
-  const [data, allSchemes] = await Promise.all([
+  const [data, allSchemes, categoryRankingsMap] = await Promise.all([
     getDashboardDataAction(reportId),
     getSchemes(),
+    getAllSchemeCategoryRankingsMap(),
   ]);
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
 
@@ -38,6 +40,7 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
           holdings={data.holdings}
           memberSummaries={data.memberSummaries}
           initialMember={initialMember}
+          categoryRankingsMap={categoryRankingsMap}
         />
       </main>
     </>

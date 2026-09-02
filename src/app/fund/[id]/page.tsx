@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db/db";
 import { parseHistoryDate, parseToLocalMidnight } from "@/helpers/dates";
 import {
@@ -35,6 +35,9 @@ import {
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
+import { getSchemeCategoryRankings } from "@/lib/fundRankingService";
+import { getCachedStockFundamentals } from "@/lib/stockFundamentalsService";
+import { calculateRollingReturnsSummary } from "@/helpers/rollingReturns";
 import FundDetailsClient from "@/components/mutual-fund/fund-details/FundDetailsClient";
 import {
   FundPageProps,
@@ -47,19 +50,46 @@ export const metadata = { title: "Fund Details" };
 
 export default async function FundDetailsPage({ params }: FundPageProps) {
   const { id } = await params;
+
+  // If accessed by folio number directly (e.g. /fund/folio_1036251952)
+  if (id.startsWith("folio_")) {
+    const rawFolio = decodeURIComponent(id.replace(/^folio_/, "").trim());
+    const snap = await db.query.holdingsSnapshot.findFirst({
+      where: eq(holdingsSnapshot.folioNo, rawFolio),
+      orderBy: [desc(holdingsSnapshot.reportId), desc(holdingsSnapshot.id)],
+    });
+    if (snap) {
+      redirect(`/fund/${snap.id}`);
+    }
+    const tx = await db.query.transactions.findFirst({
+      where: eq(transactions.folioNo, rawFolio),
+      orderBy: [desc(transactions.date), desc(transactions.id)],
+    });
+    if (tx) {
+      redirect(`/fund/sold_${tx.id}`);
+    }
+    notFound();
+  }
+
+  // If a negative ID is directly accessed (e.g. /fund/-8341), canonicalize redirect to /fund/sold_8341
+  if (id.startsWith("-") || id.startsWith("sold_-")) {
+    const rawDigits = id.replace(/^(sold_)?-/, "");
+    const cleanNum = parseInt(rawDigits, 10);
+    if (!isNaN(cleanNum)) {
+      redirect(`/fund/sold_${cleanNum}`);
+    }
+  }
+
   const isMsfl = id.startsWith("msfl_");
   const isZerodha = id.startsWith("z_");
   const isSold = id.startsWith("sold_");
-  const isNegative = id.startsWith("-");
   const rawId = isMsfl
     ? id.substring(5)
     : isZerodha
       ? id.substring(2)
       : isSold
         ? id.substring(5).replace(/^-/, "")
-        : isNegative
-          ? id.substring(1)
-          : id;
+        : id;
   const holdingId = Math.abs(parseInt(rawId, 10));
 
   if (isNaN(holdingId)) {
@@ -84,6 +114,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         asOfDate: msflReports.asOfDate,
         reportId: msflReports.id,
         isin: msflSchemes.isin,
+        sector: msflSchemes.sector,
+        marketCapCategory: msflSchemes.marketCapCategory,
       })
       .from(msflHoldings)
       .leftJoin(msflReports, eq(msflHoldings.reportId, msflReports.id))
@@ -96,6 +128,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         columns: {
           id: true,
           schemeCodeApi: true,
+          sector: true,
+          marketCapCategory: true,
         },
         where: eq(msflSchemes.name, mHolding.schemeName || ""),
       });
@@ -117,6 +151,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             : null,
         category: "Stock",
         holdingType: "equity",
+        sector: scheme?.sector || mHolding.sector || undefined,
+        marketCapCategory:
+          scheme?.marketCapCategory || mHolding.marketCapCategory || undefined,
       };
     }
   } else if (isZerodha) {
@@ -138,6 +175,7 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         reportId: zerodhaReports.id,
         holdingType: zerodhaSchemes.holdingType,
         sector: zerodhaSchemes.sector,
+        marketCapCategory: zerodhaSchemes.marketCapCategory,
         frozenQuantity: zerodhaHoldings.frozenQuantity,
         pledgedQuantity: zerodhaHoldings.pledgedQuantity,
         pledgeSetupQuantity: zerodhaHoldings.pledgeSetupQuantity,
@@ -159,6 +197,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             id: true,
             schemeCodeApi: true,
             category: true,
+            sector: true,
+            marketCapCategory: true,
           },
           where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
@@ -177,7 +217,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           memberPan: null,
           schemeCodeApi: scheme ? scheme.schemeCodeApi : zHolding.schemeName,
           category: scheme ? scheme.category : "Equity Stock",
-          sector: zHolding.sector,
+          sector: scheme?.sector || zHolding.sector || undefined,
+          marketCapCategory:
+            scheme?.marketCapCategory ||
+            zHolding.marketCapCategory ||
+            undefined,
         };
       } else {
         // Find matching scheme in DB to fetch API mapping code
@@ -186,6 +230,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
             id: true,
             schemeCodeApi: true,
             category: true,
+            sector: true,
+            marketCapCategory: true,
           },
           where: eq(zerodhaSchemes.name, zHolding.schemeName || ""),
         });
@@ -204,7 +250,11 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
           memberPan: null,
           schemeCodeApi: scheme ? scheme.schemeCodeApi : null,
           category: scheme ? scheme.category : zHolding.category,
-          sector: zHolding.sector,
+          sector: scheme?.sector || zHolding.sector || undefined,
+          marketCapCategory:
+            scheme?.marketCapCategory ||
+            zHolding.marketCapCategory ||
+            undefined,
         };
       }
     }
@@ -370,17 +420,27 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     notFound();
   }
 
-  const benchmarkCode =
+  // 2. Fetch transaction history, scheme history, benchmark code, and category rankings in parallel
+  const benchmarkCodePromise =
     isMsfl && holding.holdingType !== "equity"
-      ? "120716"
-      : await getBenchmarkCodeForCategory(holding.category, holding.schemeName);
+      ? Promise.resolve("120716")
+      : getBenchmarkCodeForCategory(holding.category, holding.schemeName);
 
-  const [benchmarkFundName, benchmarkName] = await Promise.all([
-    getBenchmarkFundNameForCode(benchmarkCode),
-    getBenchmarkNameForCode(benchmarkCode),
-  ]);
+  const categoryRankingsPromise =
+    holding.schemeCodeApi && holding.holdingType !== "equity" && !isMsfl
+      ? getSchemeCategoryRankings(holding.schemeCodeApi)
+      : Promise.resolve(null);
 
-  // 2. Fetch transaction history and NAV histories in parallel
+  const fundDetailsPromise = holding.schemeCodeApi
+    ? isMsfl
+      ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
+      : isZerodha
+        ? holding.holdingType === "equity"
+          ? getZerodhaStockHistoryForSymbol(holding.schemeCodeApi)
+          : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
+        : getSchemeHistoryForDbCode(holding.schemeCodeApi)
+    : Promise.resolve(null);
+
   let zTxsPromise = Promise.resolve<FundTransactionItem[]>([]);
   if (isZerodha && holding.schemeId) {
     zTxsPromise = (async () => {
@@ -420,67 +480,89 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     })();
   }
 
-  const [fundTxs, fundDetails, benchDetails] = await Promise.all([
-    isMsfl
-      ? Promise.resolve([])
-      : isZerodha
-        ? zTxsPromise
-        : !holding.schemeId || !holding.memberId || !holding.asOfDate
-          ? Promise.resolve([])
-          : (async () => {
-              const schemeId = holding.schemeId!;
-              const memberId = holding.memberId!;
-              const asOfDate = holding.asOfDate!;
-              const allSchemeTxs = await db
-                .select({
-                  id: transactions.id,
-                  memberId: transactions.memberId,
-                  schemeId: transactions.schemeId,
-                  folioNo: transactions.folioNo,
-                  date: transactions.date,
-                  type: transactions.type,
-                  transactionType: transactions.transactionType,
-                  units: transactions.units,
-                  nav: transactions.nav,
-                  amount: transactions.amount,
-                  stampDuty: transactions.stampDuty,
-                })
-                .from(transactions)
-                .where(
-                  and(
-                    eq(transactions.schemeId, schemeId),
-                    eq(transactions.memberId, memberId),
-                    lte(transactions.date, asOfDate)
-                  )
+  const fundTxsPromise = isMsfl
+    ? Promise.resolve([])
+    : isZerodha
+      ? zTxsPromise
+      : !holding.schemeId || !holding.memberId || !holding.asOfDate
+        ? Promise.resolve([])
+        : (async () => {
+            const schemeId = holding.schemeId!;
+            const memberId = holding.memberId!;
+            const asOfDate = holding.asOfDate!;
+            const allSchemeTxs = await db
+              .select({
+                id: transactions.id,
+                memberId: transactions.memberId,
+                schemeId: transactions.schemeId,
+                folioNo: transactions.folioNo,
+                date: transactions.date,
+                type: transactions.type,
+                transactionType: transactions.transactionType,
+                units: transactions.units,
+                nav: transactions.nav,
+                amount: transactions.amount,
+                stampDuty: transactions.stampDuty,
+              })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.schemeId, schemeId),
+                  eq(transactions.memberId, memberId),
+                  lte(transactions.date, asOfDate)
                 )
-                .orderBy(desc(transactions.date), desc(transactions.id));
+              )
+              .orderBy(desc(transactions.date), desc(transactions.id));
 
-              let filteredTxs = holding.folioNo
-                ? allSchemeTxs.filter(
-                    (tx) =>
-                      !tx.folioNo ||
-                      tx.folioNo === holding.folioNo ||
-                      holding.folioNo!.includes(tx.folioNo)
-                  )
-                : allSchemeTxs;
+            let filteredTxs = holding.folioNo
+              ? allSchemeTxs.filter(
+                  (tx) =>
+                    !tx.folioNo ||
+                    tx.folioNo === holding.folioNo ||
+                    holding.folioNo!.includes(tx.folioNo)
+                )
+              : allSchemeTxs;
 
-              if (filteredTxs.length === 0) {
-                filteredTxs = allSchemeTxs;
-              }
+            if (filteredTxs.length === 0) {
+              filteredTxs = allSchemeTxs;
+            }
 
-              return filteredTxs;
-            })(),
-    holding.schemeCodeApi
-      ? isMsfl
-        ? getMsflStockHistoryForSymbol(holding.schemeCodeApi)
-        : isZerodha
-          ? holding.holdingType === "equity"
-            ? getZerodhaStockHistoryForSymbol(holding.schemeCodeApi)
-            : getZerodhaSchemeHistoryForDbCode(holding.schemeCodeApi)
-          : getSchemeHistoryForDbCode(holding.schemeCodeApi)
-      : Promise.resolve(null),
-    getBenchmarkHistory(benchmarkCode),
+            return filteredTxs;
+          })();
+
+  const stockFundamentalsPromise =
+    holding.holdingType === "equity" && holding.schemeCodeApi
+      ? getCachedStockFundamentals(holding.schemeCodeApi)
+      : Promise.resolve(null);
+
+  const benchmarkDataPromise = benchmarkCodePromise.then(
+    async (benchmarkCode) => {
+      const [benchDetails, benchmarkFundName, benchmarkName] =
+        await Promise.all([
+          getBenchmarkHistory(benchmarkCode),
+          getBenchmarkFundNameForCode(benchmarkCode),
+          getBenchmarkNameForCode(benchmarkCode),
+        ]);
+      return { benchmarkCode, benchDetails, benchmarkFundName, benchmarkName };
+    }
+  );
+
+  const [
+    benchmarkData,
+    categoryRankingsData,
+    fundDetails,
+    fundTxs,
+    stockFundamentalsData,
+  ] = await Promise.all([
+    benchmarkDataPromise,
+    categoryRankingsPromise,
+    fundDetailsPromise,
+    fundTxsPromise,
+    stockFundamentalsPromise,
   ]);
+
+  const { benchmarkCode, benchDetails, benchmarkFundName, benchmarkName } =
+    benchmarkData;
 
   // 3. Format transactions for XIRR/Alpha calculation
   // For Zerodha or MSFL holdings where no BUY transaction exists (e.g., IPO Allotments),
@@ -600,9 +682,8 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     if (mappedTxs.length > 0) {
       const oldestTxTime = new Date(mappedTxs[0].date).getTime();
       const asOfTime = new Date(holding.asOfDate).getTime();
-      const diffDays = Math.round(
-        (asOfTime - oldestTxTime) / (24 * 60 * 60 * 1000)
-      );
+      const diffDays =
+        Math.round((asOfTime - oldestTxTime) / (24 * 60 * 60 * 1000)) + 1;
       if (diffDays > 0) {
         holding.holdingDays = diffDays;
       }
@@ -735,6 +816,16 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
     earliestBenchDateStr = sorted[0].date;
   }
 
+  const rollingReturns =
+    fundNavHistory.length > 0
+      ? calculateRollingReturnsSummary(
+          fundNavHistory,
+          benchNavHistory,
+          benchmarkName,
+          holding.cagr
+        )
+      : null;
+
   // Determine the data source for the Server Action
   const source = isMsfl ? "msfl" : isZerodha ? "zerodha" : "standard";
 
@@ -753,6 +844,9 @@ export default async function FundDetailsPage({ params }: FundPageProps) {
         benchmarkCode={benchmarkCode}
         holdingType={holding.holdingType}
         source={source}
+        categoryRankingsData={categoryRankingsData}
+        stockFundamentalsData={stockFundamentalsData}
+        rollingReturns={rollingReturns}
       />
     </main>
   );
