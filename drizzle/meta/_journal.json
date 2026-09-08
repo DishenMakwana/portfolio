@@ -218,6 +218,13 @@
       "when": 1788176631514,
       "tag": "0030_nasty_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788777635657,
+      "tag": "0031_funny_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

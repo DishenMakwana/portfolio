@@ -317,6 +317,24 @@ export const schemeCategoryRankings = mySchema.table(
   ]
 );
 
+export const zerodhaMembers = mySchema.table(
+  "zerodha_members",
+  {
+    id: serial("id").primaryKey(),
+    clientId: text("client_id").notNull().unique(),
+    name: text("name").notNull(),
+    pan: text("pan"),
+    email: text("email"),
+    phone: text("phone"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("zerodha_members_client_id_idx").on(table.clientId)]
+);
+
 export const zerodhaReports = mySchema.table(
   "zerodha_reports",
   {
@@ -324,13 +342,21 @@ export const zerodhaReports = mySchema.table(
     asOfDate: text("as_of_date").notNull(),
     uploadedAt: text("uploaded_at").notNull(),
     filename: text("filename").notNull(),
+    memberId: integer("member_id").references(() => zerodhaMembers.id, {
+      onDelete: "cascade",
+    }),
+    clientId: text("client_id").notNull().default("SQY316"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("zerodha_reports_as_of_date_idx").on(table.asOfDate)]
+  (table) => [
+    index("zerodha_reports_as_of_date_idx").on(table.asOfDate),
+    index("zerodha_reports_client_id_idx").on(table.clientId),
+    index("zerodha_reports_member_id_idx").on(table.memberId),
+  ]
 );
 
 export const zerodhaHoldings = mySchema.table(
