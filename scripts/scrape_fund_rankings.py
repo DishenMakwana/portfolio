@@ -176,7 +176,13 @@ async def scrape_groww_table_data(page, table_selector: str):
         return None
 
     header_parts = re.split(r'\t+|\s{2,}', lines[0])
-    horizons = [h.strip() for h in header_parts if h.strip() and h.strip().lower() != "name"]
+    seen_h = set()
+    horizons = []
+    for h in header_parts:
+        clean_h = h.strip()
+        if clean_h and clean_h.lower() != "name" and clean_h not in seen_h:
+            seen_h.add(clean_h)
+            horizons.append(clean_h)
     if not horizons:
         horizons = ["3Y", "5Y", "10Y", "All"]
 
