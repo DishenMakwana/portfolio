@@ -341,6 +341,91 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
             "taxImplication": tax_implication_m.group(1).strip() if tax_implication_m else None,
         }
 
+        # 7. AUM (Fund Size in ₹ Cr)
+        aum_m = re.search(r'Fund\s*size[^\n]*\n\s*₹?\s*([\d,]+(?:\.\d+)?)\s*Cr', body_text, re.IGNORECASE)
+        if not aum_m:
+            aum_m = re.search(r'Asset\s*Under\s*Management\(AUM\)\s*of\s*₹?\s*([\d,]+(?:\.\d+)?)\s*Cr', body_text, re.IGNORECASE)
+        if not aum_m:
+            aum_m = re.search(r'AUM[^\n]*\n\s*₹?\s*([\d,]+(?:\.\d+)?)\s*Cr', body_text, re.IGNORECASE)
+        aum_cr = float(aum_m.group(1).replace(",", "")) if aum_m else None
+
+        # 8. Fund Manager(s)
+        fund_manager = None
+        mgmt_m = re.search(r'Fund\s*management\s*\n(.*?)(?=\n(?:Similar funds|About|\Z))', body_text, re.DOTALL | re.IGNORECASE)
+        if mgmt_m:
+            mgmt_text = mgmt_m.group(1)
+            mgrs = re.findall(r'\n[A-Z]{2,3}\s*\n([A-Za-z\s\.\-]+?)\n\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{4}|\d{4})', '\n' + mgmt_text)
+            if mgrs:
+                seen = set()
+                clean_mgrs = []
+                for m in mgrs:
+                    name = m.strip()
+                    if name and name not in seen and len(name) > 2:
+                        seen.add(name)
+                        clean_mgrs.append(name)
+                if clean_mgrs:
+                    fund_manager = ", ".join(clean_mgrs)
+        if not fund_manager:
+            mgr_fallback = re.search(r'([A-Za-z\s\.]+?)\s+is\s+the\s+(?:Current\s+)?Fund\s+Manager\s+of', body_text, re.IGNORECASE)
+            if mgr_fallback:
+                fund_manager = mgr_fallback.group(1).strip()
+
+        # 9. Benchmark
+        bench_m = re.search(r'Fund\s*benchmark\s*\n\s*([^\n]+)', body_text, re.IGNORECASE)
+        if not bench_m:
+            bench_m = re.search(r'Benchmark\s*\n\s*([^\n]+)', body_text, re.IGNORECASE)
+        benchmark_name = bench_m.group(1).strip() if bench_m else None
+
+        # 10. Risk Rating
+        risk_rating = None
+        risk_m = re.search(r'rated\s+(Very High|High|Moderately High|Moderate|Low to Moderate|Low)\s+risk', body_text, re.IGNORECASE)
+        if not risk_m:
+            risk_m = re.search(r'Riskometer\s*\n\s*([^\n]+)', body_text, re.IGNORECASE)
+        if risk_m:
+            r_str = risk_m.group(1).strip().lower()
+            if "very high" in r_str:
+                risk_rating = 6
+            elif "moderately high" in r_str:
+                risk_rating = 4
+            elif "high" in r_str:
+                risk_rating = 5
+            elif "low to moderate" in r_str:
+                risk_rating = 2
+            elif "moderate" in r_str:
+                risk_rating = 3
+            elif "low" in r_str:
+                risk_rating = 1
+
+        # 11. Minimum SIP
+        min_sip = None
+        sip_m = re.search(r'Min\.\s*for\s*SIP\s*\n\s*₹?\s*([\d,]+)', body_text, re.IGNORECASE)
+        if not sip_m:
+            sip_m = re.search(r'Minimum\s*SIP\s*Investment\s*is\s*set\s*to\s*₹?\s*([\d,]+)', body_text, re.IGNORECASE)
+        if sip_m:
+            try:
+                min_sip = float(sip_m.group(1).replace(",", ""))
+            except Exception:
+                pass
+
+        # 12. Minimum Lumpsum
+        min_lumpsum = None
+        lump_m = re.search(r'Min\.\s*for\s*(?:1st\s*)?investment\s*\n\s*₹?\s*([\d,]+)', body_text, re.IGNORECASE)
+        if not lump_m:
+            lump_m = re.search(r'Min\.\s*investment\s*for\s*Lumpsum[^\n\d]*₹?\s*([\d,]+)', body_text, re.IGNORECASE)
+        if lump_m:
+            try:
+                min_lumpsum = float(lump_m.group(1).replace(",", ""))
+            except Exception:
+                pass
+
+        # 13. Launch Date
+        launch_date = None
+        launch_m = re.search(r'This scheme was made available to investors on\s*([0-9]{1,2}\s+[A-Za-z]{3}\s+[0-9]{4})', body_text, re.IGNORECASE)
+        if not launch_m:
+            launch_m = re.search(r'Inception\s*date\s*\n\s*([^\n]+)', body_text, re.IGNORECASE)
+        if launch_m:
+            launch_date = launch_m.group(1).strip()
+
         if not annualised_data:
             print(f"[WARN] Returns and rankings table not found for {scheme_name} ({slug})")
             return None
@@ -357,6 +442,13 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
             "assetAllocation": asset_allocation,
             "exitLoadTax": exit_load_tax,
             "expenseRatio": expense_ratio,
+            "aumCr": aum_cr,
+            "fundManager": fund_manager,
+            "benchmarkName": benchmark_name,
+            "riskRating": risk_rating,
+            "minSip": min_sip,
+            "minLumpsum": min_lumpsum,
+            "launchDate": launch_date,
             "lastScrapedAt": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -400,6 +492,72 @@ def save_ranking_to_db(data: dict):
             data.get("expenseRatio"),
             data["lastScrapedAt"],
         ))
+        # Also upsert into watchlist_fund_analytics if applicable
+        try:
+            cur.execute("""
+                INSERT INTO portfolio.watchlist_fund_analytics
+                (scheme_code, scheme_name, category_name, groww_slug, annualised_data, absolute_data, advanced_ratios_data, market_cap_data, asset_allocation_data, exit_load_tax_data, last_synced_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (scheme_code) DO UPDATE SET
+                    scheme_name = EXCLUDED.scheme_name,
+                    category_name = EXCLUDED.category_name,
+                    groww_slug = EXCLUDED.groww_slug,
+                    annualised_data = EXCLUDED.annualised_data,
+                    absolute_data = EXCLUDED.absolute_data,
+                    advanced_ratios_data = EXCLUDED.advanced_ratios_data,
+                    market_cap_data = EXCLUDED.market_cap_data,
+                    asset_allocation_data = EXCLUDED.asset_allocation_data,
+                    exit_load_tax_data = EXCLUDED.exit_load_tax_data,
+                    last_synced_at = EXCLUDED.last_synced_at,
+                    updated_at = NOW();
+            """, (
+                data["schemeCode"],
+                data["schemeName"],
+                data["categoryName"],
+                data["growwSlug"],
+                json.dumps(data["annualised"]),
+                json.dumps(data.get("absolute")) if data.get("absolute") else None,
+                json.dumps(data.get("advancedRatios")) if data.get("advancedRatios") else None,
+                json.dumps(data.get("marketCap")) if data.get("marketCap") else None,
+                json.dumps(data.get("assetAllocation")) if data.get("assetAllocation") else None,
+                json.dumps(data.get("exitLoadTax")) if data.get("exitLoadTax") else None,
+                data["lastScrapedAt"],
+            ))
+        except Exception as w_err:
+            print(f"[WARN] Error updating watchlist_fund_analytics: {w_err}")
+
+        # Also update all metadata in watchlist_schemes
+        try:
+            cur.execute("""
+                UPDATE portfolio.watchlist_schemes
+                SET 
+                    groww_slug = COALESCE(%s, groww_slug),
+                    aum_cr = COALESCE(%s, aum_cr),
+                    expense_ratio = COALESCE(%s, expense_ratio),
+                    exit_load = COALESCE(%s, exit_load),
+                    fund_manager = COALESCE(%s, fund_manager),
+                    benchmark_name = COALESCE(%s, benchmark_name),
+                    risk_rating = COALESCE(%s, risk_rating),
+                    min_lumpsum = COALESCE(%s, min_lumpsum),
+                    min_sip = COALESCE(%s, min_sip),
+                    launch_date = COALESCE(launch_date, %s),
+                    updated_at = NOW()
+                WHERE scheme_code = %s;
+            """, (
+                data.get("growwSlug"),
+                data.get("aumCr"),
+                data.get("expenseRatio"),
+                data.get("exitLoadTax", {}).get("exitLoad") if data.get("exitLoadTax") else None,
+                data.get("fundManager"),
+                data.get("benchmarkName"),
+                data.get("riskRating"),
+                data.get("minLumpsum"),
+                data.get("minSip"),
+                data.get("launchDate"),
+                data["schemeCode"],
+            ))
+        except Exception as ws_err:
+            print(f"[WARN] Error updating watchlist_schemes: {ws_err}")
         conn.commit()
         print(f"[SAVED] {data['schemeName']} ({data['schemeCode']}) -> Saved to DB.")
     except Exception as e:
@@ -439,16 +597,31 @@ async def main():
 
     try:
         if args.scheme_code:
+            clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
             cur.execute("""
                 SELECT scheme_code_api, name, category, NULL as groww_slug 
                 FROM portfolio.schemes WHERE scheme_code_api = %s
                 UNION
                 SELECT scheme_code_api, name, category, NULL as groww_slug 
                 FROM portfolio.zerodha_schemes WHERE scheme_code_api = %s
-            """, (args.scheme_code, args.scheme_code))
+                UNION
+                SELECT scheme_code, scheme_name, category, groww_slug
+                FROM portfolio.watchlist_schemes WHERE scheme_code = %s
+            """, (clean_code, clean_code, clean_code))
             rows = cur.fetchall()
             for r in rows:
                 schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
+            if not schemes_to_scrape:
+                # AMFI fallback lookup if not present in portfolio tables yet
+                try:
+                    mf_resp = requests.get(f"https://api.mfapi.in/mf/{clean_code}", timeout=6)
+                    if mf_resp.status_code == 200:
+                        meta = mf_resp.json().get("meta", {})
+                        s_name = meta.get("scheme_name", f"Scheme {clean_code}")
+                        s_cat = meta.get("scheme_category", "Mutual Fund")
+                        schemes_to_scrape.append({"schemeCode": clean_code, "schemeName": s_name, "category": s_cat, "dbSlug": None})
+                except Exception as amfi_err:
+                    print(f"[WARN] AMFI fallback lookup failed: {amfi_err}")
         elif args.scheme_codes:
             code_list = [c.strip() for c in args.scheme_codes.split(",") if c.strip()]
             if code_list:
@@ -462,8 +635,12 @@ async def main():
                     FROM portfolio.zerodha_schemes zs
                     LEFT JOIN portfolio.scheme_category_rankings r ON zs.scheme_code_api = r.scheme_code
                     WHERE zs.scheme_code_api = ANY(%s)
+                    UNION
+                    SELECT DISTINCT ws.scheme_code, ws.scheme_name, ws.category, ws.groww_slug
+                    FROM portfolio.watchlist_schemes ws
+                    WHERE ws.scheme_code = ANY(%s)
                     ORDER BY category, name;
-                """, (code_list, code_list))
+                """, (code_list, code_list, code_list))
                 rows = cur.fetchall()
                 for r in rows:
                     schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
