@@ -225,6 +225,20 @@
       "when": 1788777635657,
       "tag": "0031_funny_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789100503536,
+      "tag": "0032_premium_catseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789104299475,
+      "tag": "0033_watery_darwin",
+      "breakpoints": true
     }
   ]
 }
