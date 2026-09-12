@@ -126,7 +126,23 @@ def resolve_groww_slug_auto(scheme_code: str, scheme_name: str, db_slug: str = N
     if scheme_code in KNOWN_GROWW_SLUGS:
         return KNOWN_GROWW_SLUGS[scheme_code]
 
-    # 3. Groww Entity Search API
+    # 3. Fast direct check with generated slug pattern
+    slug_gen = scheme_name.lower()
+    slug_gen = re.sub(r'\(g\)|\(d\)|\-|\(|\)|\.|\/|,', ' ', slug_gen)
+    slug_gen = re.sub(r'\s+', '-', slug_gen.strip())
+    if not slug_gen.endswith("-growth"):
+        slug_gen += "-direct-growth"
+
+    try:
+        test_url = f"https://groww.in/mutual-funds/{slug_gen}"
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        test_r = requests.get(test_url, headers=headers, timeout=4)
+        if test_r.status_code == 200:
+            return slug_gen
+    except Exception:
+        pass
+
+    # 4. Groww Entity Search API with token-level precision
     clean_q = clean_scheme_name_for_search(scheme_name)
     try:
         url = f"https://groww.in/v1/api/search/v1/entity?app=false&entity_type=scheme&q={clean_q}"
@@ -135,30 +151,34 @@ def resolve_groww_slug_auto(scheme_code: str, scheme_name: str, db_slug: str = N
         if resp.status_code == 200:
             content = resp.json().get("content", [])
             if content:
-                # Find best fuzzy matching scheme title
+                # Identify critical differentiating tokens (e.g. 150, 250, 50, microcap, midcap)
+                clean_target = clean_q.lower()
+                key_tokens = set(re.findall(r'\b(?:150|250|50|100|500|microcap|midcap|smallcap|largecap|flexi|multi|defence|nasdaq)\b', clean_target))
+
                 best_slug = None
                 best_score = -1.0
-                clean_target = clean_q.lower()
                 for item in content:
                     title = item.get("title", "").lower()
                     slug = item.get("search_id", "")
                     score = SequenceMatcher(None, clean_target, title).ratio()
                     if "direct" in slug:
-                        score += 0.15
+                        score += 0.1
+
+                    # Check key token consistency
+                    for kt in key_tokens:
+                        if kt in title:
+                            score += 0.15
+                        else:
+                            score -= 0.35
+
                     if score > best_score:
                         best_score = score
                         best_slug = slug
-                if best_slug:
+                if best_slug and best_score >= 0.6:
                     return best_slug
     except Exception as e:
         print(f"[WARN] Groww search API failed for {scheme_name}: {e}")
 
-    # 4. Fallback slug pattern
-    slug_gen = scheme_name.lower()
-    slug_gen = re.sub(r'\(g\)|\(d\)|\-|\(|\)|\.|\/|,', ' ', slug_gen)
-    slug_gen = re.sub(r'\s+', '-', slug_gen.strip())
-    if not slug_gen.endswith("-growth"):
-        slug_gen += "-direct-growth"
     return slug_gen
 
 async def scrape_groww_table_data(page, table_selector: str):
@@ -247,10 +267,14 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
                 continue
 
         # 3. Extract Advanced Ratios, Market Cap Split, and Asset Allocation
-        for i in range(1, 5):
+        for i in range(1, 6):
             await page.evaluate(f"window.scrollTo(0, {i * 800})")
-            await page.wait_for_timeout(200)
-        await page.wait_for_timeout(400)
+            await page.wait_for_timeout(250)
+        try:
+            await page.wait_for_selector('text="Market Cap Split"', timeout=5000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(500)
         body_text = await page.inner_text("body")
 
         def safe_float(val):
@@ -283,14 +307,19 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
         }
 
         # 3. Market Cap Split
-        large_cap = re.search(r'Large Cap\s*\n\s*([\d\.\-]+)%?', body_text)
-        mid_cap = re.search(r'Mid Cap\s*\n\s*([\d\.\-]+)%?', body_text)
-        small_cap = re.search(r'Small Cap\s*\n\s*([\d\.\-]+)%?', body_text)
+        large_cap = re.search(r'Large\s*Cap\s+([\d\.\-]+)%?', body_text, re.I)
+        mid_cap = re.search(r'Mid\s*Cap\s+([\d\.\-]+)%?', body_text, re.I)
+        small_cap = re.search(r'Small\s*Cap\s+([\d\.\-]+)%?', body_text, re.I)
+        l_cap = safe_float(large_cap.group(1)) if large_cap else None
+        m_cap = safe_float(mid_cap.group(1)) if mid_cap else None
+        s_cap = safe_float(small_cap.group(1)) if small_cap else None
+        
+        has_any_mc = l_cap is not None or m_cap is not None or s_cap is not None
         market_cap_split = {
-            "largeCap": safe_float(large_cap.group(1)) if large_cap else 0.0,
-            "midCap": safe_float(mid_cap.group(1)) if mid_cap else 0.0,
-            "smallCap": safe_float(small_cap.group(1)) if small_cap else 0.0,
-        }
+            "largeCap": l_cap if l_cap is not None else 0.0,
+            "midCap": m_cap if m_cap is not None else 0.0,
+            "smallCap": s_cap if s_cap is not None else 0.0,
+        } if has_any_mc else None
 
         # 4. Asset Allocation / Split
         m_block = re.search(r'Equity / Debt / Cash split\s*\n(.*?)(?=\n(?:₹[\d,]+|Market Cap Split|Equity sector allocation|Debt sector allocation|Holdings|\Z))', body_text, re.DOTALL)

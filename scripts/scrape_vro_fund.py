@@ -44,15 +44,48 @@ def get_watchlist_scheme_meta(scheme_code: str):
         (scheme_code,)
     )
     row = cur.fetchone()
-    conn.close()
     if row:
+        conn.close()
         return {
             "schemeCode": row[0],
             "schemeName": row[1],
             "category": row[2],
             "vroUrl": row[3],
         }
+    
+    # Fallback to other scheme tables if not yet in watchlist_schemes
+    for tbl in ["schemes", "zerodha_schemes", "msfl_schemes"]:
+        try:
+            cur.execute(f"SELECT scheme_code, scheme_name, category FROM portfolio.{tbl} WHERE scheme_code = %s", (scheme_code,))
+            r = cur.fetchone()
+            if r:
+                conn.close()
+                return {
+                    "schemeCode": r[0],
+                    "schemeName": r[1],
+                    "category": r[2],
+                    "vroUrl": None,
+                }
+        except Exception:
+            pass
+
+    conn.close()
     return None
+
+def save_vro_url(scheme_code: str, vro_url: str):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE portfolio.watchlist_schemes 
+            SET vro_url = %s, updated_at = NOW() 
+            WHERE scheme_code = %s;
+        """, (vro_url, scheme_code))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving vro_url to watchlist_schemes: {e}", file=sys.stderr)
 
 def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, vro_url: str, risk_data: dict, returns_data: dict, portfolio_data: dict):
     conn = get_db_connection()
@@ -84,7 +117,15 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
         WHERE scheme_code = %s;
     """, (vro_url, vro_benchmark, scheme_code))
     
-    # 2. Upsert into watchlist_fund_analytics
+    # 2. Extract marketCap if available from VRO portfolio
+    vro_market_cap = portfolio_data.get("marketCap") if portfolio_data else None
+    vro_mkt_cap_json = json.dumps(vro_market_cap) if (vro_market_cap and (
+        (vro_market_cap.get("largeCap") or 0) > 0 or 
+        (vro_market_cap.get("midCap") or 0) > 0 or 
+        (vro_market_cap.get("smallCap") or 0) > 0
+    )) else None
+
+    # 3. Upsert into watchlist_fund_analytics
     cur.execute("""
         INSERT INTO portfolio.watchlist_fund_analytics (
             scheme_code,
@@ -93,13 +134,26 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
             vro_risk_data,
             vro_returns_data,
             vro_portfolio_data,
+            market_cap_data,
             last_vro_synced_at,
             updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (scheme_code) DO UPDATE SET
             vro_risk_data = EXCLUDED.vro_risk_data,
             vro_returns_data = EXCLUDED.vro_returns_data,
             vro_portfolio_data = EXCLUDED.vro_portfolio_data,
+            market_cap_data = CASE 
+                WHEN EXCLUDED.market_cap_data IS NOT NULL AND (
+                    watchlist_fund_analytics.market_cap_data IS NULL 
+                    OR watchlist_fund_analytics.market_cap_data = ''
+                    OR (
+                        watchlist_fund_analytics.market_cap_data LIKE '%%"largeCap": 0%%' 
+                        AND watchlist_fund_analytics.market_cap_data LIKE '%%"midCap": 0%%' 
+                        AND watchlist_fund_analytics.market_cap_data LIKE '%%"smallCap": 0%%'
+                    )
+                ) THEN EXCLUDED.market_cap_data
+                ELSE watchlist_fund_analytics.market_cap_data
+            END,
             last_vro_synced_at = EXCLUDED.last_vro_synced_at,
             updated_at = NOW();
     """, (
@@ -109,6 +163,7 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
         json.dumps(risk_data) if risk_data else None,
         json.dumps(returns_data) if returns_data else None,
         json.dumps(portfolio_data) if portfolio_data else None,
+        vro_mkt_cap_json,
         now_iso
     ))
     
@@ -196,7 +251,11 @@ async def scrape_performance(context, clean_base: str):
     )
     try:
         await page.goto(clean_base + "#performance", wait_until="domcontentloaded", timeout=25000)
-        await page.wait_for_timeout(3500)
+        try:
+            await page.wait_for_selector("table", timeout=12000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(2000)
 
         perf_as_of = await page.evaluate('''() => {
             const text = document.body.innerText;
@@ -250,11 +309,15 @@ async def scrape_performance(context, clean_base: str):
 async def scrape_portfolio(context, clean_base: str):
     page = await context.new_page()
     await page.route(
-        "**/{gtm,analytics,taboola,criteo,doubleclick,adx,facebook,twitter,smartadserver,rubiconproject,casalemedia}**",
+        "**/{gtm,analytics,taboola,criteo,doubleclick,adx,facebook,twitter,smartadserver,rubiconproject,casalemedia,amazon-adsystem,pubmatic,openx}**",
         lambda route: route.abort()
     )
     try:
         await page.goto(clean_base + "#fund-portfolio", wait_until="domcontentloaded", timeout=25000)
+        try:
+            await page.wait_for_selector("table", timeout=10000)
+        except Exception:
+            pass
         await page.wait_for_timeout(3500)
 
         port_as_of = await page.evaluate('''() => {
@@ -315,10 +378,34 @@ async def scrape_portfolio(context, clean_base: str):
                         except (ValueError, IndexError):
                             pass
 
+        # Extract Market Cap Split and Avg Market Cap from Portfolio Aggregates
+        mkt_cap_data = None
+        try:
+            full_text = await page.evaluate("() => document.body.innerText")
+            l_match = re.search(r'Large(?:\s+Cap)?\s+([\d\.]+)%', full_text, re.I)
+            m_match = re.search(r'Mid(?:\s+Cap)?\s+([\d\.]+)%', full_text, re.I)
+            s_match = re.search(r'Small(?:\s+Cap)?\s+([\d\.]+)%', full_text, re.I)
+            avg_match = re.search(r'Avg\s*Mkt\s*Cap\s+₹?\s*([\d,]+(?:\.\d+)?)\s*Cr', full_text, re.I)
+
+            if l_match or m_match or s_match or avg_match:
+                l_val = float(l_match.group(1)) if l_match else 0.0
+                m_val = float(m_match.group(1)) if m_match else 0.0
+                s_val = float(s_match.group(1)) if s_match else 0.0
+                avg_val = float(avg_match.group(1).replace(",", "")) if avg_match else None
+                mkt_cap_data = {
+                    "largeCap": l_val,
+                    "midCap": m_val,
+                    "smallCap": s_val,
+                    "avgMktCapCr": avg_val
+                }
+        except Exception as e:
+            print(f"Error extracting market cap from VRO portfolio: {e}", file=sys.stderr)
+
         await page.close()
         return {
             "sectors": sectors,
             "topHoldings": top_holdings,
+            "marketCap": mkt_cap_data,
             "asOfDate": port_as_of
         }
     except Exception as e:
@@ -330,32 +417,140 @@ async def scrape_portfolio(context, clean_base: str):
     return {
         "sectors": [],
         "topHoldings": [],
+        "marketCap": None,
         "asOfDate": None
     }
 
-async def scrape_vro_fund(vro_url: str):
-    clean_base = vro_url.split("#")[0].rstrip("/") + "/"
+def score_candidate(link: dict, scheme_name: str) -> int:
+    href = (link.get("href") or "").lower()
+    text = (link.get("text") or "").lower()
+    combined = f"{text} {href}"
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+    # Must be /funds/<id>/<slug>
+    if not re.search(r'/funds/\d+/[a-z0-9-]+', href):
+        return -999
+    if any(x in href for x in ['fund-compare', 'best-mutual-funds', 'selector', 'fund-category', 'new-fund-offers']):
+        return -999
         
-        # Scrape Risk, Performance, and Portfolio tabs concurrently
-        risk_res, perf_res, port_res = await asyncio.gather(
-            scrape_risk(context, clean_base),
-            scrape_performance(context, clean_base),
-            scrape_portfolio(context, clean_base)
+    score = 0
+    is_direct = 'direct' in scheme_name.lower()
+    is_regular = 'regular' in scheme_name.lower()
+    
+    if is_direct:
+        if 'direct' in combined:
+            score += 10
+        if 'regular' in combined:
+            score -= 10
+    elif is_regular:
+        if 'regular' in combined:
+            score += 10
+        if 'direct' in combined:
+            score -= 10
+            
+    # Word overlap
+    clean_scheme = re.sub(r'[^a-zA-Z0-9\s]', ' ', scheme_name).lower()
+    stop_words = {'fund', 'plan', 'growth', 'direct', 'regular', 'option', 'idcw', 'dividend', 'the', 'and', 'index', 'mutual'}
+    words = [w for w in clean_scheme.split() if len(w) >= 3 and w not in stop_words]
+    for w in words:
+        if w in combined:
+            score += 3
+            
+    return score
+
+async def create_stealth_context(browser):
+    ctx = await browser.new_context(
+        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    await ctx.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    """)
+    return ctx
+
+async def auto_discover_vro_url(browser, scheme_name: str):
+    """
+    Searches Value Research Online for the given fund name and returns the best matching fund URL.
+    """
+    clean_query = re.sub(r'\s*-\s*(Growth|IDCW|Dividend|Bonus|Daily|Weekly|Monthly|Quarterly|Payout|Reinvestment).*', '', scheme_name, flags=re.I).strip()
+    clean_query = re.sub(r'[\(\)]', ' ', clean_query)
+    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
+    
+    context = await create_stealth_context(browser)
+    page = await context.new_page()
+    await page.route(
+        "**/{gtm,analytics,taboola,criteo,doubleclick,adx,facebook,twitter,smartadserver,rubiconproject,casalemedia,amazon-adsystem,pubmatic,openx}**",
+        lambda route: route.abort()
+    )
+    
+    try:
+        import urllib.parse
+        search_url = f"https://www.valueresearchonline.com/search/search?q={urllib.parse.quote(clean_query)}"
+        print(f"Auto-discovering VRO URL for '{scheme_name}' via {search_url}...", file=sys.stderr)
+        await page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
+        await page.wait_for_timeout(3000)
+        
+        links = await page.evaluate(r'''() => {
+            return Array.from(document.querySelectorAll('a'))
+                .map(a => ({ href: a.href, text: a.innerText.trim() }))
+                .filter(a => /\/funds\/\d+\//.test(a.href));
+        }''')
+        await page.close()
+        await context.close()
+        
+        candidates = []
+        for l in links:
+            s = score_candidate(l, scheme_name)
+            if s > 0:
+                candidates.append((s, l))
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        
+        if candidates:
+            best_url = candidates[0][1]["href"].split("?")[0].split("#")[0].rstrip("/") + "/"
+            print(f"Auto-discovered VRO URL (Score {candidates[0][0]}): {best_url}", file=sys.stderr)
+            return best_url
+    except Exception as e:
+        print(f"Error during VRO URL auto-discovery: {e}", file=sys.stderr)
+        try:
+            await page.close()
+            await context.close()
+        except Exception:
+            pass
+            
+    return None
+
+async def scrape_vro_fund(vro_url: str, browser=None):
+    clean_base = vro_url.split("#")[0].rstrip("/") + "/"
+    owns_browser = False
+    
+    if browser is None:
+        p = await async_playwright().start()
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
         )
-
-        await browser.close()
-
-    return {
-        "risk": risk_res,
-        "returns": perf_res,
-        "portfolio": port_res
-    }
+        owns_browser = True
+        
+    try:
+        ctx_risk = await create_stealth_context(browser)
+        risk_res = await scrape_risk(ctx_risk, clean_base)
+        await ctx_risk.close()
+        
+        ctx_perf = await create_stealth_context(browser)
+        perf_res = await scrape_performance(ctx_perf, clean_base)
+        await ctx_perf.close()
+        
+        ctx_port = await create_stealth_context(browser)
+        port_res = await scrape_portfolio(ctx_port, clean_base)
+        await ctx_port.close()
+        
+        return {
+            "risk": risk_res,
+            "returns": perf_res,
+            "portfolio": port_res
+        }
+    finally:
+        if owns_browser:
+            await browser.close()
+            await p.stop()
 
 async def main():
     parser = argparse.ArgumentParser(description="Scrape Mutual Fund Analytics from Value Research Online")
@@ -366,46 +561,83 @@ async def main():
     clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
     scheme_meta = get_watchlist_scheme_meta(clean_code)
     
-    vro_url = args.vro_url or (scheme_meta.get("vroUrl") if scheme_meta else None)
-    
-    if not vro_url:
-        print(json.dumps({
-            "success": False,
-            "error": f"No Value Research Online URL provided or configured for scheme {clean_code}."
-        }))
-        sys.exit(1)
+    # Fallback to MFAPI if scheme_meta is missing
+    if not scheme_meta or not scheme_meta.get("schemeName"):
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"https://api.mfapi.in/mf/{clean_code}", headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+                if data and "meta" in data:
+                    scheme_meta = {
+                        "schemeCode": clean_code,
+                        "schemeName": data["meta"].get("scheme_name"),
+                        "category": data["meta"].get("scheme_category"),
+                        "vroUrl": None,
+                    }
+        except Exception:
+            pass
 
     scheme_name = scheme_meta["schemeName"] if scheme_meta else f"Scheme {clean_code}"
     category_name = scheme_meta.get("category") if scheme_meta else ""
+    vro_url = args.vro_url or (scheme_meta.get("vroUrl") if scheme_meta else None)
 
-    print(f"Scraping Value Research Online for {clean_code} from {vro_url}...", file=sys.stderr)
-    result = await scrape_vro_fund(vro_url)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
 
-    if not result["risk"] and not result["returns"] and not result["portfolio"]["topHoldings"]:
-        print(json.dumps({
-            "success": False,
-            "error": "Failed to extract data from Value Research Online page."
-        }))
-        sys.exit(1)
+        if not vro_url:
+            print(f"No VRO URL provided for {clean_code} ('{scheme_name}'). Attempting auto-discovery...", file=sys.stderr)
+            vro_url = await auto_discover_vro_url(browser, scheme_name)
+            if not vro_url:
+                await browser.close()
+                print(json.dumps({
+                    "success": False,
+                    "error": f"Could not auto-discover Value Research Online URL for '{scheme_name}'."
+                }))
+                sys.exit(1)
+            
+            # Immediately persist discovered VRO URL
+            print(f"Auto-discovered VRO URL for {clean_code}: {vro_url}. Saving to database...", file=sys.stderr)
+            save_vro_url(clean_code, vro_url)
 
-    # Save to PostgreSQL
-    save_vro_analytics(
-        scheme_code=clean_code,
-        scheme_name=scheme_name,
-        category_name=category_name,
-        vro_url=vro_url,
-        risk_data=result["risk"],
-        returns_data=result["returns"],
-        portfolio_data=result["portfolio"]
+        print(f"Scraping Value Research Online for {clean_code} from {vro_url}...", file=sys.stderr)
+        result = await scrape_vro_fund(vro_url, browser=browser)
+        await browser.close()
+
+    has_data = bool(
+        result.get("risk") or 
+        result.get("returns") or 
+        (result.get("portfolio") and (
+            result["portfolio"].get("topHoldings") or 
+            result["portfolio"].get("sectors") or 
+            result["portfolio"].get("marketCap")
+        ))
     )
+
+    if has_data:
+        # Save to PostgreSQL
+        save_vro_analytics(
+            scheme_code=clean_code,
+            scheme_name=scheme_name,
+            category_name=category_name,
+            vro_url=vro_url,
+            risk_data=result.get("risk"),
+            returns_data=result.get("returns"),
+            portfolio_data=result.get("portfolio")
+        )
+    elif vro_url:
+        save_vro_url(clean_code, vro_url)
 
     output = {
         "success": True,
         "schemeCode": clean_code,
         "vroUrl": vro_url,
-        "vroRisk": result["risk"],
-        "vroReturns": result["returns"],
-        "vroPortfolio": result["portfolio"]
+        "vroRisk": result.get("risk"),
+        "vroReturns": result.get("returns"),
+        "vroPortfolio": result.get("portfolio") or {"sectors": [], "topHoldings": [], "asOfDate": None}
     }
     print(json.dumps(output))
 
