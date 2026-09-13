@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { DEFAULT_ZERODHA_CLIENT_ID } from "@/constants/memberMeta";
 import type {
   ZerodhaHoldingParsed,
   ZerodhaParseResult,
@@ -25,6 +26,25 @@ function extractAsOfDate(rows: unknown[][]): string | null {
   return null;
 }
 
+function extractClientId(rows: unknown[][]): string | null {
+  for (let i = 0; i < Math.min(20, rows.length); i++) {
+    const row = rows[i];
+    if (!row || !Array.isArray(row)) continue;
+    for (let j = 0; j < row.length; j++) {
+      const val = String(row[j] || "")
+        .trim()
+        .toLowerCase();
+      if (val === "client id" && row[j + 1]) {
+        const candidate = String(row[j + 1])
+          .trim()
+          .toUpperCase();
+        if (candidate) return candidate;
+      }
+    }
+  }
+  return null;
+}
+
 function subtractOneDay(dateStr: string): string {
   const date = new Date(`${dateStr}T00:00:00`);
   date.setDate(date.getDate() - 1);
@@ -34,7 +54,10 @@ function subtractOneDay(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
+export function parseZerodhaHoldings(
+  fileBuffer: Buffer,
+  filename?: string
+): ZerodhaParseResult {
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
   const sheetNames = workbook.SheetNames;
   const hasEquity = sheetNames.includes("Equity");
@@ -63,6 +86,7 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
 
   const holdings: ZerodhaHoldingParsed[] = [];
   let asOfDate = "";
+  let clientId = "";
 
   // Parse Equity Sheet
   const equitySheet = workbook.Sheets["Equity"];
@@ -72,6 +96,8 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
     });
     const date = extractAsOfDate(rows);
     if (date) asOfDate = date;
+    const cid = extractClientId(rows);
+    if (cid) clientId = cid;
 
     // Find header row
     let headerIdx = -1;
@@ -186,6 +212,10 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
       const date = extractAsOfDate(rows);
       if (date) asOfDate = date;
     }
+    if (!clientId) {
+      const cid = extractClientId(rows);
+      if (cid) clientId = cid;
+    }
 
     // Find header row
     let headerIdx = -1;
@@ -252,7 +282,8 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
-        const symbol = String(row[colsMap.symbol] || "").trim();
+        let rawSymbol = String(row[colsMap.symbol] || "").trim();
+        const symbol = rawSymbol.replace(/[\s-]+mf$/i, "").trim();
         const isin = String(row[colsMap.isin] || "").trim();
 
         if (
@@ -298,8 +329,27 @@ export function parseZerodhaHoldings(fileBuffer: Buffer): ZerodhaParseResult {
   }
   asOfDate = subtractOneDay(asOfDate);
 
+  if (!clientId && workbook.Sheets["Combined"]) {
+    const combinedRows: unknown[][] = XLSX.utils.sheet_to_json(
+      workbook.Sheets["Combined"],
+      { header: 1 }
+    );
+    const cid = extractClientId(combinedRows);
+    if (cid) clientId = cid;
+  }
+
+  if (!clientId && filename) {
+    const match = filename.match(/holdings-([A-Z0-9]+)/i);
+    if (match) clientId = match[1].toUpperCase();
+  }
+
+  if (!clientId) {
+    clientId = DEFAULT_ZERODHA_CLIENT_ID;
+  }
+
   return {
     asOfDate,
+    clientId,
     holdings,
   };
 }

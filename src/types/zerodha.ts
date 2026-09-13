@@ -1,9 +1,23 @@
 import type { TooltipContentProps } from "recharts";
 import type { AthCorrectionData } from "./overview";
+import type { PortfolioRiskMetrics, SchemeRankingsMapItem } from "./insights";
+import type { TaxHarvestingSummary } from "./transactions";
+import type { ZerodhaAuditData } from "./zerodhaAudit";
+
+export interface ZerodhaMember {
+  id: number;
+  clientId: string;
+  name: string;
+  pan: string | null;
+  email: string | null;
+  phone: string | null;
+}
 
 interface ZerodhaHolding {
   id: number;
   reportId: number | null;
+  clientId?: string | null;
+  memberName?: string | null;
   holdingType: string;
   symbol: string;
   isin: string;
@@ -21,6 +35,7 @@ interface ZerodhaHolding {
   cagr?: number | null;
   holdingDays?: number | null;
   benchmarkXirr?: number | null;
+  benchmarkCagr?: number | null;
   alpha?: number | null;
   benchmarkCode?: string | null;
   benchmarkName?: string | null;
@@ -31,6 +46,13 @@ interface ZerodhaHolding {
   lockinQuantity?: number | null;
   lockinDate?: string | null;
   balanceDescription?: string | null;
+  schemeCodeApi?: string | null;
+  folioNo?: string | null;
+  athNav?: number | null;
+  athDate?: string | null;
+  athCorrectionPct?: number | null;
+  athDaysDiff?: number | null;
+  isLumpsumOpportunity?: boolean;
 }
 
 export interface ZerodhaSectorBreakdownItem {
@@ -51,11 +73,28 @@ export interface ZerodhaMarketCapBreakdownItem {
   stockCount: number;
 }
 
+export interface ZerodhaSchemeMemberHolding {
+  memberId: number | null;
+  clientId: string;
+  memberName: string;
+  holdingId: number;
+  quantity: number;
+  currentValue: number;
+  url: string;
+}
+
 export interface ZerodhaScheme {
   id: number;
   name: string;
   category: string;
   schemeCodeApi: string | null;
+  isin?: string | null;
+  holdingStatus?: "active" | "sold" | "mixed" | "none";
+  holdingId?: number | null;
+  url?: string | null;
+  quantity?: number | null;
+  currentValue?: number | null;
+  memberHoldings?: ZerodhaSchemeMemberHolding[];
 }
 
 export interface ZerodhaBenchmarkReturns {
@@ -96,23 +135,27 @@ export interface ZerodhaInsightsData {
     fundsCurrentValueChange: number;
     fundsGainChange: number;
   };
+  riskMetrics?: PortfolioRiskMetrics;
+  stocksRiskMetrics?: PortfolioRiskMetrics;
+  fundsRiskMetrics?: PortfolioRiskMetrics;
+}
+
+export type ZerodhaAssetFilterKey = "all" | "equity" | "mutual_fund";
+
+export interface ZerodhaPortfolioRiskKpiCardsProps {
+  riskMetrics?: PortfolioRiskMetrics;
+  stocksRiskMetrics?: PortfolioRiskMetrics;
+  fundsRiskMetrics?: PortfolioRiskMetrics;
 }
 
 export interface ZerodhaDashboardData {
   firstCasReportDate: string | null;
-  reportsList: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  }[];
-  selectedReport: {
-    id: number;
-    asOfDate: string;
-    filename: string;
-    uploadedAt: string;
-  } | null;
+  members: ZerodhaMember[];
+  selectedAccount: string;
+  reportsList: ZerodhaReportRow[];
+  selectedReport: ZerodhaReportRow | null;
   holdings: ZerodhaHolding[];
+  transactions?: ZerodhaTransactionRow[];
   totals: {
     invested: number;
     currentValue: number;
@@ -163,6 +206,8 @@ export interface ZerodhaDashboardData {
   }[];
   insights: ZerodhaInsightsData;
   athData?: AthCorrectionData;
+  taxHarvesting?: TaxHarvestingSummary;
+  auditData?: ZerodhaAuditData;
 }
 
 export const ZERODHA_COLORS = [
@@ -200,11 +245,13 @@ export type ZerodhaFundSortField =
   | "xirr"
   | "cagr"
   | "holdingDays"
-  | "alpha";
+  | "alpha"
+  | "athCorrectionPct";
 
 export interface ZerodhaDashboardProps {
   data: ZerodhaDashboardData;
   allSchemes: ZerodhaScheme[];
+  categoryRankingsMap?: Record<string, SchemeRankingsMapItem>;
 }
 
 export interface ZerodhaOverviewTabProps {
@@ -252,6 +299,13 @@ export interface SimplePiePayload {
   value: number;
 }
 
+export interface ZerodhaAccountFilterPillsProps {
+  members: ZerodhaMember[];
+  selectedAccount: string;
+  onSelect: (account: string) => void;
+  className?: string;
+}
+
 export interface ZerodhaStocksTabProps {
   stocks: ZerodhaHolding[];
   renderStockSortIcon: (field: ZerodhaStockSortField) => React.ReactNode;
@@ -261,6 +315,7 @@ export interface ZerodhaStocksTabProps {
   formatPrice: (v: number) => string;
   totals?: ZerodhaDashboardData["totals"];
   metricDeltas?: ZerodhaDashboardData["metricDeltas"];
+  selectedAccount?: string;
 }
 
 export interface ZerodhaFundsTabProps {
@@ -271,21 +326,16 @@ export interface ZerodhaFundsTabProps {
   fundSortOrder: "asc" | "desc";
   totals?: ZerodhaDashboardData["totals"];
   metricDeltas?: ZerodhaDashboardData["metricDeltas"];
+  selectedAccount?: string;
+  categoryRankingsMap?: Record<string, SchemeRankingsMapItem>;
 }
 
 export interface ZerodhaInsightsTabProps {
   data: ZerodhaDashboardData;
 }
 
-interface SnapshotReport {
-  id: number;
-  asOfDate: string;
-  filename: string;
-  uploadedAt: string;
-}
-
 export interface ZerodhaSnapshotsTabProps {
-  reportsList: SnapshotReport[];
+  reportsList: ZerodhaReportRow[];
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleDeleteReport: (id: number) => void;
   firstCasReportDate?: string | null;
@@ -325,6 +375,7 @@ export interface PageProps {
     zerodhaReportId?: string;
     reportId?: string;
     tab?: string;
+    account?: string;
   }>;
 }
 
@@ -341,6 +392,9 @@ export const ZERODHA_COLOR_CLASSES = [
 type ZerodhaCagrAssetType = "mutual_fund" | "equity";
 
 interface ZerodhaHoldingWithCagr {
+  id?: number | null;
+  clientId?: string | null;
+  memberName?: string | null;
   symbol: string;
   cagr: number;
   currentValue: number;
@@ -394,4 +448,95 @@ export interface ZerodhaInsightsOutperformersGridProps {
   activeBeatingList: ZerodhaHoldingWithCagr[];
   activeLaggingList: ZerodhaHoldingWithCagr[];
   assetTypePlural: string;
+}
+
+export interface ZerodhaInsightsMarketCapCardProps {
+  mfHoldings: ZerodhaHolding[];
+  totalCurrentValue: number;
+}
+
+export interface ZerodhaTransactionRow {
+  id: number;
+  date: string;
+  schemeName: string;
+  category: string | null;
+  folioNo: string | null;
+  memberName: string;
+  clientId: string | null;
+  type: string;
+  rawTransactionType: string | null;
+  units: number;
+  nav: number;
+  amount: number;
+  stampDuty: number | null;
+  broker: string | null;
+  assetType: string | null;
+  schemeId: number | null;
+  holdingId?: number | null;
+}
+
+export type ZerodhaTab =
+  | "overview"
+  | "insights"
+  | "stocks"
+  | "funds"
+  | "transactions"
+  | "tax-harvesting"
+  | "audit"
+  | "mapping"
+  | "files";
+
+export interface ZerodhaSectorAndCapAnalysisProps {
+  sectorBreakdown: ZerodhaSectorBreakdownItem[];
+  marketCapBreakdown: ZerodhaMarketCapBreakdownItem[];
+}
+
+export type ZerodhaTaxAssetFilterKey = "all" | "equity" | "mutual_fund";
+
+export interface ZerodhaTaxMemberMetrics {
+  memberCount: number;
+  annualLimit: number;
+  harvestableLtcg: number;
+  totalNetGain: number;
+  exemptionUsed: number;
+  remainingLimit: number;
+  quotaUsedPct: number;
+  taxSaved: number;
+  totalLoss: number;
+  shortTermLoss: number;
+  longTermLoss: number;
+  lossShield: number;
+  lossLotsCount: number;
+  underperformingCount: number;
+  stocksHarvestableLtcg?: number;
+  fundsHarvestableLtcg?: number;
+}
+
+export interface ZerodhaTaxHarvestingTabProps {
+  data: ZerodhaDashboardData;
+  summary?: TaxHarvestingSummary;
+}
+
+export interface ZerodhaTransactionsTabProps {
+  transactions: ZerodhaTransactionRow[];
+  currentPortfolioValue?: number;
+  selectedAccount?: string;
+}
+
+export interface AggregatedSchemeHolding {
+  schemeId: number;
+  totalQuantity: number;
+  totalCurrentValue: number;
+  primaryHoldingId: number;
+  memberHoldings: ZerodhaSchemeMemberHolding[];
+}
+
+export interface ZerodhaReportRow {
+  id: number;
+  asOfDate: string;
+  filename: string;
+  uploadedAt: string | null;
+  clientId: string | null;
+  memberId: number | null;
+  memberName: string | null;
 }

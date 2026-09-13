@@ -26,7 +26,7 @@ export async function uploadZerodhaHoldingsAction(
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = parseZerodhaHoldings(buffer);
+    const parsed = parseZerodhaHoldings(buffer, file.name);
 
     if (parsed.holdings.length === 0) {
       return {
@@ -39,7 +39,8 @@ export async function uploadZerodhaHoldingsAction(
     const reportId = await saveZerodhaHoldingsReport(
       parsed.asOfDate,
       file.name,
-      parsed.holdings
+      parsed.holdings,
+      parsed.clientId
     );
 
     await purgeAllApplicationCaches();
