@@ -3,19 +3,16 @@ import { getReports, getSchemes } from "@/lib/portfolioService";
 import { getNiftyAnalysisData } from "@/lib/niftyAnalysisService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import NiftyAnalysisClient from "@/components/mutual-fund/nifty-analysis/NiftyAnalysisClient";
+import type { NiftyAnalysisPageProps } from "@/types/nifty-analysis";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Nifty Trajectory & Transaction Insights — Family Portfolio",
 };
 
-interface PageProps {
-  searchParams: Promise<{
-    reportId?: string;
-  }>;
-}
-
-export default async function NiftyAnalysisPage({ searchParams }: PageProps) {
+export default async function NiftyAnalysisPage({
+  searchParams,
+}: NiftyAnalysisPageProps) {
   const params = await searchParams;
   const targetReportId = params.reportId
     ? parseInt(params.reportId, 10)

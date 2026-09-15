@@ -3,17 +3,12 @@ import { getPortfolioSummaryData } from "@/lib/portfolioSummaryService";
 import { getReports, getSchemes } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import PortfolioSummaryClient from "@/components/mutual-fund/summary/PortfolioSummaryClient";
+import type { SummaryPageProps } from "@/types/summary";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Portfolio Summary — Family Portfolio" };
 
-interface PageProps {
-  searchParams: Promise<{
-    reportId?: string;
-  }>;
-}
-
-export default async function SummaryPage({ searchParams }: PageProps) {
+export default async function SummaryPage({ searchParams }: SummaryPageProps) {
   const params = await searchParams;
   const targetReportId = params.reportId
     ? parseInt(params.reportId, 10)

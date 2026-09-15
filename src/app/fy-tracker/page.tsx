@@ -6,8 +6,11 @@ import { Suspense } from "react";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "FY Investment Tracker" };
 
-export default async function FyTrackerPage() {
-  const data = await getFyTrackerData();
+export default async function FyTrackerPage(props: {
+  searchParams?: Promise<{ fy?: string; metric?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const data = await getFyTrackerData(searchParams?.fy);
   return (
     <>
       <HeaderClient

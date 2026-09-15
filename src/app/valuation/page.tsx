@@ -7,16 +7,14 @@ import {
 import HeaderClient from "@/components/shared/HeaderClient";
 import ValuationClient from "@/components/mutual-fund/valuation/ValuationClient";
 
+import type { ValuationPageProps } from "@/types/valuation";
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Portfolio Valuation — Family Portfolio" };
 
-interface PageProps {
-  searchParams: Promise<{
-    reportId?: string;
-  }>;
-}
-
-export default async function ValuationPage({ searchParams }: PageProps) {
+export default async function ValuationPage({
+  searchParams,
+}: ValuationPageProps) {
   const params = await searchParams;
   const targetReportId = params.reportId
     ? parseInt(params.reportId, 10)
