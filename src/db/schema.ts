@@ -96,6 +96,7 @@ export const schemes = mySchema.table(
     normalizedName: text("normalized_name"),
     category: text("category").notNull(),
     schemeCodeApi: text("scheme_code_api"),
+    vroUrl: text("vro_url"),
     mappedAt: text("mapped_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -412,6 +413,7 @@ export const zerodhaSchemes = mySchema.table(
     marketCapCategory: text("market_cap_category"),
     instrumentType: text("instrument_type"),
     schemeCodeApi: text("scheme_code_api"),
+    vroUrl: text("vro_url"),
     mappedAt: text("mapped_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -822,4 +824,126 @@ export const stockFundamentals = mySchema.table(
     index("stock_fundamentals_symbol_idx").on(table.symbol),
     index("stock_fundamentals_search_id_idx").on(table.searchId),
   ]
+);
+
+export const watchlistSchemes = mySchema.table(
+  "watchlist_schemes",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull().unique(),
+    schemeName: text("scheme_name").notNull(),
+    fundHouse: text("fund_house"),
+    category: text("category"),
+    schemeType: text("scheme_type"),
+    instrumentType: text("instrument_type"),
+    symbol: text("symbol"),
+    exchange: text("exchange"),
+    isin: text("isin"),
+    launchDate: text("launch_date"),
+    aumCr: doublePrecision("aum_cr"),
+    expenseRatio: doublePrecision("expense_ratio"),
+    exitLoad: text("exit_load"),
+    fundManager: text("fund_manager"),
+    benchmarkCode: text("benchmark_code"),
+    benchmarkName: text("benchmark_name"),
+    growwSlug: text("groww_slug"),
+    vroUrl: text("vro_url"),
+    riskRating: integer("risk_rating"),
+    minLumpsum: doublePrecision("min_lumpsum"),
+    minSip: doublePrecision("min_sip"),
+    targetDipPct: doublePrecision("target_dip_pct"),
+    targetNav: doublePrecision("target_nav"),
+    notes: text("notes"),
+    tags: text("tags"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("watchlist_schemes_scheme_code_idx").on(table.schemeCode),
+    index("watchlist_schemes_category_idx").on(table.category),
+    index("watchlist_schemes_instrument_type_idx").on(table.instrumentType),
+  ]
+);
+
+export const watchlistSchemeNavCacheMeta = mySchema.table(
+  "watchlist_scheme_nav_cache_meta",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    schemeName: text("scheme_name").notNull(),
+    fundHouse: text("fund_house"),
+    category: text("category"),
+    lastFetchedAt: text("last_fetched_at").notNull(),
+    firstNavDate: text("first_nav_date"),
+    lastNavDate: text("last_nav_date"),
+    lastNav: doublePrecision("last_nav"),
+    prevNav: doublePrecision("prev_nav"),
+    oneDayChangePct: doublePrecision("one_day_change_pct"),
+    athNav: doublePrecision("ath_nav"),
+    athDate: text("ath_date"),
+    drawdownPct: doublePrecision("drawdown_pct"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("watchlist_scheme_nav_cache_meta_code_idx").on(table.schemeCode),
+  ]
+);
+
+export const watchlistSchemeNavHistory = mySchema.table(
+  "watchlist_scheme_nav_history",
+  {
+    id: serial("id").primaryKey(),
+    schemeCode: text("scheme_code").notNull(),
+    date: text("date").notNull(),
+    nav: doublePrecision("nav").notNull(),
+    fetchedAt: text("fetched_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("watchlist_scheme_nav_history_code_date_uq").on(
+      table.schemeCode,
+      table.date
+    ),
+    index("watchlist_scheme_nav_history_code_idx").on(table.schemeCode),
+    index("watchlist_scheme_nav_history_date_idx").on(table.date),
+  ]
+);
+
+export const watchlistFundAnalytics = mySchema.table(
+  "watchlist_fund_analytics",
+  {
+    schemeCode: text("scheme_code").primaryKey(),
+    schemeName: text("scheme_name").notNull(),
+    categoryName: text("category_name"),
+    growwSlug: text("groww_slug"),
+    annualisedData: text("annualised_data"),
+    absoluteData: text("absolute_data"),
+    advancedRatiosData: text("advanced_ratios_data"),
+    marketCapData: text("market_cap_data"),
+    assetAllocationData: text("asset_allocation_data"),
+    exitLoadTaxData: text("exit_load_tax_data"),
+    topHoldingsData: text("top_holdings_data"),
+    vroRiskData: text("vro_risk_data"),
+    vroReturnsData: text("vro_returns_data"),
+    vroPortfolioData: text("vro_portfolio_data"),
+    vroUrl: text("vro_url"),
+    lastVroSyncedAt: text("last_vro_synced_at"),
+    lastSyncedAt: text("last_synced_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("watchlist_fund_analytics_code_idx").on(table.schemeCode)]
 );

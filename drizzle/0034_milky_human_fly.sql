@@ -1,0 +1,1 @@
+ALTER TABLE "portfolio"."watchlist_fund_analytics" ADD COLUMN "vro_url" text;
