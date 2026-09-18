@@ -85,6 +85,12 @@ KNOWN_GROWW_SLUGS = {
     "102591": "kotak-treasury-advantage-fund-direct-growth",
     "138343": "pgim-india-ultra-short-term-direct-growth",
     "100641": "sbi-magnum-insta-cash-direct-growth",
+
+    # Small Cap & Index Funds
+    "145137": "invesco-india-smallcap-fund-direct-growth",
+    "147946": "bandhan-small-cap-fund-direct-growth",
+    "149219": "icici-prudential-nasdaq-100-index-fund-direct-growth",
+    "148381": "motilal-oswal-s-p-500-index-fund-direct-growth",
 }
 
 def get_db_connection():

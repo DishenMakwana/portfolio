@@ -53,10 +53,25 @@ def get_watchlist_scheme_meta(scheme_code: str):
             "vroUrl": row[3],
         }
     
+    # Check watchlist_fund_analytics for saved vro_url
+    cur.execute(
+        "SELECT scheme_code, scheme_name, category_name, vro_url FROM portfolio.watchlist_fund_analytics WHERE scheme_code = %s",
+        (scheme_code,)
+    )
+    row_ana = cur.fetchone()
+    if row_ana and row_ana[3]:
+        conn.close()
+        return {
+            "schemeCode": row_ana[0],
+            "schemeName": row_ana[1],
+            "category": row_ana[2],
+            "vroUrl": row_ana[3],
+        }
+
     # Fallback to other scheme tables if not yet in watchlist_schemes
-    for tbl in ["schemes", "zerodha_schemes", "msfl_schemes"]:
+    for tbl in ["schemes", "zerodha_schemes"]:
         try:
-            cur.execute(f"SELECT scheme_code, scheme_name, category FROM portfolio.{tbl} WHERE scheme_code = %s", (scheme_code,))
+            cur.execute(f"SELECT scheme_code_api, name, category, vro_url FROM portfolio.{tbl} WHERE scheme_code_api = %s", (scheme_code,))
             r = cur.fetchone()
             if r:
                 conn.close()
@@ -64,7 +79,7 @@ def get_watchlist_scheme_meta(scheme_code: str):
                     "schemeCode": r[0],
                     "schemeName": r[1],
                     "category": r[2],
-                    "vroUrl": None,
+                    "vroUrl": r[3] or (row_ana[3] if row_ana else None),
                 }
         except Exception:
             pass
@@ -72,20 +87,47 @@ def get_watchlist_scheme_meta(scheme_code: str):
     conn.close()
     return None
 
-def save_vro_url(scheme_code: str, vro_url: str):
+def save_vro_url(scheme_code: str, vro_url: str, scheme_name: str = None, category_name: str = None):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        # 1. Update watchlist_fund_analytics
+        cur.execute("""
+            INSERT INTO portfolio.watchlist_fund_analytics (scheme_code, scheme_name, category_name, vro_url, updated_at)
+            VALUES (%s, %s, %s, %s, NOW())
+            ON CONFLICT (scheme_code) DO UPDATE SET
+                vro_url = EXCLUDED.vro_url,
+                scheme_name = COALESCE(NULLIF(EXCLUDED.scheme_name, ''), portfolio.watchlist_fund_analytics.scheme_name),
+                category_name = COALESCE(NULLIF(EXCLUDED.category_name, ''), portfolio.watchlist_fund_analytics.category_name),
+                updated_at = NOW();
+        """, (scheme_code, scheme_name or f"Scheme {scheme_code}", category_name or "", vro_url))
+
+        # 2. Update schemes (CAS)
+        cur.execute("""
+            UPDATE portfolio.schemes
+            SET vro_url = %s, updated_at = NOW()
+            WHERE scheme_code_api = %s;
+        """, (vro_url, scheme_code))
+
+        # 3. Update zerodha_schemes
+        cur.execute("""
+            UPDATE portfolio.zerodha_schemes
+            SET vro_url = %s, updated_at = NOW()
+            WHERE scheme_code_api = %s;
+        """, (vro_url, scheme_code))
+
+        # 4. Update watchlist_schemes
         cur.execute("""
             UPDATE portfolio.watchlist_schemes 
             SET vro_url = %s, updated_at = NOW() 
-            WHERE scheme_code = %s;
-        """, (vro_url, scheme_code))
+            WHERE scheme_code = %s OR scheme_code = %s;
+        """, (vro_url, scheme_code, f"w_{scheme_code}"))
+
         conn.commit()
         cur.close()
         conn.close()
     except Exception as e:
-        print(f"Error saving vro_url to watchlist_schemes: {e}", file=sys.stderr)
+        print(f"Error saving vro_url to database: {e}", file=sys.stderr)
 
 def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, vro_url: str, risk_data: dict, returns_data: dict, portfolio_data: dict):
     conn = get_db_connection()
@@ -131,14 +173,16 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
             scheme_code,
             scheme_name,
             category_name,
+            vro_url,
             vro_risk_data,
             vro_returns_data,
             vro_portfolio_data,
             market_cap_data,
             last_vro_synced_at,
             updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (scheme_code) DO UPDATE SET
+            vro_url = COALESCE(EXCLUDED.vro_url, watchlist_fund_analytics.vro_url),
             vro_risk_data = EXCLUDED.vro_risk_data,
             vro_returns_data = EXCLUDED.vro_returns_data,
             vro_portfolio_data = EXCLUDED.vro_portfolio_data,
@@ -160,6 +204,7 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
         scheme_code,
         scheme_name,
         category_name,
+        vro_url,
         json.dumps(risk_data) if risk_data else None,
         json.dumps(returns_data) if returns_data else None,
         json.dumps(portfolio_data) if portfolio_data else None,
@@ -421,39 +466,58 @@ async def scrape_portfolio(context, clean_base: str):
         "asOfDate": None
     }
 
-def score_candidate(link: dict, scheme_name: str) -> int:
-    href = (link.get("href") or "").lower()
-    text = (link.get("text") or "").lower()
-    combined = f"{text} {href}"
+def clean_query_for_vro(name: str) -> str:
+    q = name
+    q = re.sub(r'\bSL\b', 'Sun Life', q)
+    q = re.sub(r'\bPru\b', 'Prudential', q)
+    q = re.sub(r'\bST\b', 'Short Term', q)
+    q = re.sub(r'\bRet\b', 'Retail', q)
+    q = re.sub(r'\bIns\b', 'Institutional', q)
+    q = re.sub(r'\bMidcap\b', 'Mid Cap', q, flags=re.I)
+    q = re.sub(r'\bMulticap\b', 'Multi Cap', q, flags=re.I)
+    q = re.sub(r'\bFlexicap\b', 'Flexi Cap', q, flags=re.I)
+    q = re.sub(r'\bSmallcap\b', 'Small Cap', q, flags=re.I)
+    q = re.sub(r'\bLargecap\b', 'Large Cap', q, flags=re.I)
+    q = re.sub(r'[\(\)]', ' ', q)
+    q = re.sub(r'\b(reg|regular|direct|dir|plan|growth|g|idcw|dividend|option)\b', ' ', q, flags=re.I)
+    q = re.sub(r'[-–—&]', ' ', q)
+    q = re.sub(r'\s+', ' ', q).strip()
+    return q
+
+def score_candidate(link_href: str, scheme_name: str) -> int:
+    href_lower = link_href.lower()
+    if not re.search(r'/funds/\d+/[a-z0-9-]+', href_lower):
+        return -999
+    if any(x in href_lower for x in ['fund-compare', 'best-mutual-funds', 'selector', 'fund-category', 'new-fund-offers', 'etf', 'hindi']):
+        return -999
+
+    href_norm = re.sub(r'[^a-z0-9]', '', href_lower)
+    clean_scheme = clean_query_for_vro(scheme_name).lower()
+    words = [re.sub(r'[^a-z0-9]', '', w) for w in clean_scheme.split() if len(w) >= 3 and w.lower() not in {'fund', 'the', 'and'}]
     
-    # Must be /funds/<id>/<slug>
-    if not re.search(r'/funds/\d+/[a-z0-9-]+', href):
-        return -999
-    if any(x in href for x in ['fund-compare', 'best-mutual-funds', 'selector', 'fund-category', 'new-fund-offers']):
-        return -999
-        
     score = 0
-    is_direct = 'direct' in scheme_name.lower()
-    is_regular = 'regular' in scheme_name.lower()
-    
-    if is_direct:
-        if 'direct' in combined:
-            score += 10
-        if 'regular' in combined:
-            score -= 10
-    elif is_regular:
-        if 'regular' in combined:
-            score += 10
-        if 'direct' in combined:
-            score -= 10
-            
-    # Word overlap
-    clean_scheme = re.sub(r'[^a-zA-Z0-9\s]', ' ', scheme_name).lower()
-    stop_words = {'fund', 'plan', 'growth', 'direct', 'regular', 'option', 'idcw', 'dividend', 'the', 'and', 'index', 'mutual'}
-    words = [w for w in clean_scheme.split() if len(w) >= 3 and w not in stop_words]
+    matched = 0
     for w in words:
-        if w in combined:
-            score += 3
+        if w in href_norm:
+            score += 5
+            matched += 1
+            
+    if matched == len(words) and len(words) > 0:
+        score += 20
+    elif matched >= max(1, len(words) - 1) and len(words) >= 2:
+        score += 10
+        
+    is_direct = bool(re.search(r'\b(direct|dir)\b', scheme_name, re.I))
+    if is_direct:
+        if 'direct-plan' in href_lower:
+            score += 5
+        elif 'regular-plan' in href_lower:
+            score -= 5
+    else:
+        if 'regular-plan' in href_lower:
+            score += 5
+        elif 'direct-plan' in href_lower:
+            score -= 1
             
     return score
 
@@ -470,10 +534,7 @@ async def auto_discover_vro_url(browser, scheme_name: str):
     """
     Searches Value Research Online for the given fund name and returns the best matching fund URL.
     """
-    clean_query = re.sub(r'\s*-\s*(Growth|IDCW|Dividend|Bonus|Daily|Weekly|Monthly|Quarterly|Payout|Reinvestment).*', '', scheme_name, flags=re.I).strip()
-    clean_query = re.sub(r'[\(\)]', ' ', clean_query)
-    clean_query = re.sub(r'\s+', ' ', clean_query).strip()
-    
+    clean_query = clean_query_for_vro(scheme_name)
     context = await create_stealth_context(browser)
     page = await context.new_page()
     await page.route(
@@ -485,26 +546,30 @@ async def auto_discover_vro_url(browser, scheme_name: str):
         import urllib.parse
         search_url = f"https://www.valueresearchonline.com/search/search?q={urllib.parse.quote(clean_query)}"
         print(f"Auto-discovering VRO URL for '{scheme_name}' via {search_url}...", file=sys.stderr)
-        await page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
-        await page.wait_for_timeout(3000)
+        await page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
+        await page.wait_for_timeout(2500)
         
         links = await page.evaluate(r'''() => {
             return Array.from(document.querySelectorAll('a'))
-                .map(a => ({ href: a.href, text: a.innerText.trim() }))
-                .filter(a => /\/funds\/\d+\//.test(a.href));
+                .map(a => a.href)
+                .filter(h => /\/funds\/\d+\//.test(h));
         }''')
         await page.close()
         await context.close()
         
         candidates = []
+        seen = set()
         for l in links:
-            s = score_candidate(l, scheme_name)
-            if s > 0:
-                candidates.append((s, l))
+            clean = l.split("?")[0].split("#")[0].rstrip("/") + "/"
+            if clean not in seen and "hindi" not in clean:
+                seen.add(clean)
+                s = score_candidate(clean, scheme_name)
+                if s > 0:
+                    candidates.append((s, clean))
         candidates.sort(key=lambda x: x[0], reverse=True)
         
-        if candidates:
-            best_url = candidates[0][1]["href"].split("?")[0].split("#")[0].rstrip("/") + "/"
+        if candidates and candidates[0][0] >= 15:
+            best_url = candidates[0][1]
             print(f"Auto-discovered VRO URL (Score {candidates[0][0]}): {best_url}", file=sys.stderr)
             return best_url
     except Exception as e:
@@ -554,9 +619,108 @@ async def scrape_vro_fund(vro_url: str, browser=None):
 
 async def main():
     parser = argparse.ArgumentParser(description="Scrape Mutual Fund Analytics from Value Research Online")
-    parser.add_argument("--scheme-code", required=True, help="AMFI scheme code (e.g. 151751)")
+    parser.add_argument("--scheme-code", help="AMFI scheme code (e.g. 151751)")
     parser.add_argument("--vro-url", help="Direct URL to Value Research fund page")
+    parser.add_argument("--sync-all", action="store_true", help="Sync VRO analytics for all funds with vro_url")
+    parser.add_argument("--force", action="store_true", help="Re-sync even if already synced")
+    parser.add_argument("--concurrency", type=int, default=2, help="Number of concurrent fund syncs")
     args = parser.parse_args()
+
+    if args.sync_all:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT scheme_code, scheme_name, category_name, vro_url,
+                   (vro_portfolio_data IS NOT NULL AND vro_portfolio_data != '{}' AND vro_risk_data IS NOT NULL) as is_synced
+            FROM portfolio.watchlist_fund_analytics
+            WHERE vro_url IS NOT NULL AND vro_url != ''
+            ORDER BY scheme_name
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        to_sync = []
+        already_synced = 0
+        for r in rows:
+            code, name, cat, url, is_synced = r
+            if is_synced and not args.force:
+                already_synced += 1
+            else:
+                to_sync.append((code, name, cat, url))
+
+        print(f"Total funds with VRO URL: {len(rows)}")
+        print(f"Already fully synced: {already_synced}")
+        print(f"To sync: {len(to_sync)}")
+
+        if not to_sync:
+            print("All funds already synced! Nothing to do. Use --force to re-sync.")
+            return
+
+        semaphore = asyncio.Semaphore(args.concurrency)
+        success_count = 0
+        fail_count = 0
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled"]
+            )
+
+            async def sync_one(idx, total, code, name, cat, url):
+                nonlocal success_count, fail_count
+                async with semaphore:
+                    print(f"[{idx}/{total}] Syncing {code}: {name} from {url}...", flush=True)
+                    try:
+                        res = await asyncio.wait_for(
+                            scrape_vro_fund(url, browser=browser),
+                            timeout=50.0
+                        )
+                        has_data = bool(
+                            res.get("risk") or 
+                            res.get("returns") or 
+                            (res.get("portfolio") and (
+                                res["portfolio"].get("topHoldings") or 
+                                res["portfolio"].get("sectors") or 
+                                res["portfolio"].get("marketCap")
+                            ))
+                        )
+                        if has_data:
+                            save_vro_analytics(
+                                scheme_code=code,
+                                scheme_name=name,
+                                category_name=cat,
+                                vro_url=url,
+                                risk_data=res.get("risk"),
+                                returns_data=res.get("returns"),
+                                portfolio_data=res.get("portfolio")
+                            )
+                            sectors_n = len(res.get("portfolio", {}).get("sectors", []))
+                            holdings_n = len(res.get("portfolio", {}).get("topHoldings", []))
+                            print(f"  [✓] SUCCESS {code}: Sectors={sectors_n}, TopHoldings={holdings_n}", flush=True)
+                            success_count += 1
+                        else:
+                            print(f"  [!] NO DATA for {code}", flush=True)
+                            fail_count += 1
+                    except Exception as e:
+                        print(f"  [✗] ERROR syncing {code}: {e}", flush=True)
+                        fail_count += 1
+
+            tasks = [sync_one(i+1, len(to_sync), c, n, cat, u) for i, (c, n, cat, u) in enumerate(to_sync)]
+            await asyncio.gather(*tasks)
+            await browser.close()
+
+        print("\n" + "="*60)
+        print("VRO Batch Sync Completed!")
+        print(f"Successfully Synced & Saved: {success_count}")
+        print(f"Failed: {fail_count}")
+        print(f"Already had data: {already_synced}")
+        print(f"Total: {len(rows)}")
+        print("="*60)
+        return
+
+    if not args.scheme_code:
+        parser.error("Either --scheme-code or --sync-all must be provided")
 
     clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
     scheme_meta = get_watchlist_scheme_meta(clean_code)
