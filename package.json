@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "sync:funds": "python3 scripts/sync_funds_nav.py",
+    "check:nav": "python3 scripts/check_all_nav_dates.py",
+    "backfill:stocks": "python3 scripts/backfill_start_gap_stocks.py",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate"
