@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   getAnalysisLinks,
   calculateAnalysisLinksStats,
@@ -16,5 +17,9 @@ export default async function AnalysisLinksPage({}: AnalysisLinksPageProps) {
   const links = await getAnalysisLinks();
   const stats = calculateAnalysisLinksStats(links);
 
-  return <AnalysisLinksClient initialLinks={links} stats={stats} />;
+  return (
+    <Suspense fallback={null}>
+      <AnalysisLinksClient initialLinks={links} stats={stats} />
+    </Suspense>
+  );
 }

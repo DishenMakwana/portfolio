@@ -18,10 +18,10 @@ export default async function NiftyAnalysisPage({
     ? parseInt(params.reportId, 10)
     : undefined;
 
-  const [reportsList, allSchemes, niftyData] = await Promise.all([
-    getReports(),
+  const reportsList = await getReports();
+  const [allSchemes, niftyData] = await Promise.all([
     getSchemes(),
-    getNiftyAnalysisData(targetReportId),
+    getNiftyAnalysisData(targetReportId, reportsList),
   ]);
 
   const selectedReportId = targetReportId || reportsList[0]?.id;

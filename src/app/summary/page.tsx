@@ -14,10 +14,15 @@ export default async function SummaryPage({ searchParams }: SummaryPageProps) {
     ? parseInt(params.reportId, 10)
     : undefined;
 
+  const reportsListPromise = getReports();
+  const summaryDataPromise = reportsListPromise.then((list) =>
+    getPortfolioSummaryData(targetReportId, list)
+  );
+
   const [reportsList, allSchemes, summaryData] = await Promise.all([
-    getReports(),
+    reportsListPromise,
     getSchemes(),
-    getPortfolioSummaryData(targetReportId),
+    summaryDataPromise,
   ]);
 
   const selectedReportId = targetReportId || reportsList[0]?.id;

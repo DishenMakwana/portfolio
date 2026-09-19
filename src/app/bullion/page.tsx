@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getSchemes, getReports } from "@/lib/portfolioService";
 import { getBullionData } from "@/lib/bullionService";
 import HeaderClient from "@/components/shared/HeaderClient";
@@ -30,10 +31,12 @@ export default async function BullionPage() {
         unmappedCount={unmappedCount}
       />
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30">
-        <BullionClient
-          initialRates={bullion.data.rates}
-          initialChartData={bullion.data.chartData}
-        />
+        <Suspense fallback={null}>
+          <BullionClient
+            initialRates={bullion.data.rates}
+            initialChartData={bullion.data.chartData}
+          />
+        </Suspense>
       </main>
     </>
   );

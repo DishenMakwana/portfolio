@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getSipMandates, getSchemes, getReports } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import SipsClient from "@/components/mutual-fund/sips/SipsClient";
@@ -25,7 +26,9 @@ export default async function SipsPage() {
         unmappedCount={unmappedCount}
       />
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30">
-        <SipsClient mandates={mandates} />
+        <Suspense fallback={null}>
+          <SipsClient mandates={mandates} />
+        </Suspense>
       </main>
     </>
   );

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   getAllTransactions,
   getSchemes,
@@ -11,23 +12,24 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Transactions — Family Portfolio" };
 
 export default async function TransactionsPage() {
-  const [txRows, allSchemes, reportsList] = await Promise.all([
+  const reportsListPromise = getReports();
+  const holdingsPromise = reportsListPromise.then((reports) =>
+    reports[0] ? getReportHoldings(reports[0].id) : Promise.resolve([])
+  );
+
+  const [txRows, allSchemes, reportsList, holdings] = await Promise.all([
     getAllTransactions(),
     getSchemes(),
-    getReports(),
+    reportsListPromise,
+    holdingsPromise,
   ]);
 
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
   const selectedReport = reportsList[0] || null;
-
-  let currentPortfolioValue = 0;
-  if (selectedReport) {
-    const holdings = await getReportHoldings(selectedReport.id);
-    currentPortfolioValue = holdings.reduce(
-      (acc, h) => acc + (h.currentValue || 0),
-      0
-    );
-  }
+  const currentPortfolioValue = holdings.reduce(
+    (acc, h) => acc + (h.currentValue || 0),
+    0
+  );
 
   return (
     <>
@@ -45,10 +47,12 @@ export default async function TransactionsPage() {
             All mutual fund purchase and sell transaction entries
           </p>
         </div>
-        <TransactionsClient
-          transactions={txRows}
-          currentPortfolioValue={currentPortfolioValue}
-        />
+        <Suspense fallback={null}>
+          <TransactionsClient
+            transactions={txRows}
+            currentPortfolioValue={currentPortfolioValue}
+          />
+        </Suspense>
       </main>
     </>
   );

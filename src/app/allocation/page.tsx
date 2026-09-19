@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
@@ -28,15 +29,17 @@ export default async function AllocationPage({ searchParams }: PageProps) {
         unmappedCount={unmappedCount}
       />
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30">
-        <AllocationClient
-          memberSummaries={data.memberSummaries}
-          holdings={data.holdings}
-          categoryAllocation={data.categoryAllocation}
-          capAllocation={data.capAllocation}
-          amcAllocation={data.amcAllocation}
-          totals={data.totals}
-          selectedReport={data.selectedReport}
-        />
+        <Suspense fallback={null}>
+          <AllocationClient
+            memberSummaries={data.memberSummaries}
+            holdings={data.holdings}
+            categoryAllocation={data.categoryAllocation}
+            capAllocation={data.capAllocation}
+            amcAllocation={data.amcAllocation}
+            totals={data.totals}
+            selectedReport={data.selectedReport}
+          />
+        </Suspense>
       </main>
     </>
   );

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getSchemesWithFolioStats } from "@/lib/portfolioService";
 import { getReports } from "@/lib/portfolioService";
 import MappingTab from "@/components/mutual-fund/mapping/MappingTab";
@@ -33,7 +34,9 @@ export default async function MappingPage() {
             calculations
           </p>
         </div>
-        <MappingTab allSchemes={allSchemes} />
+        <Suspense fallback={null}>
+          <MappingTab allSchemes={allSchemes} />
+        </Suspense>
       </main>
     </>
   );

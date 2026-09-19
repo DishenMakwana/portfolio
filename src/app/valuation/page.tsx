@@ -20,10 +20,10 @@ export default async function ValuationPage({
     ? parseInt(params.reportId, 10)
     : undefined;
 
-  const [reportsList, allSchemes, valuationData] = await Promise.all([
-    getReports(),
+  const reportsList = await getReports();
+  const [allSchemes, valuationData] = await Promise.all([
     getSchemes(),
-    getValuationData(targetReportId),
+    getValuationData(targetReportId, reportsList),
   ]);
 
   const selectedReportId = targetReportId || reportsList[0]?.id;

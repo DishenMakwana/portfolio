@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import { getDashboardDataAction } from "@/actions/portfolio";
-import { getSipMandates, getSchemes, getReports } from "@/lib/portfolioService";
+import { getSipMandates, getSchemes } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import FutureProjectionClient from "@/components/future-projection/FutureProjectionClient";
 
@@ -10,13 +11,13 @@ export const metadata = {
 };
 
 export default async function FutureProjectionPage() {
-  const [dashboardData, sipMandatesList, allSchemes, reportsList] =
-    await Promise.all([
-      getDashboardDataAction(),
-      getSipMandates(),
-      getSchemes(),
-      getReports(),
-    ]);
+  const [dashboardData, sipMandatesList, allSchemes] = await Promise.all([
+    getDashboardDataAction(),
+    getSipMandates(),
+    getSchemes(),
+  ]);
+
+  const reportsList = dashboardData.reportsList;
 
   const initialPortfolioValue = dashboardData.totals.currentValue || 0;
   const initialInvestedCapital = dashboardData.totals.invested || 0;
@@ -39,12 +40,14 @@ export default async function FutureProjectionPage() {
         unmappedCount={unmappedCount}
       />
       <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30 selection:text-teal-200">
-        <FutureProjectionClient
-          initialPortfolioValue={initialPortfolioValue}
-          initialInvestedCapital={initialInvestedCapital}
-          initialMonthlySip={activeSipsTotal}
-          initialXirr={portfolioXirr}
-        />
+        <Suspense fallback={null}>
+          <FutureProjectionClient
+            initialPortfolioValue={initialPortfolioValue}
+            initialInvestedCapital={initialInvestedCapital}
+            initialMonthlySip={activeSipsTotal}
+            initialXirr={portfolioXirr}
+          />
+        </Suspense>
       </main>
     </>
   );

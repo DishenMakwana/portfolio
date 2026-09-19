@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getDashboardDataAction } from "@/actions/portfolio";
 import { getSchemes } from "@/lib/portfolioService";
 import { getAllSchemeCategoryRankingsMap } from "@/lib/fundRankingService";
@@ -36,12 +37,14 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
             All fund positions with XIRR, Alpha, and performance metrics
           </p>
         </div>
-        <HoldingsTab
-          holdings={data.holdings}
-          memberSummaries={data.memberSummaries}
-          initialMember={initialMember}
-          categoryRankingsMap={categoryRankingsMap}
-        />
+        <Suspense fallback={null}>
+          <HoldingsTab
+            holdings={data.holdings}
+            memberSummaries={data.memberSummaries}
+            initialMember={initialMember}
+            categoryRankingsMap={categoryRankingsMap}
+          />
+        </Suspense>
       </main>
     </>
   );
