@@ -1,6 +1,6 @@
 export type SifAssetClass = "Equity" | "Debt" | "Hybrid";
 
-export interface SifTaxationDetails {
+interface SifTaxationDetails {
   taxCategory: "Equity" | "Debt" | "Hybrid";
   stcg: string;
   ltcg: string;
@@ -37,4 +37,31 @@ export interface SifVsTraditionalPillar {
   traditionalMf: string;
   sifStrategy: string;
   advantage: string;
+}
+
+export interface SifTaxationBadgeProps {
+  taxation: SifTaxationDetails;
+  alternative?: SifTaxationDetails;
+}
+
+export interface SifStrategyExpandedPanelProps {
+  scheme: SifSchemeComparison;
+  onClose: () => void;
+  isTableRow?: boolean;
+}
+
+export interface SifStrategyCardProps {
+  scheme: SifSchemeComparison;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+export interface SifMatchupDuelProps {
+  schemes: SifSchemeComparison[];
+  selectedId: number;
+  onSelectScheme: (id: number) => void;
+}
+
+export interface SifDownsideSimulatorProps {
+  schemes: SifSchemeComparison[];
 }
