@@ -30,11 +30,13 @@ const AUDIT_STATUSES: readonly AuditStatusType[] = [
 const DEFAULT_AUDIT_URL_STATE: AuditUrlState = {
   searchTerm: "",
   statusFilters: [],
+  activityFilter: "ALL",
   memberFilter: "ALL",
   categoryFilter: "ALL",
   sortField: "auditStatus",
   sortOrder: "desc",
-  viewMode: "compact",
+  page: 1,
+  pageSize: 25,
 };
 
 function isAuditSortField(value: string): value is AuditSortField {
@@ -53,14 +55,26 @@ export function parseAuditUrlState(query: string): AuditUrlState {
   const params = new URLSearchParams(query);
   const sortField = params.get("sort");
   const sortOrder = params.get("order");
-  const viewMode = params.get("view");
+  const activityParam = params.get("activity");
+  const activityFilter: "ALL" | "ACTIVE" | "INACTIVE" =
+    activityParam === "ACTIVE" || activityParam === "INACTIVE"
+      ? activityParam
+      : "ALL";
   const statusFilters = (params.get("status") ?? "")
     .split(",")
     .filter(isAuditStatus);
+  const rawPage = parseInt(params.get("page") || "1", 10);
+  const page = !isNaN(rawPage) && rawPage > 0 ? rawPage : 1;
+  const rawPageSize = parseInt(
+    params.get("pageSize") || params.get("perPage") || "25",
+    10
+  );
+  const pageSize = !isNaN(rawPageSize) && rawPageSize > 0 ? rawPageSize : 25;
 
   return {
     searchTerm: params.get("q") ?? DEFAULT_AUDIT_URL_STATE.searchTerm,
     statusFilters,
+    activityFilter,
     memberFilter: params.get("member") ?? DEFAULT_AUDIT_URL_STATE.memberFilter,
     categoryFilter:
       params.get("category") ?? DEFAULT_AUDIT_URL_STATE.categoryFilter,
@@ -72,7 +86,8 @@ export function parseAuditUrlState(query: string): AuditUrlState {
       sortOrder && isAuditSortOrder(sortOrder)
         ? sortOrder
         : DEFAULT_AUDIT_URL_STATE.sortOrder,
-    viewMode: viewMode === "expanded" ? "expanded" : "compact",
+    page,
+    pageSize,
   };
 }
 
@@ -84,11 +99,11 @@ export function updateAuditUrlParams(
   const optionalParams: Array<[string, string, string]> = [
     ["q", state.searchTerm, ""],
     ["status", state.statusFilters.join(","), ""],
+    ["activity", state.activityFilter, "ALL"],
     ["member", state.memberFilter, "ALL"],
     ["category", state.categoryFilter, "ALL"],
     ["sort", state.sortField, DEFAULT_AUDIT_URL_STATE.sortField],
     ["order", state.sortOrder, DEFAULT_AUDIT_URL_STATE.sortOrder],
-    ["view", state.viewMode, DEFAULT_AUDIT_URL_STATE.viewMode],
   ];
 
   for (const [key, value, defaultValue] of optionalParams) {
@@ -97,6 +112,19 @@ export function updateAuditUrlParams(
     } else {
       nextParams.delete(key);
     }
+  }
+
+  if (state.page && state.page > 1) {
+    nextParams.set("page", String(state.page));
+  } else {
+    nextParams.delete("page");
+  }
+
+  if (state.pageSize && state.pageSize !== 25) {
+    nextParams.set("pageSize", String(state.pageSize));
+  } else {
+    nextParams.delete("pageSize");
+    nextParams.delete("perPage");
   }
 
   return nextParams;

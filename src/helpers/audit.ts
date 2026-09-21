@@ -24,6 +24,25 @@ export function analyzeAuditRootCause(
     };
   }
 
+  // Handle Inactive / Fully Redeemed Folios (0 CAS balance)
+  if (casUnits <= 0.0001) {
+    if (absUnitDiff < 0.001) {
+      return {
+        unitStatus: "MATCH",
+        auditStatus: "PERFECT_MATCH",
+        rootCauseAnalysis:
+          "Fully redeemed / closed folio. All historical units were 100% redeemed (0.000 balance). Realized P&L fully settled.",
+      };
+    }
+    return {
+      unitStatus: "MISMATCH",
+      auditStatus: "UNIT_COST_MISMATCH",
+      rootCauseAnalysis: `Fully redeemed in CAS (0 units), but transaction ledger shows unresolved net balance of ${Math.abs(
+        unitDiff
+      ).toFixed(3)} units.`,
+    };
+  }
+
   if (absUnitDiff >= 0.001) {
     return {
       unitStatus: "MISMATCH",
