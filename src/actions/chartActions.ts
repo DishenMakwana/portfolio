@@ -10,9 +10,9 @@ import {
   getZerodhaStockHistoryForSymbol,
 } from "@/lib/zerodhaService";
 import { getMsflStockHistoryForSymbol } from "@/lib/msflService";
+import { getWatchlistSchemeDetails } from "@/lib/watchlistService";
 import { parseHistoryDate, parseToLocalMidnight } from "@/helpers/dates";
-import { FactsheetChartPoint } from "@/types/portfolio";
-import { FundTimeframe } from "@/types/fund-details";
+import type { FundTimeframe, ChartDataResponse } from "@/types/fund-details";
 
 /** Maps a FundTimeframe to the number of months to look back from asOfDate. */
 function timeframeToMonths(tf: FundTimeframe): number | null {
@@ -33,12 +33,6 @@ function timeframeToMonths(tf: FundTimeframe): number | null {
     default:
       return null; // no limit
   }
-}
-
-export interface ChartDataResponse {
-  chartData: FactsheetChartPoint[];
-  earliestFundDateStr: string | null;
-  earliestBenchDateStr: string | null;
 }
 
 /**
@@ -82,7 +76,27 @@ export async function fetchChartData(
 
   // 1. Fetch NAV histories from DB cache (same path as page.tsx)
   let fundDetailsPromise;
-  if (source === "msfl") {
+  if (source === "watchlist") {
+    fundDetailsPromise = getWatchlistSchemeDetails(schemeCodeApi).then(
+      (res) => {
+        if (!res) return null;
+        return {
+          meta: {
+            fund_house: res.scheme.fundHouse || "",
+            scheme_type: res.scheme.schemeType || "",
+            scheme_category: res.scheme.category || "",
+            scheme_code: Number(res.scheme.schemeCode) || 0,
+            scheme_name: res.scheme.schemeName,
+            isin_growth: res.scheme.isin || null,
+          },
+          data: res.navHistory.map((h) => ({
+            date: h.date,
+            nav: String(h.nav),
+          })),
+        };
+      }
+    );
+  } else if (source === "msfl") {
     fundDetailsPromise = getMsflStockHistoryForSymbol(
       schemeCodeApi,
       "10y",
