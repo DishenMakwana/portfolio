@@ -8,18 +8,25 @@ import {
   getReportHoldings,
   getSchemes,
   updateSchemeCode,
-  getSipMandates,
   saveSipMandates,
   clearSipMandates,
   deleteReport,
+  clearValuationCache,
 } from "@/lib/portfolioService";
 import {
   calculateAlpha,
   getBenchmarkCodeForCategory,
   clearAllAlphaCaches,
+} from "@/lib/alpha";
+import {
   isBuyTransactionType,
   isSellTransactionType,
-} from "@/lib/alpha";
+} from "@/helpers/transactions";
+import {
+  calculateAthCorrectionData,
+  getNiftyAthAndCurrentPoints,
+  clearAthCache,
+} from "@/helpers/ath";
 import {
   PortfolioTransaction,
   AutoMapResult,
@@ -34,17 +41,95 @@ import { clearAllMsflCaches } from "@/lib/msflService";
 import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
 import { parseSipExcel } from "@/lib/sipParser";
 import { getBullionData } from "@/lib/bullionService";
+import { getNifty50IndexHistory, clearNiftyIndexCache } from "@/lib/stockApi";
 import { getAmcName } from "@/helpers/allocation";
-import { getFyTrackerData } from "@/lib/insightsService";
+import {
+  getFyTrackerData,
+  clearInsightsServiceCaches,
+} from "@/lib/insightsService";
+import { clearAuditDataCache } from "@/lib/auditService";
+import { clearPortfolioSummaryCache } from "@/lib/portfolioSummaryService";
+import { clearNiftyAnalysisCache } from "@/lib/niftyAnalysisService";
+import { clearSchemeCategoryRankingsCache } from "@/lib/fundRankingService";
+import { clearPortfolioServiceCaches } from "@/lib/portfolioService";
+import { clearWatchlistCache } from "@/lib/watchlistService";
+import { getLastTradingDays, isIndianMarketOpen } from "@/helpers/tradingDays";
+import type {
+  NotificationSummary,
+  MissingUploadNotification,
+} from "@/types/notifications";
 import { db } from "@/db/db";
 import {
   transactions as txTable,
   reports,
+  zerodhaReports,
   memberReportCagrs,
   familyMembers,
   schemes,
 } from "@/db/schema";
+
 import { eq, lte, inArray, desc } from "drizzle-orm";
+
+const dashboardDataCache = new Map<
+  string,
+  { data: DashboardData; timestamp: number }
+>();
+let notificationsCache: {
+  data: ActionResult<NotificationSummary>;
+  timestamp: number;
+} | null = null;
+
+function clearDashboardDataCache(): void {
+  dashboardDataCache.clear();
+  notificationsCache = null;
+}
+
+/**
+ * Universal cache cleaner: clears all in-memory and computational caches
+ * across Mutual Funds, Zerodha, MSFL, Transactions, SIPs, Alpha, Ath, and Audit,
+ * and purges Next.js full layout and route caches.
+ */
+export async function purgeAllApplicationCaches(): Promise<void> {
+  clearDashboardDataCache();
+  clearInsightsServiceCaches();
+  clearAuditDataCache();
+  clearPortfolioSummaryCache();
+  clearValuationCache();
+  clearPortfolioServiceCaches();
+  clearSchemeCategoryRankingsCache();
+  clearNiftyAnalysisCache();
+  clearAthCache();
+  clearNiftyIndexCache();
+  clearAllAlphaCaches();
+  clearAllZerodhaCaches();
+  clearAllMsflCaches();
+  clearWatchlistCache();
+
+  try {
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/holdings");
+    revalidatePath("/valuation");
+    revalidatePath("/summary");
+    revalidatePath("/nifty-analysis");
+    revalidatePath("/family");
+    revalidatePath("/insights");
+    revalidatePath("/allocation");
+    revalidatePath("/watchlist");
+    revalidatePath("/sips");
+    revalidatePath("/transactions");
+    revalidatePath("/fy-tracker");
+    revalidatePath("/uploads");
+    revalidatePath("/audit");
+    revalidatePath("/bullion");
+    revalidatePath("/future-projection");
+    revalidatePath("/zerodha");
+    revalidatePath("/msfl");
+    revalidatePath("/mapping");
+  } catch {
+    // Gracefully ignore when executed outside Next.js request context (e.g. CLI benchmarks/scripts)
+  }
+}
 
 /**
  * Upload and parse Excel report
@@ -98,7 +183,8 @@ export async function uploadReportAction(
       parsed.memberCagrs
     );
 
-    revalidatePath("/");
+    await purgeAllApplicationCaches();
+
     return { success: true, data: { reportId } };
   } catch (error: unknown) {
     console.error("Upload Action Error:", error);
@@ -116,7 +202,7 @@ export async function deleteReportAction(
 ): Promise<ActionResult> {
   try {
     await deleteReport(reportId);
-    revalidatePath("/");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     console.error("Delete Action Error:", error);
@@ -147,7 +233,7 @@ export async function updateSchemeMappingAction(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await updateSchemeCode(schemeId, code);
-    revalidatePath("/");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (error: unknown) {
     const errorMsg =
@@ -268,7 +354,7 @@ export async function autoMapAllSchemesAction(
   }
 
   if (savedCount > 0) {
-    revalidatePath("/");
+    await purgeAllApplicationCaches();
   }
 
   return { results, savedCount };
@@ -322,6 +408,15 @@ export async function getDashboardDataAction(
   const selectedReport = reportId
     ? reportsList.find((r) => r.id === reportId) || reportsList[0]
     : reportsList[0];
+
+  const marketOpen = isIndianMarketOpen();
+  const cacheKey = `dashboard:${selectedReport.id}:${selectedReport.asOfDate}:${reportsList.length}`;
+  const cached = dashboardDataCache.get(cacheKey);
+  const cacheTtl = marketOpen ? 30000 : 24 * 60 * 60 * 1000;
+  if (cached && Date.now() - cached.timestamp < cacheTtl) {
+    return cached.data;
+  }
+
   const selectedReportIndex = chronologicalReports.findIndex(
     (r) => r.id === selectedReport.id
   );
@@ -330,20 +425,26 @@ export async function getDashboardDataAction(
       ? chronologicalReports[selectedReportIndex - 1]
       : null;
 
+  const latestTimelineDate =
+    chronologicalReports[chronologicalReports.length - 1]?.asOfDate ||
+    selectedReport.asOfDate;
+
   // Pre-fetch all member CAGRs for selected and previous reports to avoid N+1 queries in loop
   const reportIdsToCheck = [selectedReport.id];
   if (previousReport) {
     reportIdsToCheck.push(previousReport.id);
   }
 
-  // Run DB queries in parallel for optimal render performance
+  // Run DB queries and external API calls in parallel for optimal render performance
   const [
     holdings,
     allMemberCagrs,
-    txHistory,
+    allTimelineTxs,
     previousHoldings,
     dbMembers,
     allDBSchemes,
+    niftyIndexDetails,
+    allChronologicalHoldings,
   ] = await Promise.all([
     getReportHoldings(selectedReport.id),
     db
@@ -369,7 +470,7 @@ export async function getDashboardDataAction(
         sourceReportId: txTable.sourceReportId,
       })
       .from(txTable)
-      .where(lte(txTable.date, selectedReport.asOfDate))
+      .where(lte(txTable.date, latestTimelineDate))
       .orderBy(desc(txTable.date), desc(txTable.id)),
     previousReport ? getReportHoldings(previousReport.id) : Promise.resolve([]),
     db
@@ -399,7 +500,13 @@ export async function getDashboardDataAction(
       })
       .from(familyMembers),
     db.select({ name: schemes.name, category: schemes.category }).from(schemes),
+    getNifty50IndexHistory("5y"),
+    Promise.all(chronologicalReports.map((r) => getReportHoldings(r.id))),
   ]);
+
+  const txHistory = allTimelineTxs.filter(
+    (tx) => tx.date <= selectedReport.asOfDate
+  );
 
   const memberCagrMap = new Map<string, number>();
   allMemberCagrs.forEach((c) => {
@@ -485,6 +592,8 @@ export async function getDashboardDataAction(
 
       let schemeXirr = h.cagr || 0;
       let schemeAlpha = 0;
+      let benchmarkXirr: number | null = null;
+      let benchmarkCagr: number | null = null;
 
       if (schemeTxs.length >= 1) {
         const benchmarkCode = await getBenchmarkCodeForCategory(
@@ -501,19 +610,40 @@ export async function getDashboardDataAction(
           schemeXirr = metrics.portfolioXirr;
           schemeAlpha = metrics.alpha;
         }
+        if (metrics.benchmarkXirr !== 0 && !isNaN(metrics.benchmarkXirr)) {
+          benchmarkXirr = metrics.benchmarkXirr;
+        }
+        if (
+          metrics.benchmarkCagrSinceInception !== 0 &&
+          !isNaN(metrics.benchmarkCagrSinceInception)
+        ) {
+          benchmarkCagr = metrics.benchmarkCagrSinceInception;
+        }
       }
 
       return {
         ...h,
         xirr: schemeXirr,
         alpha: schemeAlpha,
+        benchmarkXirr,
+        benchmarkCagr,
       };
     })
   );
 
+  // Use current date for dynamic holding days & XIRR calculations on the latest report
+  const isLatest =
+    !reportId ||
+    (chronologicalReports.length > 0 &&
+      chronologicalReports[chronologicalReports.length - 1].id ===
+        selectedReport.id);
+  const effectiveAsOfDate = isLatest
+    ? new Date().toISOString().slice(0, 10)
+    : selectedReport.asOfDate;
+
   // Run overall & previous alpha calculations in parallel
   const [alphaMetrics, previousAlphaMetrics] = await Promise.all([
-    calculateAlpha(overallTxs, selectedReport.asOfDate, overallValuation),
+    calculateAlpha(overallTxs, effectiveAsOfDate, overallValuation),
     previousReport
       ? calculateAlpha(previousTxs, previousReport.asOfDate, previousValuation)
       : Promise.resolve({ portfolioXirr: 0, benchmarkXirr: 0, alpha: 0 }),
@@ -526,15 +656,34 @@ export async function getDashboardDataAction(
   const benchmarkXirr = alphaMetrics.benchmarkXirr;
   const alpha = alphaMetrics.alpha;
 
-  const currentCagr =
-    selectedReport.cagr !== undefined && selectedReport.cagr !== null
-      ? selectedReport.cagr
-      : activeHoldings.length > 0
-        ? activeHoldings.reduce(
-            (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
-            0
-          ) / (overallInvested || 1)
-        : 0;
+  // Point-to-Point Holding Period CAGR (matches Excel formula)
+  let derivedCagr = 0;
+  if (overallInvested > 0 && overallValuation > 0) {
+    const weightedHoldingDaysNum = activeHoldings.reduce(
+      (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+      0
+    );
+    const weightedHoldingDays = Math.round(
+      weightedHoldingDaysNum / overallInvested
+    );
+    const absReturnPct =
+      ((overallValuation - overallInvested) / overallInvested) * 100;
+    if (weightedHoldingDays > 0) {
+      if (weightedHoldingDays <= 365) {
+        derivedCagr = (absReturnPct * 365) / weightedHoldingDays;
+      } else {
+        derivedCagr =
+          (Math.pow(
+            overallValuation / overallInvested,
+            365 / weightedHoldingDays
+          ) -
+            1) *
+          100;
+      }
+    }
+  }
+
+  const currentCagr = derivedCagr;
 
   let metricDeltas: DashboardData["metricDeltas"] = {
     previousDate: previousReport?.asOfDate || null,
@@ -557,15 +706,36 @@ export async function getDashboardDataAction(
   >();
 
   if (previousReport) {
+    let derivedPrevCagr = 0;
+    if (previousInvested > 0 && previousValuation > 0) {
+      const prevWeightedHoldingDaysNum = activePreviousHoldings.reduce(
+        (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+        0
+      );
+      const prevWeightedHoldingDays = Math.round(
+        prevWeightedHoldingDaysNum / previousInvested
+      );
+      const prevAbsReturnPct =
+        ((previousValuation - previousInvested) / previousInvested) * 100;
+      if (prevWeightedHoldingDays > 0) {
+        if (prevWeightedHoldingDays <= 365) {
+          derivedPrevCagr = (prevAbsReturnPct * 365) / prevWeightedHoldingDays;
+        } else {
+          derivedPrevCagr =
+            (Math.pow(
+              previousValuation / previousInvested,
+              365 / prevWeightedHoldingDays
+            ) -
+              1) *
+            100;
+        }
+      }
+    }
+
     const previousCagr =
       previousReport.cagr !== undefined && previousReport.cagr !== null
         ? previousReport.cagr
-        : activePreviousHoldings.length > 0
-          ? activePreviousHoldings.reduce(
-              (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
-              0
-            ) / (previousInvested || 1)
-          : 0;
+        : derivedPrevCagr;
 
     metricDeltas = {
       previousDate: previousReport.asOfDate,
@@ -608,13 +778,29 @@ export async function getDashboardDataAction(
         const isMemberActive =
           activeMemberHoldings.length > 0 && currentValue > 0;
 
+        let derivedMemberCagr = 0;
+        if (isMemberActive && invested > 0 && currentValue > 0) {
+          const mWeightedDaysNum = activeMemberHoldings.reduce(
+            (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+            0
+          );
+          const mWeightedDays = Math.round(mWeightedDaysNum / invested);
+          const mAbsReturnPct = ((currentValue - invested) / invested) * 100;
+          if (mWeightedDays > 0) {
+            if (mWeightedDays <= 365) {
+              derivedMemberCagr = (mAbsReturnPct * 365) / mWeightedDays;
+            } else {
+              derivedMemberCagr =
+                (Math.pow(currentValue / invested, 365 / mWeightedDays) - 1) *
+                100;
+            }
+          }
+        }
+
         const cagr = isMemberActive
           ? storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
             ? storedMemberCagrVal
-            : memberHoldings.reduce(
-                (acc, h) => acc + h.cagr * h.purchaseValue,
-                0
-              ) / (invested || 1)
+            : derivedMemberCagr
           : 0;
 
         const memberTxs = getPortfolioTransactions((tx) => {
@@ -674,7 +860,9 @@ export async function getDashboardDataAction(
     dbMembersMap.set(m.name, m);
   });
 
-  const members = Array.from(new Set(holdings.map((h) => h.memberName)));
+  const members = Array.from(new Set(holdings.map((h) => h.memberName))).sort(
+    (a, b) => a.localeCompare(b)
+  );
   const memberSummaries = await Promise.all(
     members.map(async (name) => {
       const allMemberHoldings = holdings.filter((h) => h.memberName === name);
@@ -704,13 +892,29 @@ export async function getDashboardDataAction(
             )
           : null;
 
+      let derivedMemberCagr = 0;
+      if (isMemberActive && invested > 0 && currentValue > 0) {
+        const mWeightedDaysNum = activeMemberHoldings.reduce(
+          (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+          0
+        );
+        const mWeightedDays = Math.round(mWeightedDaysNum / invested);
+        const mAbsReturnPct = ((currentValue - invested) / invested) * 100;
+        if (mWeightedDays > 0) {
+          if (mWeightedDays <= 365) {
+            derivedMemberCagr = (mAbsReturnPct * 365) / mWeightedDays;
+          } else {
+            derivedMemberCagr =
+              (Math.pow(currentValue / invested, 365 / mWeightedDays) - 1) *
+              100;
+          }
+        }
+      }
+
       const cagr = isMemberActive
         ? storedMemberCagrVal !== undefined && storedMemberCagrVal !== null
           ? storedMemberCagrVal
-          : memberHoldings.reduce(
-              (acc, h) => acc + h.cagr * h.purchaseValue,
-              0
-            ) / (invested || 1)
+          : derivedMemberCagr
         : 0;
 
       // Calculate Member XIRR with exact tolerance matching (prefer transaction XIRR when within +-0.05%, fallback to stored report XIRR)
@@ -849,28 +1053,9 @@ export async function getDashboardDataAction(
     .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
 
   // 5. Timeline data (invested vs value over time)
-  const latestTimelineDate =
-    chronologicalReports[chronologicalReports.length - 1]?.asOfDate ||
-    selectedReport.asOfDate;
-  const timelineTxHistory = await db
-    .select({
-      id: txTable.id,
-      memberId: txTable.memberId,
-      schemeId: txTable.schemeId,
-      folioNo: txTable.folioNo,
-      date: txTable.date,
-      type: txTable.type,
-      units: txTable.units,
-      nav: txTable.nav,
-      amount: txTable.amount,
-      sourceReportId: txTable.sourceReportId,
-    })
-    .from(txTable)
-    .where(lte(txTable.date, latestTimelineDate));
-
   const timelineData = await Promise.all(
-    chronologicalReports.map(async (r) => {
-      const snapHoldings = await getReportHoldings(r.id);
+    chronologicalReports.map(async (r, idx) => {
+      const snapHoldings = allChronologicalHoldings[idx] || [];
       const activeHoldings = snapHoldings.filter(
         (h) => (h.balanceUnits ?? 0) > 0.0001 || (h.currentValue ?? 0) > 0
       );
@@ -882,16 +1067,29 @@ export async function getDashboardDataAction(
         (acc, h) => acc + h.currentValue,
         0
       );
+      let derivedSnapCagr = 0;
+      if (snapInvested > 0 && snapValue > 0) {
+        const snapWeightedDaysNum = activeHoldings.reduce(
+          (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+          0
+        );
+        const snapWeightedDays = Math.round(snapWeightedDaysNum / snapInvested);
+        const snapAbsReturnPct =
+          ((snapValue - snapInvested) / snapInvested) * 100;
+        if (snapWeightedDays > 0) {
+          if (snapWeightedDays <= 365) {
+            derivedSnapCagr = (snapAbsReturnPct * 365) / snapWeightedDays;
+          } else {
+            derivedSnapCagr =
+              (Math.pow(snapValue / snapInvested, 365 / snapWeightedDays) - 1) *
+              100;
+          }
+        }
+      }
+
       const snapCagr =
-        r.cagr !== undefined && r.cagr !== null
-          ? r.cagr
-          : snapHoldings.length > 0
-            ? snapHoldings.reduce(
-                (acc, h) => acc + (h.cagr || 0) * (h.purchaseValue || 0),
-                0
-              ) / (snapInvested || 1)
-            : 0;
-      const snapTxs: PortfolioTransaction[] = timelineTxHistory
+        r.cagr !== undefined && r.cagr !== null ? r.cagr : derivedSnapCagr;
+      const snapTxs: PortfolioTransaction[] = allTimelineTxs
         .filter((tx) => tx.date <= r.asOfDate)
         .map((tx) => ({
           date: tx.date,
@@ -919,7 +1117,56 @@ export async function getDashboardDataAction(
     })
   );
 
-  return {
+  // 6. All-Time High (ATH) & Correction Calculations
+  let maxInvested = {
+    value: overallInvested,
+    date: selectedReport.asOfDate,
+  };
+  let maxValue = {
+    value: overallValuation,
+    date: selectedReport.asOfDate,
+  };
+  let maxGain = {
+    value: overallValuation - overallInvested,
+    date: selectedReport.asOfDate,
+  };
+
+  chronologicalReports.forEach((r, idx) => {
+    const tItem = timelineData[idx];
+    if (tItem) {
+      if (tItem.invested > maxInvested.value) {
+        maxInvested = { value: tItem.invested, date: r.asOfDate };
+      }
+      if (tItem.value > maxValue.value) {
+        maxValue = { value: tItem.value, date: r.asOfDate };
+      }
+      const g = tItem.value - tItem.invested;
+      if (g > maxGain.value) {
+        maxGain = { value: g, date: r.asOfDate };
+      }
+    }
+  });
+
+  // Benchmark Nifty 50 Spot Index ATH & Current Points
+  const bmData = niftyIndexDetails?.data || [];
+  const { maxNifty, currentNifty } = getNiftyAthAndCurrentPoints(
+    selectedReport.asOfDate,
+    bmData
+  );
+
+  const athData = calculateAthCorrectionData({
+    currentInvested: overallInvested,
+    currentValue: overallValuation,
+    currentGain: overallValuation - overallInvested,
+    currentDate: selectedReport.asOfDate,
+    maxInvested,
+    maxValue,
+    maxGain,
+    currentNifty,
+    maxNifty,
+  });
+
+  const result: DashboardData = {
     reportsList,
     selectedReport,
     totals: {
@@ -933,7 +1180,7 @@ export async function getDashboardDataAction(
       portfolioXirr,
       benchmarkXirr,
       alpha,
-      cagr: selectedReport.cagr || null,
+      cagr: currentCagr,
     },
     memberSummaries,
     holdings: detailedHoldings,
@@ -942,7 +1189,11 @@ export async function getDashboardDataAction(
     amcAllocation,
     metricDeltas,
     timelineData,
+    athData,
   };
+
+  dashboardDataCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -975,7 +1226,7 @@ export async function uploadSipAction(
 
     const { inserted, skipped } = await saveSipMandates(parsed.sips, file.name);
 
-    revalidatePath("/sips");
+    await purgeAllApplicationCaches();
     return {
       success: true,
       data: { inserted, skipped, total: parsed.sips.length },
@@ -989,19 +1240,12 @@ export async function uploadSipAction(
 }
 
 /**
- * Get all SIP mandates for the /sips page
- */
-export async function getSipMandatesAction() {
-  return getSipMandates();
-}
-
-/**
  * Clear all SIP mandates (full reset)
  */
 export async function clearSipMandatesAction(): Promise<ActionResult> {
   try {
     await clearSipMandates();
-    revalidatePath("/sips");
+    await purgeAllApplicationCaches();
     return { success: true };
   } catch (err: unknown) {
     const errorMsg =
@@ -1037,6 +1281,11 @@ export async function globalRefreshAction(): Promise<ActionResult> {
     clearAllAlphaCaches();
     clearAllZerodhaCaches();
     clearAllMsflCaches();
+    clearInsightsServiceCaches();
+    clearAuditDataCache();
+    clearDashboardDataCache();
+    clearAthCache();
+    clearNiftyIndexCache();
 
     // 2. Purge Next.js page layout cache
     revalidatePath("/", "layout");
@@ -1055,4 +1304,102 @@ export async function globalRefreshAction(): Promise<ActionResult> {
  */
 export async function getFyTrackerDataAction(selectedFyLabel?: string) {
   return getFyTrackerData(selectedFyLabel);
+}
+
+/**
+ * Check for missing Mutual Fund and Zerodha upload tracker statements
+ * across the last 5 active trading days (excluding weekends).
+ */
+export async function getMissingUploadNotificationsAction(): Promise<
+  ActionResult<NotificationSummary>
+> {
+  if (
+    notificationsCache &&
+    Date.now() - notificationsCache.timestamp < 60_000
+  ) {
+    return notificationsCache.data;
+  }
+
+  try {
+    const tradingDays = getLastTradingDays(5);
+    const tradingDateKeys = tradingDays.map((d) => d.dateKey);
+
+    // Fetch existing reports for these trading dates in parallel
+    const [mfExisting, zerodhaExisting] = await Promise.all([
+      db
+        .select({ asOfDate: reports.asOfDate })
+        .from(reports)
+        .where(inArray(reports.asOfDate, tradingDateKeys)),
+      db
+        .select({ asOfDate: zerodhaReports.asOfDate })
+        .from(zerodhaReports)
+        .where(inArray(zerodhaReports.asOfDate, tradingDateKeys)),
+    ]);
+
+    const mfDateSet = new Set(mfExisting.map((r) => r.asOfDate));
+    const zerodhaDateSet = new Set(zerodhaExisting.map((r) => r.asOfDate));
+
+    const items: MissingUploadNotification[] = [];
+
+    for (const day of tradingDays) {
+      // Check Regular Mutual Fund Portfolio statement
+      if (!mfDateSet.has(day.dateKey)) {
+        items.push({
+          id: `mf-missing-${day.dateKey}`,
+          type: "mutual_fund",
+          title: "Mutual Fund Portfolio Valuation",
+          description: `Missing daily valuation statement for ${day.formattedDate}`,
+          dateKey: day.dateKey,
+          formattedDate: day.formattedDate,
+          dayLabel: day.dayLabel,
+          actionUrl: "/uploads",
+          isMissing: true,
+        });
+      }
+
+      // Check Zerodha Portfolio Holdings statement
+      if (!zerodhaDateSet.has(day.dateKey)) {
+        items.push({
+          id: `zerodha-missing-${day.dateKey}`,
+          type: "zerodha",
+          title: "Zerodha Holdings Statement",
+          description: `Missing holdings snapshot statement for ${day.formattedDate}`,
+          dateKey: day.dateKey,
+          formattedDate: day.formattedDate,
+          dayLabel: day.dayLabel,
+          actionUrl: "/zerodha?tab=files",
+          isMissing: true,
+        });
+      }
+    }
+
+    const mfMissingCount = items.filter((i) => i.type === "mutual_fund").length;
+    const zerodhaMissingCount = items.filter(
+      (i) => i.type === "zerodha"
+    ).length;
+
+    const result: ActionResult<NotificationSummary> = {
+      success: true,
+      data: {
+        totalMissing: items.length,
+        mfMissingCount,
+        zerodhaMissingCount,
+        items,
+      },
+    };
+
+    notificationsCache = {
+      data: result,
+      timestamp: Date.now(),
+    };
+
+    return result;
+  } catch (err: unknown) {
+    console.error("getMissingUploadNotificationsAction Error:", err);
+    const errorMsg =
+      err instanceof Error
+        ? err.message
+        : "Failed to fetch missing upload notifications";
+    return { success: false, error: errorMsg };
+  }
 }
