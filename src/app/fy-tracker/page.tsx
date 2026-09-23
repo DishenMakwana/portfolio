@@ -1,33 +1,17 @@
-import { getFyTrackerData } from "@/lib/insightsService";
-import FyTrackerClient from "@/components/mutual-fund/fy-tracker/FyTrackerClient";
-import HeaderClient from "@/components/shared/HeaderClient";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import type { FyTrackerPageProps } from "@/types/insights";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "FY Investment Tracker" };
-
-export default async function FyTrackerPage(props: {
-  searchParams?: Promise<{ fy?: string; metric?: string }>;
-}) {
-  const searchParams = await props.searchParams;
-  const data = await getFyTrackerData(searchParams?.fy);
-  return (
-    <>
-      <HeaderClient
-        title="Family Portfolio - FY Investment Tracker"
-        iconName="calendar-range"
-      />
-      <main className="flex-1 overflow-auto p-6 selection:bg-teal-500/30 selection:text-teal-200">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center min-h-[300px] text-slate-400 font-medium">
-              Loading FY Investment Tracker...
-            </div>
-          }
-        >
-          <FyTrackerClient initialData={data} />
-        </Suspense>
-      </main>
-    </>
-  );
+export default async function FyTrackerPage({
+  searchParams,
+}: FyTrackerPageProps) {
+  const params = await searchParams;
+  const sp = new URLSearchParams();
+  sp.set("tab", "fy-tracker");
+  if (params?.fy) {
+    sp.set("fy", params.fy);
+  }
+  if (params?.metric) {
+    sp.set("metric", params.metric);
+  }
+  redirect(`/insights?${sp.toString()}`);
 }
