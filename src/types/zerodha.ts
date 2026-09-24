@@ -3,6 +3,7 @@ import type { AthCorrectionData } from "./overview";
 import type { PortfolioRiskMetrics, SchemeRankingsMapItem } from "./insights";
 import type { TaxHarvestingSummary } from "./transactions";
 import type { ZerodhaAuditData } from "./zerodhaAudit";
+import type { GrowwMarketCapData, GrowwAssetAllocationData } from "./portfolio";
 
 export interface ZerodhaMember {
   id: number;
@@ -53,6 +54,8 @@ interface ZerodhaHolding {
   athCorrectionPct?: number | null;
   athDaysDiff?: number | null;
   isLumpsumOpportunity?: boolean;
+  marketCap?: GrowwMarketCapData | null;
+  assetAllocation?: GrowwAssetAllocationData | null;
 }
 
 export interface ZerodhaSectorBreakdownItem {
@@ -389,7 +392,16 @@ export const ZERODHA_COLOR_CLASSES = [
   "bg-red-500",
 ];
 
-type ZerodhaCagrAssetType = "mutual_fund" | "equity";
+export type ZerodhaCagrAssetType = "mutual_fund" | "equity";
+
+export interface ZerodhaHoveredBarState {
+  x: number;
+  y: number;
+  symbol: string;
+  cagr: number;
+  key: string;
+  memberName?: string | null;
+}
 
 interface ZerodhaHoldingWithCagr {
   id?: number | null;

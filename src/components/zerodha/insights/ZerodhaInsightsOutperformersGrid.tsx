@@ -1,7 +1,10 @@
 "use client";
 
 import { CheckCircle2, AlertTriangle } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import {
+  formatCurrency,
+  formatZerodhaMemberShortName,
+} from "@/helpers/formatters";
 import type { ZerodhaInsightsOutperformersGridProps } from "@/types/zerodha";
 
 export default function ZerodhaInsightsOutperformersGrid({
@@ -19,15 +22,26 @@ export default function ZerodhaInsightsOutperformersGrid({
         </h3>
         <div className="space-y-3">
           {activeBeatingList.length > 0 ? (
-            activeBeatingList.map((f) => (
+            activeBeatingList.map((f, idx) => (
               <div
-                key={f.symbol}
+                key={
+                  f.id ? `beating-${f.id}` : `${f.symbol}-${f.clientId || idx}`
+                }
                 className="flex items-center justify-between gap-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-200">
-                    {f.symbol}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-200">
+                      {f.symbol}
+                    </p>
+                    {(f.memberName || f.clientId) && (
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        {formatZerodhaMemberShortName(
+                          f.clientId || f.memberName
+                        )}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500">
                     Gain: {formatCurrency(f.unrealizedPnl)}
                   </p>
@@ -53,15 +67,26 @@ export default function ZerodhaInsightsOutperformersGrid({
         </h3>
         <div className="space-y-3">
           {activeLaggingList.length > 0 ? (
-            activeLaggingList.map((f) => (
+            activeLaggingList.map((f, idx) => (
               <div
-                key={f.symbol}
+                key={
+                  f.id ? `lagging-${f.id}` : `${f.symbol}-${f.clientId || idx}`
+                }
                 className="flex items-center justify-between gap-4 rounded-xl border border-rose-500/15 bg-rose-500/5 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-200">
-                    {f.symbol}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-slate-200">
+                      {f.symbol}
+                    </p>
+                    {(f.memberName || f.clientId) && (
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        {formatZerodhaMemberShortName(
+                          f.clientId || f.memberName
+                        )}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500">
                     Gain: {formatCurrency(f.unrealizedPnl)}
                   </p>

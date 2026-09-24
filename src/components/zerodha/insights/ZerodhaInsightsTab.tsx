@@ -9,7 +9,10 @@ import {
   formatInrCompact,
   formatHoldingYearsAndDays,
 } from "@/helpers/formatters";
-import type { ZerodhaInsightsTabProps } from "@/types/zerodha";
+import type {
+  ZerodhaInsightsTabProps,
+  ZerodhaCagrAssetType,
+} from "@/types/zerodha";
 import type {
   AllocationAnalysisSortKey,
   AmcPoint,
@@ -28,6 +31,8 @@ import ZerodhaInsightsHeroCards from "./ZerodhaInsightsHeroCards";
 import ZerodhaInsightsBenchmarkCard from "./ZerodhaInsightsBenchmarkCard";
 import ZerodhaInsightsSummaryCard from "./ZerodhaInsightsSummaryCard";
 import ZerodhaInsightsOutperformersGrid from "./ZerodhaInsightsOutperformersGrid";
+import ZerodhaPortfolioRiskKpiCards from "./ZerodhaPortfolioRiskKpiCards";
+import ZerodhaInsightsMarketCapCard from "./ZerodhaInsightsMarketCapCard";
 
 export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
   const { insights, totals, holdings } = data;
@@ -54,9 +59,8 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
   const initialCatDir =
     (searchParams.get("catOrder") as "asc" | "desc") || "desc";
 
-  const [cagrAssetType, setCagrAssetType] = useState<"mutual_fund" | "equity">(
-    initialAsset
-  );
+  const [cagrAssetType, setCagrAssetType] =
+    useState<ZerodhaCagrAssetType>(initialAsset);
 
   // AMC sorting state
   const [amcSortKey, setAmcSortKey] =
@@ -153,6 +157,9 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
     return mfHoldings
       .filter((h) => typeof h.cagr === "number" && h.currentValue > 0)
       .map((h) => ({
+        id: h.id,
+        clientId: h.clientId,
+        memberName: h.memberName,
         symbol: h.symbol,
         cagr: h.cagr as number,
         currentValue: h.currentValue,
@@ -224,6 +231,9 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
     return stockHoldings
       .filter((h) => typeof h.cagr === "number" && h.currentValue > 0)
       .map((h) => ({
+        id: h.id,
+        clientId: h.clientId,
+        memberName: h.memberName,
         symbol: h.symbol,
         cagr: h.cagr as number,
         currentValue: h.currentValue,
@@ -405,7 +415,9 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
     const groups: Record<string, SubCategoryGroupItem[]> = {};
 
     for (const h of mfHoldingsWithCagr) {
-      const parentHolding = holdings.find((x) => x.symbol === h.symbol);
+      const parentHolding = holdings.find(
+        (x) => x.symbol === h.symbol && (h.id ? x.id === h.id : true)
+      );
       const name = h.symbol;
       const subCat = getOverlapSubCategory(
         name,
@@ -416,13 +428,39 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
         groups[subCat] = [];
       }
 
-      groups[subCat].push({
-        schemeName: name,
-        cagr: h.cagr,
-        holders: ["Self"],
-        totalValue: h.currentValue,
-        avgHoldingDays: h.holdingDays,
-      });
+      const holderName =
+        h.memberName || (h.clientId ? `Account ${h.clientId}` : "Self");
+
+      const existing = groups[subCat].find((item) => item.schemeName === name);
+      if (existing) {
+        const newTotalValue = existing.totalValue + h.currentValue;
+        const weightedCagr =
+          newTotalValue > 0
+            ? (existing.cagr * existing.totalValue + h.cagr * h.currentValue) /
+              newTotalValue
+            : existing.cagr;
+        const weightedDays =
+          newTotalValue > 0
+            ? (existing.avgHoldingDays * existing.totalValue +
+                h.holdingDays * h.currentValue) /
+              newTotalValue
+            : existing.avgHoldingDays;
+
+        existing.totalValue = newTotalValue;
+        existing.cagr = weightedCagr;
+        existing.avgHoldingDays = weightedDays;
+        if (!existing.holders.includes(holderName)) {
+          existing.holders.push(holderName);
+        }
+      } else {
+        groups[subCat].push({
+          schemeName: name,
+          cagr: h.cagr,
+          holders: [holderName],
+          totalValue: h.currentValue,
+          avgHoldingDays: h.holdingDays,
+        });
+      }
     }
 
     // Sort funds in each category by CAGR descending
@@ -520,6 +558,21 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                   activeTopPerformer={activeTopPerformer}
                 />
               </div>
+
+              {/* Portfolio Risk & Volatility Intelligence (9-Card 3x3 Grid with Multi-Asset & Horizon Selectors) */}
+              <ZerodhaPortfolioRiskKpiCards
+                riskMetrics={insights.riskMetrics}
+                stocksRiskMetrics={insights.stocksRiskMetrics}
+                fundsRiskMetrics={insights.fundsRiskMetrics}
+              />
+
+              {/* Market Cap Distribution — MF holdings only */}
+              {mfHoldings.length > 0 && (
+                <ZerodhaInsightsMarketCapCard
+                  mfHoldings={mfHoldings}
+                  totalCurrentValue={totals.fundsCurrentValue}
+                />
+              )}
 
               {/* CAGR Leaderboard SVG Chart with Asset Type Toggle Header */}
               <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-5 shadow-xl">
@@ -670,13 +723,23 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                             <tbody className="divide-y divide-slate-800/50">
                               {schemes.map((s, i) => (
                                 <tr
-                                  key={s.schemeName}
+                                  key={`${s.schemeName}-${i}`}
                                   className={`hover:bg-slate-850/40 transition-colors ${
                                     i === 0 ? "bg-teal-500/5" : ""
                                   }`}
                                 >
                                   <td className="py-3 pr-4 font-semibold text-slate-200">
-                                    {s.schemeName}
+                                    <div>{s.schemeName}</div>
+                                    {s.holders &&
+                                      s.holders.length > 0 &&
+                                      !(
+                                        s.holders.length === 1 &&
+                                        s.holders[0] === "Self"
+                                      ) && (
+                                        <div className="text-[10px] text-teal-400/80 font-normal mt-0.5">
+                                          {s.holders.join(", ")}
+                                        </div>
+                                      )}
                                   </td>
                                   <td className="py-3 px-4 text-right font-bold text-slate-300">
                                     {formatInrCompact(s.totalValue)}
@@ -696,7 +759,13 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                                       </div>
                                     )}
                                   </td>
-                                  <td className="py-3 px-4 text-right font-extrabold text-teal-400">
+                                  <td
+                                    className={`py-3 px-4 text-right font-extrabold ${
+                                      s.cagr >= 0
+                                        ? "text-teal-400"
+                                        : "text-rose-400"
+                                    }`}
+                                  >
                                     {s.cagr.toFixed(2)}%
                                   </td>
                                   <td className="py-3 pl-4 text-right pr-4">
@@ -746,7 +815,13 @@ export default function ZerodhaInsightsTab({ data }: ZerodhaInsightsTabProps) {
                                         </div>
                                       )}
                                     </td>
-                                    <td className="py-4 px-4 text-right text-indigo-400 font-black text-sm">
+                                    <td
+                                      className={`py-4 px-4 text-right font-black text-sm ${
+                                        totals.avgCagr >= 0
+                                          ? "text-teal-400"
+                                          : "text-rose-400"
+                                      }`}
+                                    >
                                       {totals.avgCagr.toFixed(2)}%
                                     </td>
                                     <td className="py-4 pl-4 text-right pr-4">

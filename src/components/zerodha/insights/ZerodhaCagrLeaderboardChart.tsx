@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { ZerodhaCagrLeaderboardChartProps } from "@/types/zerodha";
+import type {
+  ZerodhaCagrLeaderboardChartProps,
+  ZerodhaHoveredBarState,
+} from "@/types/zerodha";
 
 function getShortFundName(fullName: string): string {
   const parts = fullName.split(" ");
@@ -25,12 +28,9 @@ export default function ZerodhaCagrLeaderboardChart({
   holdings,
   niftyBenchmark,
 }: ZerodhaCagrLeaderboardChartProps) {
-  const [hoveredBar, setHoveredBar] = useState<{
-    x: number;
-    y: number;
-    symbol: string;
-    cagr: number;
-  } | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<ZerodhaHoveredBarState | null>(
+    null
+  );
 
   const maxCagr = Math.max(...holdings.map((m) => m.cagr), 0);
   const minCagr = Math.min(...holdings.map((m) => m.cagr), 0);
@@ -127,17 +127,22 @@ export default function ZerodhaCagrLeaderboardChart({
 
           const isTop = i === 0;
           const shortLabelName = getShortFundName(m.symbol);
-          const isHovered = hoveredBar?.symbol === m.symbol;
+          const itemKey = m.id
+            ? `bar-${m.id}`
+            : `bar-${m.symbol}-${m.clientId || i}`;
+          const isHovered = hoveredBar?.key === itemKey;
 
           return (
             <g
-              key={m.symbol}
+              key={itemKey}
               onMouseEnter={() =>
                 setHoveredBar({
                   x,
                   y: valY,
                   symbol: m.symbol,
                   cagr: m.cagr,
+                  key: itemKey,
+                  memberName: m.memberName,
                 })
               }
               onMouseLeave={() => setHoveredBar(null)}
@@ -237,6 +242,7 @@ export default function ZerodhaCagrLeaderboardChart({
                   fontWeight="bold"
                 >
                   {getShortFundName(hoveredBar.symbol)}
+                  {hoveredBar.memberName ? ` (${hoveredBar.memberName})` : ""}
                 </text>
                 <text
                   x={tooltipX + 85}

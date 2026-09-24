@@ -10,18 +10,18 @@ import {
   Loader2,
   TrendingUp,
   TrendingDown,
-  ChevronDown,
-  ChevronsUpDown,
   IndianRupee,
   Activity,
   Target,
-  ChevronUp,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
   GitMerge,
   CalendarDays,
   Lightbulb,
+  Coins,
+  ArrowLeftRight,
+  ShieldCheck,
 } from "lucide-react";
 import {
   uploadZerodhaHoldingsAction,
@@ -35,18 +35,24 @@ import {
 import { ZERODHA_COLORS } from "@/types/zerodha";
 import HeaderClient from "@/components/shared/HeaderClient";
 import ConfirmationModal from "@/components/shared/ConfirmationModal";
+import { useTableSort } from "@/helpers/useTableSort";
 import type {
   ZerodhaDashboardProps,
   ZerodhaFundSortField,
   ZerodhaStockSortField,
+  ZerodhaTab,
 } from "@/types/zerodha";
 import ZerodhaMappingTab from "@/components/zerodha/mapping/ZerodhaMappingTab";
 import ZerodhaOverviewTab from "@/components/zerodha/overview/ZerodhaOverviewTab";
 import ZerodhaStocksTab from "@/components/zerodha/stocks/ZerodhaStocksTab";
 import ZerodhaSectorAndCapAnalysis from "@/components/zerodha/stocks/ZerodhaSectorAndCapAnalysis";
 import ZerodhaFundsTab from "@/components/zerodha/funds/ZerodhaFundsTab";
+import ZerodhaTransactionsTab from "@/components/zerodha/transactions/ZerodhaTransactionsTab";
 import ZerodhaSnapshotsTab from "@/components/zerodha/snapshots/ZerodhaSnapshotsTab";
 import ZerodhaInsightsTab from "@/components/zerodha/insights/ZerodhaInsightsTab";
+import ZerodhaTaxHarvestingTab from "@/components/zerodha/tax-harvesting/ZerodhaTaxHarvestingTab";
+import ZerodhaAuditTab from "@/components/zerodha/audit/ZerodhaAuditTab";
+import ZerodhaAccountFilterPills from "@/components/zerodha/ZerodhaAccountFilterPills";
 
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
@@ -57,9 +63,6 @@ const cardVariants: Variants = {
   }),
 };
 
-type ZerodhaTab =
-  "overview" | "insights" | "stocks" | "funds" | "mapping" | "files";
-
 const ZERODHA_SUB_TAB_META: Record<
   ZerodhaTab,
   { label: string; icon: React.ElementType }
@@ -67,14 +70,18 @@ const ZERODHA_SUB_TAB_META: Record<
   overview: { label: "Overview", icon: BarChart3 },
   stocks: { label: "Stocks", icon: TrendingUp },
   funds: { label: "Mutual Funds", icon: Target },
+  transactions: { label: "Transactions", icon: ArrowLeftRight },
+  insights: { label: "Insights", icon: Lightbulb },
+  "tax-harvesting": { label: "Tax Harvesting", icon: Coins },
+  audit: { label: "CAS Audit", icon: ShieldCheck },
   mapping: { label: "Fund Mapping", icon: GitMerge },
   files: { label: "Upload Tracker", icon: CalendarDays },
-  insights: { label: "Insights", icon: Lightbulb },
 };
 
 export default function ZerodhaDashboard({
   data,
   allSchemes = [],
+  categoryRankingsMap,
 }: ZerodhaDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,9 +89,17 @@ export default function ZerodhaDashboard({
   const rawTab = searchParams.get("tab");
   const activeTab: ZerodhaTab =
     rawTab &&
-    ["overview", "insights", "stocks", "funds", "mapping", "files"].includes(
-      rawTab
-    )
+    [
+      "overview",
+      "insights",
+      "stocks",
+      "funds",
+      "transactions",
+      "tax-harvesting",
+      "audit",
+      "mapping",
+      "files",
+    ].includes(rawTab)
       ? (rawTab as ZerodhaTab)
       : "overview";
 
@@ -102,69 +117,50 @@ export default function ZerodhaDashboard({
     router.replace(url, { scroll: false });
   };
 
+  const handleAccountChange = (account: string) => {
+    const params = new URLSearchParams(
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString()
+    );
+    if (account === "all") {
+      params.delete("account");
+    } else {
+      params.set("account", account);
+    }
+    params.delete("zerodhaReportId");
+    params.delete("reportId");
+    params.delete("page");
+    const url = `/zerodha?${params.toString()}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
+  };
+
   const [isUploading, setIsUploading] = useState(false);
 
-  // Search & Filter state for Stocks Table
-  const [stockSortField, setStockSortField] =
-    useState<ZerodhaStockSortField>("currentValue");
-  const [stockSortOrder, setStockSortOrder] = useState<"asc" | "desc">("desc");
+  // Search & Filter state for Stocks Table with URL Param Synchronization
+  const {
+    sortField: stockSortField,
+    sortOrder: stockSortOrder,
+    toggleSort: toggleStockSort,
+    renderSortIcon: renderStockSortIcon,
+  } = useTableSort<ZerodhaStockSortField>({
+    defaultField: "currentValue",
+    defaultOrder: "desc",
+  });
 
-  const toggleStockSort = (field: typeof stockSortField) => {
-    if (stockSortField === field) {
-      setStockSortOrder(stockSortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setStockSortField(field);
-      setStockSortOrder("desc");
-    }
-  };
-
-  const renderStockSortIcon = (field: typeof stockSortField) => {
-    const isActive = stockSortField === field;
-    if (isActive) {
-      return stockSortOrder === "asc" ? (
-        <ChevronUp size={12} className="inline ml-1 text-teal-400" />
-      ) : (
-        <ChevronDown size={12} className="inline ml-1 text-teal-400" />
-      );
-    }
-    return (
-      <ChevronsUpDown
-        size={12}
-        className="inline ml-1 text-slate-500 opacity-60"
-      />
-    );
-  };
-
-  // Search & Filter state for Funds Table
-  const [fundSortField, setFundSortField] =
-    useState<ZerodhaFundSortField>("currentValue");
-  const [fundSortOrder, setFundSortOrder] = useState<"asc" | "desc">("desc");
-
-  const toggleFundSort = (field: typeof fundSortField) => {
-    if (fundSortField === field) {
-      setFundSortOrder(fundSortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setFundSortField(field);
-      setFundSortOrder("desc");
-    }
-  };
-
-  const renderFundSortIcon = (field: typeof fundSortField) => {
-    const isActive = fundSortField === field;
-    if (isActive) {
-      return fundSortOrder === "asc" ? (
-        <ChevronUp size={12} className="inline ml-1 text-teal-400" />
-      ) : (
-        <ChevronDown size={12} className="inline ml-1 text-teal-400" />
-      );
-    }
-    return (
-      <ChevronsUpDown
-        size={12}
-        className="inline ml-1 text-slate-500 opacity-60"
-      />
-    );
-  };
+  // Search & Filter state for Funds Table with URL Param Synchronization
+  const {
+    sortField: fundSortField,
+    sortOrder: fundSortOrder,
+    toggleSort: toggleFundSort,
+    renderSortIcon: renderFundSortIcon,
+  } = useTableSort<ZerodhaFundSortField>({
+    defaultField: "currentValue",
+    defaultOrder: "desc",
+  });
 
   const reportsList = data.reportsList || [];
   const holdings = data.holdings || [];
@@ -218,7 +214,16 @@ export default function ZerodhaDashboard({
 
   if (reportsList.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto mt-12 text-center">
+      <div className="max-w-2xl mx-auto mt-12 text-center space-y-4">
+        {data.members && data.members.length > 0 && (
+          <div className="flex justify-center">
+            <ZerodhaAccountFilterPills
+              members={data.members}
+              selectedAccount={data.selectedAccount}
+              onSelect={handleAccountChange}
+            />
+          </div>
+        )}
         <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-16 shadow-xl relative overflow-hidden backdrop-blur-xl">
           <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-500/30 to-transparent" />
           <Upload className="mx-auto text-teal-400 w-16 h-16 mb-6 opacity-80" />
@@ -226,9 +231,9 @@ export default function ZerodhaDashboard({
             No Zerodha Holdings Snapshot Uploaded
           </h2>
           <p className="text-slate-400 mb-8 max-w-md mx-auto text-sm leading-relaxed">
-            Upload your Zerodha Console Holdings Excel file (which contains
-            Equity, Mutual Funds, and Combined sheets) to track and analyze your
-            investments.
+            {data.selectedAccount && data.selectedAccount !== "all"
+              ? `No snapshots uploaded yet for account ${data.selectedAccount}. Upload an Excel file or select another account.`
+              : `Upload your Zerodha Console Holdings Excel file (which contains Equity, Mutual Funds, and Combined sheets) to track and analyze your investments.`}
           </p>
 
           <label className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg cursor-pointer transition text-sm w-fit mx-auto">
@@ -322,6 +327,13 @@ export default function ZerodhaDashboard({
               investments.
             </p>
           </div>
+          {data.members && data.members.length > 0 && (
+            <ZerodhaAccountFilterPills
+              members={data.members}
+              selectedAccount={data.selectedAccount}
+              onSelect={handleAccountChange}
+            />
+          )}
         </div>
 
         {/* Tab Content Panels (Full Width - Navigated via AppSidebar Tree) */}
@@ -500,6 +512,7 @@ export default function ZerodhaDashboard({
                 stockSortField={stockSortField}
                 stockSortOrder={stockSortOrder}
                 formatPrice={formatPrice}
+                selectedAccount={data.selectedAccount}
               />
               <ZerodhaSectorAndCapAnalysis
                 sectorBreakdown={data.sectorBreakdown}
@@ -517,6 +530,27 @@ export default function ZerodhaDashboard({
               toggleFundSort={toggleFundSort}
               fundSortField={fundSortField}
               fundSortOrder={fundSortOrder}
+              selectedAccount={data.selectedAccount}
+              categoryRankingsMap={categoryRankingsMap}
+            />
+          )}
+
+          {activeTab === "transactions" && (
+            <ZerodhaTransactionsTab
+              transactions={data.transactions || []}
+              currentPortfolioValue={data.totals.fundsCurrentValue}
+              selectedAccount={data.selectedAccount}
+            />
+          )}
+
+          {activeTab === "tax-harvesting" && (
+            <ZerodhaTaxHarvestingTab data={data} summary={data.taxHarvesting} />
+          )}
+
+          {activeTab === "audit" && data.auditData && (
+            <ZerodhaAuditTab
+              auditData={data.auditData}
+              selectedAccount={data.selectedAccount}
             />
           )}
 

@@ -1,15 +1,25 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useDeferredValue } from "react";
 import SearchFilterBar from "@/components/shared/SearchFilterBar";
+import {
+  matchesSearchTokens,
+  getSearchTokens,
+  scoreItem,
+  PORTFOLIO_SEARCH_WEIGHTS,
+} from "@/helpers/search";
+import FolioBadge from "@/components/shared/FolioBadge";
 import {
   formatCurrency,
   formatPercent,
   formatHoldingYearsAndDays,
+  formatZerodhaMemberShortName,
+  getZerodhaClientBadgeStyle,
 } from "@/helpers/formatters";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ZerodhaFundsTabProps } from "@/types/zerodha";
 import ZerodhaBenchmarkCards from "@/components/zerodha/overview/ZerodhaBenchmarkCards";
+import TablePagination from "@/components/shared/TablePagination";
 
 export default function ZerodhaFundsTab({
   funds,
@@ -19,55 +29,99 @@ export default function ZerodhaFundsTab({
   fundSortOrder,
   totals,
   metricDeltas,
+  selectedAccount,
+  categoryRankingsMap,
 }: ZerodhaFundsTabProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const initialSearch = searchParams.get("q") || "";
+  const initialPageSize = (() => {
+    const ps = parseInt(
+      searchParams.get("pageSize") || searchParams.get("perPage") || "25",
+      10
+    );
+    return !isNaN(ps) && ps > 0 ? ps : 25;
+  })();
+  const initialPage = (() => {
+    const p = parseInt(searchParams.get("page") || "1", 10);
+    return !isNaN(p) && p > 0 ? p : 1;
+  })();
+
   const [fundSearch, setFundSearch] = useState(initialSearch);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [page, setPage] = useState(initialPage);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
+    for (const [key, value] of Object.entries(updates)) {
+      if (
+        value === null ||
+        value === "" ||
+        value === "All" ||
+        (key === "page" && value === "1") ||
+        (key === "pageSize" && value === "25") ||
+        (key === "perPage" && value === "25")
+      ) {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    const url = `${pathname}${query ? `?${query}` : ""}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
+  };
 
   useEffect(() => {
     setFundSearch(searchParams.get("q") || "");
+    const rawP = parseInt(searchParams.get("page") || "1", 10);
+    if (!isNaN(rawP) && rawP > 0) setPage(rawP);
+    const rawPs = parseInt(
+      searchParams.get("pageSize") || searchParams.get("perPage") || "25",
+      10
+    );
+    if (!isNaN(rawPs) && rawPs > 0) setPageSize(rawPs);
   }, [searchParams]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       const currentQ = searchParams.get("q") || "";
       if (currentQ !== fundSearch) {
-        const searchString =
-          typeof window !== "undefined"
-            ? window.location.search
-            : searchParams.toString();
-        const current = new URLSearchParams(searchString);
-        if (fundSearch) {
-          current.set("q", fundSearch);
-        } else {
-          current.delete("q");
-        }
-        const query = current.toString();
-        const url = `${pathname}${query ? `?${query}` : ""}`;
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", url);
-        }
-        router.replace(url, {
-          scroll: false,
-        });
+        setPage(1);
+        updateUrl({ q: fundSearch, page: "1" });
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [fundSearch]);
 
+  const deferredSearch = useDeferredValue(fundSearch);
+
   const filteredBase = useMemo(() => {
-    return funds.filter((f) =>
-      f.symbol.toLowerCase().includes(fundSearch.toLowerCase())
+    const tokens = getSearchTokens(deferredSearch);
+    return funds.filter(
+      (f) =>
+        tokens.length === 0 ||
+        matchesSearchTokens(
+          tokens,
+          [f.symbol, f.folioNo, f.memberName, f.sector, f.instrumentType],
+          f.folioNo
+        )
     );
-  }, [funds, fundSearch]);
+  }, [funds, deferredSearch]);
 
   const rankMap = useMemo(() => {
     const descSorted = [...filteredBase].sort((a, b) => {
-      const valA = a[fundSortField];
-      const valB = b[fundSortField];
+      const valA = a[fundSortField] ?? -999999;
+      const valB = b[fundSortField] ?? -999999;
       if (typeof valA === "string" && typeof valB === "string") {
         return valB.localeCompare(valA);
       }
@@ -76,17 +130,61 @@ export default function ZerodhaFundsTab({
       return numB - numA;
     });
 
-    const map = new Map<string, number>();
+    const map = new Map<number, number>();
     descSorted.forEach((item, index) => {
-      map.set(item.symbol, index + 1);
+      map.set(item.id, index + 1);
     });
     return map;
   }, [filteredBase, fundSortField]);
 
   const filteredFunds = useMemo(() => {
+    const tokens = getSearchTokens(deferredSearch);
+    const isSearching = tokens.length > 0;
+
+    const scoreMap = new Map<
+      number,
+      { matchedTermsCount: number; totalScore: number }
+    >();
+    if (isSearching) {
+      for (const f of filteredBase) {
+        const res = scoreItem(
+          tokens,
+          [
+            { text: f.symbol, weight: PORTFOLIO_SEARCH_WEIGHTS.SCHEME_NAME },
+            {
+              text: f.memberName,
+              weight: PORTFOLIO_SEARCH_WEIGHTS.MEMBER_NAME,
+            },
+            { text: f.folioNo, weight: PORTFOLIO_SEARCH_WEIGHTS.FOLIO_NO },
+            { text: f.sector, weight: PORTFOLIO_SEARCH_WEIGHTS.CATEGORY },
+            { text: f.instrumentType, weight: PORTFOLIO_SEARCH_WEIGHTS.OTHER },
+          ],
+          f.folioNo
+        );
+        scoreMap.set(f.id, res);
+      }
+    }
+
     return [...filteredBase].sort((a, b) => {
-      const valA = a[fundSortField];
-      const valB = b[fundSortField];
+      if (isSearching) {
+        const scoreA = scoreMap.get(a.id);
+        const scoreB = scoreMap.get(b.id);
+        const termsA = scoreA?.matchedTermsCount ?? 0;
+        const termsB = scoreB?.matchedTermsCount ?? 0;
+        if (termsB !== termsA) {
+          return termsB - termsA;
+        }
+        const totalA = scoreA?.totalScore ?? 0;
+        const totalB = scoreB?.totalScore ?? 0;
+        if (Math.abs(totalB - totalA) > 0.05) {
+          return totalB - totalA;
+        }
+      }
+
+      const valA =
+        a[fundSortField] ?? (fundSortOrder === "asc" ? 999999 : -999999);
+      const valB =
+        b[fundSortField] ?? (fundSortOrder === "asc" ? 999999 : -999999);
       if (typeof valA === "string" && typeof valB === "string") {
         return fundSortOrder === "asc"
           ? valA.localeCompare(valB)
@@ -96,7 +194,13 @@ export default function ZerodhaFundsTab({
       const numB = typeof valB === "number" ? valB : Number(valB) || 0;
       return fundSortOrder === "asc" ? numA - numB : numB - numA;
     });
-  }, [filteredBase, fundSortField, fundSortOrder]);
+  }, [filteredBase, fundSortField, fundSortOrder, deferredSearch]);
+
+  const totalPages = Math.ceil(filteredFunds.length / pageSize);
+  const paginatedFunds = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredFunds.slice(start, start + pageSize);
+  }, [filteredFunds, page, pageSize]);
 
   const fundTotals = useMemo(() => {
     if (filteredFunds.length === 0) return null;
@@ -175,6 +279,7 @@ export default function ZerodhaFundsTab({
         metricDeltas={fundBenchmarkDeltas}
         title="Mutual Fund XIRR"
       />
+
       <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-xl overflow-hidden shadow-lg">
         {/* Search controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-b border-slate-800/60">
@@ -184,9 +289,27 @@ export default function ZerodhaFundsTab({
             placeholder="Search scheme name..."
             className="max-w-sm w-full"
           />
-          <div className="text-xs text-slate-500 font-bold pr-1">
-            Showing {filteredFunds.length} of {funds.length} funds
-          </div>
+        </div>
+
+        {/* Table Top Bar with Page & Counter */}
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-950/80 border-b border-slate-850">
+          <span className="text-xs text-slate-400 font-medium">
+            Page <span className="text-slate-200 font-bold">{page}</span> of{" "}
+            <span className="text-slate-200 font-bold">
+              {Math.max(totalPages, 1)}
+            </span>
+          </span>
+          <span className="text-xs text-slate-400 font-medium">
+            Showing{" "}
+            <span className="text-slate-200 font-bold">
+              {paginatedFunds.length}
+            </span>{" "}
+            of{" "}
+            <span className="text-slate-200 font-bold">
+              {filteredFunds.length}
+            </span>{" "}
+            funds
+          </span>
         </div>
 
         {/* Table */}
@@ -198,17 +321,27 @@ export default function ZerodhaFundsTab({
                   #
                 </th>
                 <th
-                  className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("symbol")}
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none min-w-[320px]"
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("symbol");
+                  }}
                 >
                   <div className="flex items-center gap-1">
-                    Scheme Details {renderFundSortIcon("symbol")}
+                    <div className="leading-tight">
+                      <div>Scheme</div>
+                      <div>Details</div>
+                    </div>
+                    {renderFundSortIcon("symbol")}
                   </div>
                 </th>
-                <th className="p-4">Holder</th>
+                <th className="p-4 min-w-[90px] w-24 select-none">Holder</th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("currentValue")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("currentValue");
+                  }}
                 >
                   <div className="flex items-center gap-1">
                     Valuation {renderFundSortIcon("currentValue")}
@@ -216,23 +349,40 @@ export default function ZerodhaFundsTab({
                 </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("unrealizedPnl")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("unrealizedPnl");
+                  }}
                 >
                   <div className="flex items-center gap-1">
-                    Profit/Loss {renderFundSortIcon("unrealizedPnl")}
+                    <div className="leading-tight">
+                      <div>Profit /</div>
+                      <div>Loss</div>
+                    </div>
+                    {renderFundSortIcon("unrealizedPnl")}
                   </div>
                 </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap"
-                  onClick={() => toggleFundSort("holdingDays")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("holdingDays");
+                  }}
                 >
                   <div className="flex items-center gap-1">
-                    Holding Days {renderFundSortIcon("holdingDays")}
+                    <div className="leading-tight">
+                      <div>Holding</div>
+                      <div>Days</div>
+                    </div>
+                    {renderFundSortIcon("holdingDays")}
                   </div>
                 </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("cagr")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("cagr");
+                  }}
                 >
                   <div className="flex items-center gap-1">
                     CAGR {renderFundSortIcon("cagr")}
@@ -240,7 +390,10 @@ export default function ZerodhaFundsTab({
                 </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("xirr")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("xirr");
+                  }}
                 >
                   <div className="flex items-center gap-1">
                     XIRR {renderFundSortIcon("xirr")}
@@ -248,46 +401,122 @@ export default function ZerodhaFundsTab({
                 </th>
                 <th
                   className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                  onClick={() => toggleFundSort("alpha")}
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("alpha");
+                  }}
                 >
                   <div className="flex items-center gap-1">
                     Alpha {renderFundSortIcon("alpha")}
                   </div>
                 </th>
+                <th
+                  className="p-4 cursor-pointer hover:text-slate-200 select-none whitespace-nowrap"
+                  onClick={() => {
+                    setPage(1);
+                    toggleFundSort("athCorrectionPct");
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <div className="leading-tight">
+                      <div>ATH &</div>
+                      <div>Dip</div>
+                    </div>
+                    {renderFundSortIcon("athCorrectionPct")}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850 text-slate-300 text-sm">
-              {filteredFunds.length > 0 ? (
-                filteredFunds.map((f, idx) => (
+              {paginatedFunds.length > 0 ? (
+                paginatedFunds.map((f, idx) => (
                   <tr
                     key={idx}
                     onClick={() => router.push(`/fund/z_${f.id}`)}
                     className="hover:bg-slate-950/45 transition cursor-pointer select-none"
                   >
-                    <td className="p-4 text-center font-mono text-xs font-bold text-slate-500">
-                      {rankMap.get(f.symbol) ?? "-"}
+                    <td className="p-4 text-center  text-xs font-bold text-slate-500">
+                      {rankMap.get(f.id) ?? "-"}
                     </td>
                     <td className="p-4">
                       <div
-                        className="font-bold text-slate-100 break-words max-w-[320px] text-base leading-snug"
+                        className="font-bold text-slate-100 hover:text-emerald-400 transition cursor-pointer"
                         title={f.symbol}
                       >
                         {f.symbol}
                       </div>
-                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-                        <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px] capitalize shrink-0 whitespace-nowrap">
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-1">
+                        <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
                           {f.instrumentType || "Mutual Fund"}
                         </span>
-                        <span className="shrink-0">
-                          • Units: {f.quantity.toFixed(3)}
-                        </span>
-                        <span className="shrink-0">
-                          • NAV: ₹{f.currentPrice.toFixed(2)}
-                        </span>
+                        {(() => {
+                          const rankInfo = f.schemeCodeApi
+                            ? categoryRankingsMap?.[f.schemeCodeApi]
+                            : null;
+                          if (!rankInfo?.primaryRank) return null;
+
+                          const { rank, horizon } = rankInfo.primaryRank;
+                          const rankPillClass =
+                            rank === 1
+                              ? "bg-amber-950/80 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10"
+                              : rank <= 5
+                                ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
+                                : rank <= 15
+                                  ? "bg-sky-950/70 text-sky-300 border-sky-500/30"
+                                  : "bg-slate-850/90 text-slate-300 border-slate-700/60";
+
+                          const rankText =
+                            rank === 1
+                              ? `🏆 #1 in Cat (${horizon})`
+                              : rank <= 5
+                                ? `⭐ #${rank} (${horizon})`
+                                : `Rank #${rank} (${horizon})`;
+
+                          const titleText = `Category: ${rankInfo.categoryName || f.instrumentType || "Mutual Fund"}\n${Object.entries(
+                            rankInfo.allRanks
+                          )
+                            .filter(([, r]) => r && r !== "--")
+                            .map(([hz, r]) => `${hz}: #${r}`)
+                            .join(" • ")}`;
+
+                          return (
+                            <span
+                              title={titleText}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${rankPillClass}`}
+                            >
+                              {rankText}
+                            </span>
+                          );
+                        })()}
+                        {f.folioNo && <FolioBadge folioNo={f.folioNo} />}
+                        {f.quantity <= 0.0001 && (
+                          <span className="bg-amber-950/80 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">
+                            Inactive / Sold
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span>Units: {f.quantity.toFixed(3)}</span>
+                        <span>• NAV: ₹{f.currentPrice.toFixed(2)}</span>
                       </div>
                     </td>
-                    <td className="p-4 font-medium text-slate-200 uppercase tracking-wide">
-                      Dishen
+                    <td className="p-4 font-medium text-slate-200">
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="uppercase tracking-wide text-xs font-semibold text-slate-200">
+                          {formatZerodhaMemberShortName(
+                            f.clientId || f.memberName
+                          )}
+                        </span>
+                        {f.clientId && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px]  font-bold ${getZerodhaClientBadgeStyle(
+                              f.clientId
+                            )}`}
+                          >
+                            {f.clientId}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 font-bold text-slate-100">
                       <div>{formatCurrency(f.currentValue)}</div>
@@ -321,31 +550,59 @@ export default function ZerodhaFundsTab({
                         "-"
                       )}
                     </td>
-                    <td
-                      className={`p-4 font-bold ${
-                        f.cagr !== null && f.cagr !== undefined && f.cagr >= 0
-                          ? "text-slate-200"
-                          : f.cagr !== null && f.cagr !== undefined
-                            ? "text-red-400"
-                            : "text-slate-200"
-                      }`}
-                    >
-                      {f.cagr !== null && f.cagr !== undefined
-                        ? formatPercent(f.cagr)
-                        : "-"}
+                    <td className="p-4">
+                      <div
+                        className={`font-bold ${
+                          f.cagr !== null && f.cagr !== undefined && f.cagr >= 0
+                            ? "text-teal-400"
+                            : f.cagr !== null && f.cagr !== undefined
+                              ? "text-red-400"
+                              : "text-slate-400"
+                        }`}
+                      >
+                        {f.cagr !== null && f.cagr !== undefined
+                          ? formatPercent(f.cagr)
+                          : "-"}
+                      </div>
+                      {f.benchmarkCagr !== null &&
+                        f.benchmarkCagr !== undefined && (
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            CAVG: {formatPercent(f.benchmarkCagr)}
+                          </div>
+                        )}
                     </td>
-                    <td
-                      className={`p-4 font-bold ${
-                        f.xirr !== null && f.xirr !== undefined && f.xirr >= 0
-                          ? "text-teal-400"
-                          : f.xirr !== null && f.xirr !== undefined
-                            ? "text-red-400"
-                            : "text-teal-400"
-                      }`}
-                    >
-                      {f.xirr !== null && f.xirr !== undefined
-                        ? formatPercent(f.xirr)
-                        : "-"}
+                    <td className="p-4">
+                      <div
+                        className={`font-bold ${
+                          f.xirr !== null && f.xirr !== undefined && f.xirr >= 0
+                            ? "text-teal-400"
+                            : f.xirr !== null && f.xirr !== undefined
+                              ? "text-red-400"
+                              : "text-teal-400"
+                        }`}
+                      >
+                        {f.xirr !== null && f.xirr !== undefined
+                          ? formatPercent(f.xirr)
+                          : "-"}
+                      </div>
+                      {(() => {
+                        const benchXirr =
+                          f.benchmarkXirr !== null &&
+                          f.benchmarkXirr !== undefined
+                            ? f.benchmarkXirr
+                            : typeof f.alpha === "number" &&
+                                typeof f.xirr === "number" &&
+                                (f.alpha !== 0 || f.xirr !== 0)
+                              ? f.xirr - f.alpha
+                              : null;
+                        if (benchXirr === null || benchXirr === undefined)
+                          return null;
+                        return (
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            CAVG: {formatPercent(benchXirr)}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4">
                       {f.alpha !== null && f.alpha !== undefined ? (
@@ -363,12 +620,89 @@ export default function ZerodhaFundsTab({
                         <span className="text-slate-500">-</span>
                       )}
                     </td>
+                    <td className="p-4 whitespace-nowrap">
+                      {f.athNav && f.athNav > 0 ? (
+                        <div className="flex flex-col items-start gap-1">
+                          {/* Buy Dip Tag if opportunity */}
+                          {f.isLumpsumOpportunity && (
+                            <span
+                              title="Down ≥5% from All-Time High — Prime Lumpsum Opportunity"
+                              className="text-[10px] font-black uppercase text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/50 inline-flex items-center gap-0.5 shadow-sm shadow-amber-500/10"
+                            >
+                              🔥 Buy Dip
+                            </span>
+                          )}
+                          {/* Pct Correction */}
+                          <span
+                            className={`font-bold text-xs px-1.5 py-0.5 rounded border ${
+                              f.isLumpsumOpportunity
+                                ? "bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-sm shadow-rose-500/10"
+                                : (f.athCorrectionPct ?? 0) >= 0
+                                  ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
+                                  : "bg-amber-950/80 text-amber-300 border-amber-500/40"
+                            }`}
+                          >
+                            {f.athCorrectionPct !== null &&
+                            f.athCorrectionPct !== undefined
+                              ? f.athCorrectionPct >= 0
+                                ? "At Peak"
+                                : `${f.athCorrectionPct.toFixed(2)}%`
+                              : "-"}
+                          </span>
+                          {/* CUR & ATH & days */}
+                          <div className="text-[11px] text-slate-400 flex flex-col gap-0.5 mt-0.5 font-medium">
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-500 text-[10px]">
+                                CUR:
+                              </span>
+                              <span className="text-slate-300">
+                                ₹{f.currentPrice.toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-500 text-[10px]">
+                                ATH:
+                              </span>
+                              <span className="text-slate-300">
+                                ₹{f.athNav.toFixed(2)}
+                              </span>
+                            </div>
+                            {f.athDaysDiff !== null &&
+                              f.athDaysDiff !== undefined &&
+                              f.athDaysDiff > 0 && (
+                                <div className="text-[10px] text-slate-500">
+                                  {f.athDaysDiff}d ago
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-500 text-xs">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-500">
-                    No mutual funds found matching search.
+                  <td colSpan={10} className="p-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <p className="text-sm">
+                        No mutual funds found matching search.
+                      </p>
+                      {fundSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFundSearch("");
+                            setPage(1);
+                            updateUrl({ q: null, page: "1" });
+                          }}
+                          className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition underline cursor-pointer"
+                        >
+                          Clear Search
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
@@ -382,7 +716,11 @@ export default function ZerodhaFundsTab({
                       {filteredFunds.length === 1 ? "Fund" : "Funds"}
                     </div>
                   </td>
-                  <td className="p-4 text-slate-400">Dishen</td>
+                  <td className="p-4 text-slate-400">
+                    {selectedAccount === "all" || !selectedAccount
+                      ? "All"
+                      : formatZerodhaMemberShortName(selectedAccount)}
+                  </td>
                   <td className="p-4 text-teal-400 text-base font-black">
                     <div>{formatCurrency(fundTotals.totalValueSum)}</div>
                     <div className="text-[11px] text-slate-500 font-normal">
@@ -444,11 +782,33 @@ export default function ZerodhaFundsTab({
                       {fundTotals.avgAlpha.toFixed(2)}%
                     </span>
                   </td>
+                  <td className="p-4 text-slate-500">-</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Bottom Pagination & Records-Per-Page Bar */}
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          pageSizeOptions={[25, 50, 75, 100]}
+          onPageChange={(p) => {
+            setPage(p);
+            updateUrl({ page: String(p) });
+          }}
+          onPageSizeChange={(s) => {
+            setPageSize(s);
+            setPage(1);
+            updateUrl({ pageSize: String(s), page: "1" });
+          }}
+          totalItems={filteredFunds.length}
+          showingStart={(page - 1) * pageSize + 1}
+          showingEnd={Math.min(page * pageSize, filteredFunds.length)}
+          itemName="funds"
+        />
       </div>
     </div>
   );
