@@ -22,5 +22,6 @@ export interface ZerodhaHoldingParsed {
 
 export interface ZerodhaParseResult {
   asOfDate: string;
+  clientId: string;
   holdings: ZerodhaHoldingParsed[];
 }
