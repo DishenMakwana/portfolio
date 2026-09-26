@@ -680,7 +680,7 @@ async def main():
                 for r in rows:
                     schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
         elif args.active_only:
-            # Query active mutual fund schemes in the latest report snapshot
+            # Query active mutual fund schemes in the latest report snapshot and zerodha active mutual funds
             cur.execute("""
                 SELECT DISTINCT s.scheme_code_api, s.name, s.category, r.groww_slug
                 FROM portfolio.holdings_snapshot h
@@ -689,7 +689,15 @@ async def main():
                 WHERE h.report_id = (SELECT id FROM portfolio.reports ORDER BY as_of_date DESC LIMIT 1)
                   AND (h.balance_units > 0.0001 OR h.current_value > 0)
                   AND s.scheme_code_api ~ '^[0-9]{5,6}$'
-                ORDER BY s.category, s.name;
+                UNION
+                SELECT DISTINCT zs.scheme_code_api, zs.name, zs.category, r.groww_slug
+                FROM portfolio.zerodha_holdings zh
+                JOIN portfolio.zerodha_schemes zs ON zh.scheme_id = zs.id
+                LEFT JOIN portfolio.scheme_category_rankings r ON zs.scheme_code_api = r.scheme_code
+                WHERE zh.quantity > 0.0001
+                  AND zs.holding_type = 'mutual_fund'
+                  AND zs.scheme_code_api ~ '^[0-9]{5,6}$'
+                ORDER BY category, name;
             """)
             rows = cur.fetchall()
             for r in rows:

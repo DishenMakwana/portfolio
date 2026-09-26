@@ -419,7 +419,7 @@ def sync_instrument_to_db(conn, inspection, api_data):
                     ON CONFLICT (scheme_code, date) DO UPDATE SET nav = EXCLUDED.nav, fetched_at = EXCLUDED.fetched_at;
                 """
                 for i in range(0, len(history), BATCH_CHUNK_SIZE):
-                    chunk = [(code, r["date"], float(r.get("nav") or 0), now_iso) for r in history[i:i + BATCH_CHUNK_SIZE]]
+                    chunk = [(code, parse_date_to_iso(r["date"]) or r["date"], float(r.get("nav") or 0), now_iso) for r in history[i:i + BATCH_CHUNK_SIZE]]
                     execute_values(cur, w_query, chunk)
 
         conn.commit()

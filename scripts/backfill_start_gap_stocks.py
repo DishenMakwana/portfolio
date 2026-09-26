@@ -189,7 +189,7 @@ def backfill_stock(conn, item):
                     fetched_at = EXCLUDED.fetched_at;
             """
             for i in range(0, len(history_rows), BATCH_CHUNK_SIZE):
-                chunk = [(ticker, r["date"], r["nav"], now_iso) for r in history_rows[i:i + BATCH_CHUNK_SIZE]]
+                chunk = [(ticker, datetime.strptime(r["date"], "%d-%m-%Y").strftime("%Y-%m-%d"), r["nav"], now_iso) for r in history_rows[i:i + BATCH_CHUNK_SIZE]]
                 execute_values(cur, query, chunk)
 
         conn.commit()
