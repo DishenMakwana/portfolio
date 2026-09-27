@@ -253,7 +253,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catTop5 || "--"}
                 </span>
                 {catTop5 && top5 !== "--" && (
@@ -294,7 +294,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catTop20 || "--"}
                 </span>
                 {catTop20 && top20 !== "--" && (
@@ -335,7 +335,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catPe != null ? catPe.toFixed(2) : "--"}
                 </span>
                 {catPe != null && peRatio != null && (
@@ -376,7 +376,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catPb != null ? catPb.toFixed(2) : "--"}
                 </span>
                 {catPb != null && pbRatio != null && (
@@ -452,7 +452,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg:{" "}
                   {catAlpha != null
                     ? `${catAlpha >= 0 ? "+" : ""}${catAlpha.toFixed(2)}%`
@@ -496,7 +496,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catBeta != null ? catBeta.toFixed(2) : "--"}
                 </span>
                 {catBeta != null && beta != null && (
@@ -537,7 +537,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catSharpe != null ? catSharpe.toFixed(2) : "--"}
                 </span>
                 {catSharpe != null && sharpe != null && (
@@ -578,7 +578,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg: {catSortino != null ? catSortino.toFixed(2) : "--"}
                 </span>
                 {catSortino != null && sortino != null && (
@@ -619,7 +619,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg:{" "}
                   {catStdDev != null ? `${catStdDev.toFixed(2)}%` : "--"}
                 </span>
@@ -675,7 +675,7 @@ export default function FundAdvancedRatiosCard({
               </div>
 
               <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-400 ">
                   Cat Avg:{" "}
                   {catRSquared != null ? `${catRSquared.toFixed(1)}%` : "--"}
                 </span>
@@ -734,7 +734,7 @@ export default function FundAdvancedRatiosCard({
                     🟢 Higher is Better (&gt; 0)
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-purple-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                <div className="text-[11px]  text-purple-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
                   Formula: α = R_p - [R_f + β × (R_m - R_f)]
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -756,7 +756,7 @@ export default function FundAdvancedRatiosCard({
                     🛡️ &lt; 1.0 = Defensive | &gt; 1.0 = Aggressive
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
+                <div className="text-[11px]  text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
                   Formula: β = Cov(R_p, R_m) / Var(R_m)
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -779,7 +779,7 @@ export default function FundAdvancedRatiosCard({
                     🟢 Higher is Better
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-teal-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                <div className="text-[11px]  text-teal-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
                   Formula: Sharpe = (R_p - R_f) / σ_p
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -801,7 +801,7 @@ export default function FundAdvancedRatiosCard({
                     🟢 Higher is Better
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-emerald-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                <div className="text-[11px]  text-emerald-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
                   Formula: Sortino = (R_p - R_f) / σ_downside
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -822,7 +822,7 @@ export default function FundAdvancedRatiosCard({
                     🛡️ Lower is Calmer
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-sky-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                <div className="text-[11px]  text-sky-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
                   Formula: σ_annual = σ_weekly × √52
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -844,7 +844,7 @@ export default function FundAdvancedRatiosCard({
                     🟢 &gt; 80% Reliable Benchmark
                   </span>
                 </div>
-                <div className="text-[11px] font-mono text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                <div className="text-[11px]  text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-850">
                   Formula: R² = [Corr(R_fund, R_bench)]²
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">

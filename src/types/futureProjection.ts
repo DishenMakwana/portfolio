@@ -55,3 +55,14 @@ export interface ScenarioComparison {
   monthsToGoal: number;
   timeDifferenceMonths: number; // positive = faster, negative = slower
 }
+
+export interface FutureProjectionClientProps {
+  initialPortfolioValue: number;
+  initialInvestedCapital: number;
+  initialMonthlySip: number;
+  initialXirr: number;
+}
+
+export interface FutureProjectionPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
