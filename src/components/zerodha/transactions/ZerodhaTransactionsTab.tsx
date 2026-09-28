@@ -1096,7 +1096,12 @@ export default function ZerodhaTransactionsTab({
                             if (tx.holdingId) {
                               router.push(`/fund/z_${tx.holdingId}`);
                             } else if (tx.schemeId) {
-                              router.push(`/fund/${tx.schemeId}`);
+                              // No holding row yet (e.g. fresh IPO) — route via
+                              // scheme + client so fund page finds the right member.
+                              const url = tx.clientId
+                                ? `/fund/z_s${tx.schemeId}?client=${encodeURIComponent(tx.clientId)}`
+                                : `/fund/${tx.schemeId}`;
+                              router.push(url);
                             }
                           }}
                           className="font-bold text-slate-100 hover:text-emerald-400 transition cursor-pointer text-xs sm:text-sm whitespace-normal leading-snug"

@@ -1,11 +1,10 @@
 "use server";
 
-import { eq, and } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/db";
 import {
   familyMembers,
-  zerodhaMembers,
   zerodhaSchemes,
   zerodhaTransactions,
   schemeNavCacheMeta,
@@ -14,6 +13,8 @@ import { normalizeSchemeName } from "@/helpers/schemeNormalize";
 import { calculateMutualFundStampDuty } from "@/helpers/transactions";
 import { parseZerodhaCoinCsv } from "@/lib/zerodhaCoinCsvParser";
 import { purgeAllApplicationCaches } from "@/actions/portfolio";
+import { getFamilyMembers } from "@/lib/portfolioService";
+import { getZerodhaMembers, getRawZerodhaSchemes } from "@/lib/zerodhaService";
 import type { TransactionUploadResult } from "@/types/transactionUpload";
 
 export async function uploadZerodhaCoinCsvAction(
@@ -51,14 +52,47 @@ export async function uploadZerodhaCoinCsvAction(
       };
     }
 
-    // Pre-fetch all lookup entities in a single Promise.all batch
-    const [allFamilyMembers, allZerodhaMembers, allSchemes, allMeta] =
-      await Promise.all([
-        db.select().from(familyMembers),
-        db.select().from(zerodhaMembers),
-        db.select().from(zerodhaSchemes),
-        db.select().from(schemeNavCacheMeta),
-      ]);
+    // Extract distinct dates from CSV rows to prefetch existing transactions
+    const distinctDates = Array.from(
+      new Set(parseResult.rows.map((r) => r.tradeDate))
+    );
+
+    // Pre-fetch all lookup entities and relevant existing transactions in a single Promise.all batch
+    const [
+      allFamilyMembers,
+      allZerodhaMembers,
+      allSchemes,
+      allMeta,
+      existingTransactions,
+    ] = await Promise.all([
+      getFamilyMembers(),
+      getZerodhaMembers(),
+      getRawZerodhaSchemes(),
+      db
+        .select({
+          schemeCode: schemeNavCacheMeta.schemeCode,
+          schemeName: schemeNavCacheMeta.schemeName,
+          schemeCategory: schemeNavCacheMeta.schemeCategory,
+          isinGrowth: schemeNavCacheMeta.isinGrowth,
+          isinDivReinvestment: schemeNavCacheMeta.isinDivReinvestment,
+        })
+        .from(schemeNavCacheMeta),
+      distinctDates.length > 0
+        ? db
+            .select({
+              id: zerodhaTransactions.id,
+              memberId: zerodhaTransactions.memberId,
+              schemeId: zerodhaTransactions.schemeId,
+              date: zerodhaTransactions.date,
+              units: zerodhaTransactions.units,
+              amount: zerodhaTransactions.amount,
+              stampDuty: zerodhaTransactions.stampDuty,
+              folioNo: zerodhaTransactions.folioNo,
+            })
+            .from(zerodhaTransactions)
+            .where(inArray(zerodhaTransactions.date, distinctDates))
+        : Promise.resolve([]),
+    ]);
 
     const familyMap = new Map<string, (typeof allFamilyMembers)[0]>();
     for (const fm of allFamilyMembers) {
@@ -82,6 +116,15 @@ export async function uploadZerodhaCoinCsvAction(
       if (m.isinGrowth) metaIsinMap.set(m.isinGrowth.trim().toUpperCase(), m);
       if (m.isinDivReinvestment)
         metaIsinMap.set(m.isinDivReinvestment.trim().toUpperCase(), m);
+    }
+
+    // Map existing transactions for O(1) deduplication check: (memberId, schemeId, date, units)
+    const existingTxMap = new Map<string, (typeof existingTransactions)[0]>();
+    for (const tx of existingTransactions) {
+      existingTxMap.set(
+        `${tx.memberId}_${tx.schemeId}_${tx.date}_${tx.units}`,
+        tx
+      );
     }
 
     let insertedCount = 0;
@@ -175,14 +218,8 @@ export async function uploadZerodhaCoinCsvAction(
       );
 
       // 3. Deduplication Check: (memberId, schemeId, date, units)
-      const existingTx = await db.query.zerodhaTransactions.findFirst({
-        where: and(
-          eq(zerodhaTransactions.memberId, memberId),
-          eq(zerodhaTransactions.schemeId, schemeId),
-          eq(zerodhaTransactions.date, row.tradeDate),
-          eq(zerodhaTransactions.units, row.units)
-        ),
-      });
+      const txKey = `${memberId}_${schemeId}_${row.tradeDate}_${row.units}`;
+      const existingTx = existingTxMap.get(txKey);
 
       if (existingTx) {
         // If existing record is missing folio number, or has unrounded amount or missing stamp duty, update it
@@ -202,6 +239,14 @@ export async function uploadZerodhaCoinCsvAction(
             })
             .where(eq(zerodhaTransactions.id, existingTx.id));
           updatedCount++;
+          existingTxMap.set(txKey, {
+            ...existingTx,
+            folioNo: needsFolioUpdate ? row.folioNumber : existingTx.folioNo,
+            amount: needsAmountUpdate ? calculatedAmount : existingTx.amount,
+            stampDuty: needsStampUpdate
+              ? calculatedStampDuty
+              : existingTx.stampDuty,
+          });
         } else {
           skippedCount++;
         }
@@ -209,22 +254,37 @@ export async function uploadZerodhaCoinCsvAction(
       }
 
       // 4. Insert new transaction
-      await db.insert(zerodhaTransactions).values({
-        memberId,
-        schemeId,
-        folioNo: row.folioNumber,
-        date: row.tradeDate,
-        type: row.transactionMode,
-        rawTransactionType: row.transactionMode,
-        units: row.units,
-        nav: row.nav,
-        amount: calculatedAmount,
-        stampDuty: calculatedStampDuty,
-        broker: "Zerodha Coin",
-        assetType: "mutual_fund",
-        uploadedAt: new Date().toISOString(),
-      });
+      const [insertedTx] = await db
+        .insert(zerodhaTransactions)
+        .values({
+          memberId,
+          schemeId,
+          folioNo: row.folioNumber,
+          date: row.tradeDate,
+          type: row.transactionMode,
+          rawTransactionType: row.transactionMode,
+          units: row.units,
+          nav: row.nav,
+          amount: calculatedAmount,
+          stampDuty: calculatedStampDuty,
+          broker: "Zerodha Coin",
+          assetType: "mutual_fund",
+          uploadedAt: new Date().toISOString(),
+        })
+        .returning({
+          id: zerodhaTransactions.id,
+          memberId: zerodhaTransactions.memberId,
+          schemeId: zerodhaTransactions.schemeId,
+          date: zerodhaTransactions.date,
+          units: zerodhaTransactions.units,
+          amount: zerodhaTransactions.amount,
+          stampDuty: zerodhaTransactions.stampDuty,
+          folioNo: zerodhaTransactions.folioNo,
+        });
 
+      if (insertedTx) {
+        existingTxMap.set(txKey, insertedTx);
+      }
       insertedCount++;
     }
 

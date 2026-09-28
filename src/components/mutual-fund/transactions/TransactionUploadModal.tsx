@@ -12,12 +12,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { uploadTransactionsAction } from "@/actions/transactionUpload";
-import type { TransactionUploadResult } from "@/types/transactionUpload";
-
-interface TransactionUploadModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+import type {
+  TransactionUploadModalProps,
+  TransactionUploadResult,
+} from "@/types/transactionUpload";
 
 export default function TransactionUploadModal({
   isOpen,
@@ -62,6 +60,9 @@ export default function TransactionUploadModal({
       setResult(res);
 
       if (res.success) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("portfolio-data-updated"));
+        }
         router.refresh();
       }
     } catch {
