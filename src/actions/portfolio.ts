@@ -1,12 +1,18 @@
 "use server";
 
+import { execFile } from "child_process";
+import { promisify } from "util";
+import path from "path";
 import { revalidatePath } from "next/cache";
+
+const execFileAsync = promisify(execFile);
 import { parsePortfolioExcel } from "@/lib/parser";
 import {
   saveReportSnapshot,
   getReports,
   getReportHoldings,
   getSchemes,
+  getFamilyMembers,
   updateSchemeCode,
   saveSipMandates,
   clearSipMandates,
@@ -26,6 +32,7 @@ import {
   calculateAthCorrectionData,
   getNiftyAthAndCurrentPoints,
   clearAthCache,
+  parseDateToMidnightMs,
 } from "@/helpers/ath";
 import {
   PortfolioTransaction,
@@ -35,7 +42,7 @@ import {
   ActionResult,
   BullionRatesResponse,
 } from "@/types/portfolio";
-import { clearAllZerodhaCaches } from "@/lib/zerodhaService";
+import { clearAllZerodhaCaches, getZerodhaReports } from "@/lib/zerodhaService";
 import type { MfSearchResult } from "@/types/mf-api";
 import { clearAllMsflCaches } from "@/lib/msflService";
 import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
@@ -62,10 +69,7 @@ import { db } from "@/db/db";
 import {
   transactions as txTable,
   reports,
-  zerodhaReports,
   memberReportCagrs,
-  familyMembers,
-  schemes,
 } from "@/db/schema";
 
 import { eq, lte, inArray, desc } from "drizzle-orm";
@@ -126,6 +130,8 @@ export async function purgeAllApplicationCaches(): Promise<void> {
     revalidatePath("/zerodha");
     revalidatePath("/msfl");
     revalidatePath("/mapping");
+    revalidatePath("/fund/[id]");
+    revalidatePath("/watchlist/[id]");
   } catch {
     // Gracefully ignore when executed outside Next.js request context (e.g. CLI benchmarks/scripts)
   }
@@ -446,7 +452,7 @@ export async function getDashboardDataAction(
     niftyIndexDetails,
     allChronologicalHoldings,
   ] = await Promise.all([
-    getReportHoldings(selectedReport.id),
+    getReportHoldings(selectedReport.id, selectedReport.asOfDate),
     db
       .select({
         reportId: memberReportCagrs.reportId,
@@ -472,36 +478,15 @@ export async function getDashboardDataAction(
       .from(txTable)
       .where(lte(txTable.date, latestTimelineDate))
       .orderBy(desc(txTable.date), desc(txTable.id)),
-    previousReport ? getReportHoldings(previousReport.id) : Promise.resolve([]),
-    db
-      .select({
-        id: familyMembers.id,
-        name: familyMembers.name,
-        pan: familyMembers.pan,
-        address: familyMembers.address,
-        email: familyMembers.email,
-        mobile: familyMembers.mobile,
-        dematNominee: familyMembers.dematNominee,
-        dpId: familyMembers.dpId,
-        clientId: familyMembers.clientId,
-        dpName: familyMembers.dpName,
-        boSubStatus: familyMembers.boSubStatus,
-        bsda: familyMembers.bsda,
-        rgess: familyMembers.rgess,
-        accountStatus: familyMembers.accountStatus,
-        frozenStatus: familyMembers.frozenStatus,
-        boStatus: familyMembers.boStatus,
-        nsdlId: familyMembers.nsdlId,
-        dob: familyMembers.dob,
-        aadhaarStatus: familyMembers.aadhaarStatus,
-        linkedBankName: familyMembers.linkedBankName,
-        linkedBankIfsc: familyMembers.linkedBankIfsc,
-        linkedBankAccountNo: familyMembers.linkedBankAccountNo,
-      })
-      .from(familyMembers),
-    db.select({ name: schemes.name, category: schemes.category }).from(schemes),
+    previousReport
+      ? getReportHoldings(previousReport.id, previousReport.asOfDate)
+      : Promise.resolve([]),
+    getFamilyMembers(),
+    getSchemes(),
     getNifty50IndexHistory("5y"),
-    Promise.all(chronologicalReports.map((r) => getReportHoldings(r.id))),
+    Promise.all(
+      chronologicalReports.map((r) => getReportHoldings(r.id, r.asOfDate))
+    ),
   ]);
 
   const txHistory = allTimelineTxs.filter(
@@ -590,7 +575,16 @@ export async function getDashboardDataAction(
         );
       }
 
-      let schemeXirr = h.cagr || 0;
+      let hCagr = h.cagr || 0;
+      if (h.holdingDays && h.holdingDays > 0) {
+        if (h.holdingDays < 30) {
+          hCagr = h.absoluteReturn;
+        } else if (h.holdingDays <= 365) {
+          hCagr = (h.absoluteReturn * 365) / h.holdingDays;
+        }
+      }
+
+      let schemeXirr = hCagr;
       let schemeAlpha = 0;
       let benchmarkXirr: number | null = null;
       let benchmarkCagr: number | null = null;
@@ -607,7 +601,10 @@ export async function getDashboardDataAction(
           benchmarkCode
         );
         if (metrics.portfolioXirr !== 0 && !isNaN(metrics.portfolioXirr)) {
-          schemeXirr = metrics.portfolioXirr;
+          schemeXirr =
+            h.holdingDays && h.holdingDays < 30
+              ? h.absoluteReturn
+              : metrics.portfolioXirr;
           schemeAlpha = metrics.alpha;
         }
         if (metrics.benchmarkXirr !== 0 && !isNaN(metrics.benchmarkXirr)) {
@@ -623,7 +620,8 @@ export async function getDashboardDataAction(
 
       return {
         ...h,
-        xirr: schemeXirr,
+        cagr: Math.round(hCagr * 100) / 100,
+        xirr: Math.round(schemeXirr * 100) / 100,
         alpha: schemeAlpha,
         benchmarkXirr,
         benchmarkCagr,
@@ -669,7 +667,9 @@ export async function getDashboardDataAction(
     const absReturnPct =
       ((overallValuation - overallInvested) / overallInvested) * 100;
     if (weightedHoldingDays > 0) {
-      if (weightedHoldingDays <= 365) {
+      if (weightedHoldingDays < 30) {
+        derivedCagr = absReturnPct;
+      } else if (weightedHoldingDays <= 365) {
         derivedCagr = (absReturnPct * 365) / weightedHoldingDays;
       } else {
         derivedCagr =
@@ -1131,18 +1131,28 @@ export async function getDashboardDataAction(
     date: selectedReport.asOfDate,
   };
 
+  const selectedDateMs = parseDateToMidnightMs(selectedReport.asOfDate);
+  const cutoff52WMs = selectedDateMs - 364 * 24 * 60 * 60 * 1000;
+
   chronologicalReports.forEach((r, idx) => {
-    const tItem = timelineData[idx];
-    if (tItem) {
-      if (tItem.invested > maxInvested.value) {
-        maxInvested = { value: tItem.invested, date: r.asOfDate };
-      }
-      if (tItem.value > maxValue.value) {
-        maxValue = { value: tItem.value, date: r.asOfDate };
-      }
-      const g = tItem.value - tItem.invested;
-      if (g > maxGain.value) {
-        maxGain = { value: g, date: r.asOfDate };
+    const rDateMs = parseDateToMidnightMs(r.asOfDate);
+    if (
+      !isNaN(rDateMs) &&
+      rDateMs >= cutoff52WMs &&
+      rDateMs <= selectedDateMs + 86400000
+    ) {
+      const tItem = timelineData[idx];
+      if (tItem) {
+        if (tItem.invested > maxInvested.value) {
+          maxInvested = { value: tItem.invested, date: r.asOfDate };
+        }
+        if (tItem.value > maxValue.value) {
+          maxValue = { value: tItem.value, date: r.asOfDate };
+        }
+        const g = tItem.value - tItem.invested;
+        if (g > maxGain.value) {
+          maxGain = { value: g, date: r.asOfDate };
+        }
       }
     }
   });
@@ -1300,6 +1310,53 @@ export async function globalRefreshAction(): Promise<ActionResult> {
 }
 
 /**
+ * Run python incremental NAV & stock sync script and purge caches
+ */
+export async function syncNavAction(): Promise<
+  ActionResult<{ output: string }>
+> {
+  try {
+    const scriptPath = path.join(
+      process.cwd(),
+      "scripts",
+      "sync_latest_nav.py"
+    );
+    const { stdout, stderr } = await execFileAsync("python3", [scriptPath], {
+      cwd: process.cwd(),
+      maxBuffer: 15 * 1024 * 1024,
+      env: { ...process.env },
+    });
+
+    // Invalidate in-memory caches
+    clearAllAlphaCaches();
+    clearAllZerodhaCaches();
+    clearAllMsflCaches();
+    clearInsightsServiceCaches();
+    clearAuditDataCache();
+    clearPortfolioSummaryCache();
+    clearNiftyAnalysisCache();
+    clearSchemeCategoryRankingsCache();
+    clearPortfolioServiceCaches();
+    clearWatchlistCache();
+    clearDashboardDataCache();
+    clearAthCache();
+    clearNiftyIndexCache();
+
+    revalidatePath("/", "layout");
+
+    return {
+      success: true,
+      data: { output: stdout || stderr },
+    };
+  } catch (err: unknown) {
+    console.error("syncNavAction Error:", err);
+    const errorMsg =
+      err instanceof Error ? err.message : "Sync NAV script execution failed";
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
  * Fetch Financial Year Tracker data for selected FY or default
  */
 export async function getFyTrackerDataAction(selectedFyLabel?: string) {
@@ -1324,20 +1381,23 @@ export async function getMissingUploadNotificationsAction(): Promise<
     const tradingDays = getLastTradingDays(5);
     const tradingDateKeys = tradingDays.map((d) => d.dateKey);
 
-    // Fetch existing reports for these trading dates in parallel
-    const [mfExisting, zerodhaExisting] = await Promise.all([
-      db
-        .select({ asOfDate: reports.asOfDate })
-        .from(reports)
-        .where(inArray(reports.asOfDate, tradingDateKeys)),
-      db
-        .select({ asOfDate: zerodhaReports.asOfDate })
-        .from(zerodhaReports)
-        .where(inArray(zerodhaReports.asOfDate, tradingDateKeys)),
+    // Fetch existing reports using cached repository functions in parallel
+    const [mfReportsList, zerodhaReportsList] = await Promise.all([
+      getReports(),
+      getZerodhaReports(),
     ]);
 
-    const mfDateSet = new Set(mfExisting.map((r) => r.asOfDate));
-    const zerodhaDateSet = new Set(zerodhaExisting.map((r) => r.asOfDate));
+    const tradingDateSet = new Set(tradingDateKeys);
+    const mfDateSet = new Set(
+      mfReportsList
+        .filter((r) => tradingDateSet.has(r.asOfDate))
+        .map((r) => r.asOfDate)
+    );
+    const zerodhaDateSet = new Set(
+      zerodhaReportsList
+        .filter((r) => tradingDateSet.has(r.asOfDate))
+        .map((r) => r.asOfDate)
+    );
 
     const items: MissingUploadNotification[] = [];
 

@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
+import type { FutureProjectionPageProps } from "@/types/futureProjection";
 
 export default async function FutureProjectionPage({
   searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+}: FutureProjectionPageProps) {
   const params = await searchParams;
   const sp = new URLSearchParams();
   sp.set("tab", "future-projection");

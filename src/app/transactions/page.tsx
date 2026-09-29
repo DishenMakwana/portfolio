@@ -7,6 +7,7 @@ import {
 } from "@/lib/portfolioService";
 import HeaderClient from "@/components/shared/HeaderClient";
 import TransactionsClient from "@/components/mutual-fund/transactions/TransactionsClient";
+import { enrichTransactionsWithHoldings } from "@/helpers/transactions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Transactions — Family Portfolio" };
@@ -30,6 +31,7 @@ export default async function TransactionsPage() {
     (acc, h) => acc + (h.currentValue || 0),
     0
   );
+  const enrichedTransactions = enrichTransactionsWithHoldings(txRows, holdings);
 
   return (
     <>
@@ -49,7 +51,7 @@ export default async function TransactionsPage() {
         </div>
         <Suspense fallback={null}>
           <TransactionsClient
-            transactions={txRows}
+            transactions={enrichedTransactions}
             currentPortfolioValue={currentPortfolioValue}
           />
         </Suspense>
