@@ -241,18 +241,33 @@ async def scrape_groww_table_data(page, table_selector: str):
     }
 
 async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_name: str, db_slug: str = None):
+    # Fast check: skip ULIP / Insurance / non-mutual fund schemes or schemes verified not on Groww
+    cat_lower = (category_name or "").lower()
+    name_lower = (scheme_name or "").lower()
+    if (
+        db_slug == "NOT_FOUND"
+        or "ulip" in cat_lower
+        or "insurance" in cat_lower
+        or "ulip" in name_lower
+        or "ulis" in name_lower
+    ):
+        print(f"[SKIP] Non-mutual fund / ULIP scheme {scheme_name} ({scheme_code}). Marking NOT_FOUND.")
+        save_not_found_to_db(scheme_code, scheme_name, category_name)
+        return None
+
     slug = resolve_groww_slug_auto(scheme_code, scheme_name, db_slug)
     url = f"https://groww.in/mutual-funds/{slug}"
     
     page = await browser.new_page()
     try:
-        resp = await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+        resp = await page.goto(url, wait_until="domcontentloaded", timeout=12000)
         if not resp or resp.status != 200:
             fallback_slug = slug.replace("-direct-growth", "-growth")
             url = f"https://groww.in/mutual-funds/{fallback_slug}"
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            resp = await page.goto(url, wait_until="domcontentloaded", timeout=12000)
             if not resp or resp.status != 200:
                 print(f"[FAIL] HTTP {resp.status if resp else 'No response'} for {scheme_name} at {url}")
+                save_not_found_to_db(scheme_code, scheme_name, category_name)
                 return None
             slug = fallback_slug
 
@@ -463,6 +478,7 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
 
         if not annualised_data:
             print(f"[WARN] Returns and rankings table not found for {scheme_name} ({slug})")
+            save_not_found_to_db(scheme_code, scheme_name, category_name)
             return None
 
         return {
@@ -491,6 +507,30 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
         return None
     finally:
         await page.close()
+
+def save_not_found_to_db(scheme_code: str, scheme_name: str, category_name: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO portfolio.scheme_category_rankings 
+            (scheme_code, scheme_name, category_name, groww_slug, last_scraped_at, updated_at)
+            VALUES (%s, %s, %s, 'NOT_FOUND', NOW(), NOW())
+            ON CONFLICT (scheme_code) DO UPDATE SET
+                scheme_name = EXCLUDED.scheme_name,
+                category_name = EXCLUDED.category_name,
+                groww_slug = 'NOT_FOUND',
+                last_scraped_at = NOW(),
+                updated_at = NOW();
+        """, (scheme_code, scheme_name, category_name))
+        conn.commit()
+        print(f"[NOT_FOUND] Marked {scheme_name} ({scheme_code}) as NOT_FOUND in DB.")
+    except Exception as e:
+        conn.rollback()
+        print(f"[DB ERROR] Error saving NOT_FOUND for {scheme_code}: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 def save_ranking_to_db(data: dict):
     conn = get_db_connection()
@@ -634,14 +674,20 @@ async def main():
         if args.scheme_code:
             clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
             cur.execute("""
-                SELECT scheme_code_api, name, category, NULL as groww_slug 
-                FROM portfolio.schemes WHERE scheme_code_api = %s
+                SELECT s.scheme_code_api, s.name, s.category, r.groww_slug 
+                FROM portfolio.schemes s
+                LEFT JOIN portfolio.scheme_category_rankings r ON s.scheme_code_api = r.scheme_code
+                WHERE s.scheme_code_api = %s
                 UNION
-                SELECT scheme_code_api, name, category, NULL as groww_slug 
-                FROM portfolio.zerodha_schemes WHERE scheme_code_api = %s
+                SELECT zs.scheme_code_api, zs.name, zs.category, r.groww_slug 
+                FROM portfolio.zerodha_schemes zs
+                LEFT JOIN portfolio.scheme_category_rankings r ON zs.scheme_code_api = r.scheme_code
+                WHERE zs.scheme_code_api = %s
                 UNION
-                SELECT scheme_code, scheme_name, category, groww_slug
-                FROM portfolio.watchlist_schemes WHERE scheme_code = %s
+                SELECT ws.scheme_code, ws.scheme_name, ws.category, COALESCE(ws.groww_slug, r.groww_slug)
+                FROM portfolio.watchlist_schemes ws
+                LEFT JOIN portfolio.scheme_category_rankings r ON ws.scheme_code = r.scheme_code
+                WHERE ws.scheme_code = %s
             """, (clean_code, clean_code, clean_code))
             rows = cur.fetchall()
             for r in rows:
