@@ -45,7 +45,7 @@ import {
 import { clearAllZerodhaCaches, getZerodhaReports } from "@/lib/zerodhaService";
 import type { MfSearchResult } from "@/types/mf-api";
 import { clearAllMsflCaches } from "@/lib/msflService";
-import { searchMutualFund, autoMapScheme } from "@/lib/mfApi";
+import { searchMutualFund, autoMapScheme, clearMfApiCache } from "@/lib/mfApi";
 import { parseSipExcel } from "@/lib/sipParser";
 import { getBullionData } from "@/lib/bullionService";
 import { getNifty50IndexHistory, clearNiftyIndexCache } from "@/lib/stockApi";
@@ -108,6 +108,7 @@ export async function purgeAllApplicationCaches(): Promise<void> {
   clearAllZerodhaCaches();
   clearAllMsflCaches();
   clearWatchlistCache();
+  clearMfApiCache();
 
   try {
     revalidatePath("/", "layout");
