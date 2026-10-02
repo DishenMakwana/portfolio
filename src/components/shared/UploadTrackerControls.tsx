@@ -31,6 +31,9 @@ export default function UploadTrackerControls({
     setIsUploading(false);
     if (res.success && res.data?.reportId) {
       toast.success("Mutual Fund Valuation sheet uploaded successfully!");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("portfolio-data-updated"));
+      }
       router.refresh();
       router.push(`/uploads?reportId=${res.data.reportId}`);
     } else {

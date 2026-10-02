@@ -1,10 +1,15 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/db";
 import { familyMembers, schemes, transactions } from "@/db/schema";
+import {
+  cleanFolioNumber,
+  normalizeSchemeName,
+} from "@/helpers/schemeNormalize";
 import { parseTransactionXlsx } from "@/lib/transactionXlsxParser";
+import { purgeAllApplicationCaches } from "@/actions/portfolio";
+import { getFamilyMembers, getSchemes } from "@/lib/portfolioService";
 import type { TransactionUploadResult } from "@/types/transactionUpload";
 
 function normalizeTxType(type: string): string {
@@ -67,9 +72,42 @@ export async function uploadTransactionsAction(
       };
     }
 
-    // Pre-fetch all members and schemes for fast lookup
-    const allMembers = await db.select().from(familyMembers);
-    const allSchemes = await db.select().from(schemes);
+    const uniqueDates = Array.from(
+      new Set(parsedRows.map((r) => r.date.trim()))
+    );
+
+    // Pre-fetch all members, schemes, and matching date transactions in parallel
+    const [allMembers, allSchemes, existingDateTxs] = await Promise.all([
+      getFamilyMembers(),
+      getSchemes(),
+      uniqueDates.length > 0
+        ? db
+            .select({
+              id: transactions.id,
+              memberId: transactions.memberId,
+              date: transactions.date,
+              nav: transactions.nav,
+              amount: transactions.amount,
+              units: transactions.units,
+              schemeId: transactions.schemeId,
+              folioNo: transactions.folioNo,
+              transactionType: transactions.transactionType,
+            })
+            .from(transactions)
+            .where(inArray(transactions.date, uniqueDates))
+        : Promise.resolve([]),
+    ]);
+
+    type ExistingTxItem = (typeof existingDateTxs)[number];
+    const txsByMemberDate = new Map<string, ExistingTxItem[]>();
+    for (const t of existingDateTxs) {
+      if (t.memberId && t.date) {
+        const key = `${t.memberId}_${t.date}`;
+        const list = txsByMemberDate.get(key) || [];
+        list.push(t);
+        txsByMemberDate.set(key, list);
+      }
+    }
 
     const memberMap = new Map<string, number>();
     const memberPanMap = new Map<string, number>();
@@ -79,8 +117,13 @@ export async function uploadTransactionsAction(
     });
 
     const schemeMap = new Map<string, number>();
+    const normSchemeMap = new Map<string, number>();
     allSchemes.forEach((s) => {
       schemeMap.set(s.name.trim().toLowerCase(), s.id);
+      if (s.normalizedName) {
+        normSchemeMap.set(s.normalizedName, s.id);
+      }
+      normSchemeMap.set(normalizeSchemeName(s.name), s.id);
     });
 
     let insertedCount = 0;
@@ -116,10 +159,11 @@ export async function uploadTransactionsAction(
         }
       }
 
-      // 2. Resolve Scheme ID
-      let schemeId: number | undefined = schemeMap.get(
-        row.schemeName.trim().toLowerCase()
-      );
+      // 2. Resolve Scheme ID with canonical normalization
+      const normScheme = normalizeSchemeName(row.schemeName);
+      let schemeId: number | undefined =
+        schemeMap.get(row.schemeName.trim().toLowerCase()) ||
+        normSchemeMap.get(normScheme);
 
       if (!schemeId) {
         // Create new scheme in DB
@@ -127,44 +171,38 @@ export async function uploadTransactionsAction(
           .insert(schemes)
           .values({
             name: row.schemeName.trim(),
+            normalizedName: normScheme,
             category: "Equity",
           })
           .returning({ id: schemes.id });
 
         schemeId = insertedScheme.id;
         schemeMap.set(row.schemeName.trim().toLowerCase(), schemeId);
+        normSchemeMap.set(normScheme, schemeId);
       }
 
       const cleanFolioNo = row.folioNo.replace(/^'/, "").trim();
+      const normalizedFolio = cleanFolioNumber(cleanFolioNo);
       const cleanDate = row.date.trim();
       const cleanTxnType = row.transactionType.trim();
       const normTxnType = normalizeTxType(cleanTxnType);
 
-      // 3. Query all candidate transactions from DB for this member on this date
-      const dateTxs = await db
-        .select({
-          id: transactions.id,
-          nav: transactions.nav,
-          amount: transactions.amount,
-          units: transactions.units,
-          schemeId: transactions.schemeId,
-          folioNo: transactions.folioNo,
-          transactionType: transactions.transactionType,
-        })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.memberId, memberId),
-            eq(transactions.date, cleanDate)
-          )
-        );
+      // 3. Lookup candidate transactions for this member on this date from memory map
+      const dateKey = `${memberId}_${cleanDate}`;
+      const dateTxs = txsByMemberDate.get(dateKey) || [];
 
       // Candidates matching folio AND transactionType (strictly respecting SIP vs Purchase vs Switch)
       const sameTypeCandidates = dateTxs.filter((t) => {
-        const dbFolio = (t.folioNo || "").replace(/^'/, "").trim();
+        const dbNormFolio = cleanFolioNumber(t.folioNo);
         const dbNormType = normalizeTxType(t.transactionType || "");
+        const folioMatch =
+          dbNormFolio === normalizedFolio ||
+          (dbNormFolio &&
+            normalizedFolio &&
+            (dbNormFolio.includes(normalizedFolio) ||
+              normalizedFolio.includes(dbNormFolio)));
         return (
-          dbFolio === cleanFolioNo &&
+          folioMatch &&
           dbNormType.toLowerCase() === normTxnType.toLowerCase() &&
           !matchedDbIds.has(t.id)
         );
@@ -223,15 +261,30 @@ export async function uploadTransactionsAction(
           .returning({ id: transactions.id });
 
         matchedDbIds.add(inserted.id);
+        let list = txsByMemberDate.get(dateKey);
+        if (!list) {
+          list = [];
+          txsByMemberDate.set(dateKey, list);
+        }
+        list.push({
+          id: inserted.id,
+          memberId,
+          date: cleanDate,
+          nav: row.nav,
+          amount: row.amount,
+          units: row.units,
+          schemeId,
+          folioNo: cleanFolioNo,
+          transactionType: cleanTxnType,
+        });
         insertedCount++;
       }
     }
 
-    revalidatePath("/transactions");
-    revalidatePath("/holdings");
-    revalidatePath("/");
+    await purgeAllApplicationCaches();
 
     const details: string[] = [];
+
     details.push(`${insertedCount} newly added`);
     details.push(`${updatedCount} updated`);
     details.push(`${skippedCount} skipped (already matched)`);
