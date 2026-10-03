@@ -410,11 +410,12 @@ def discover_all_instruments(conn, specific_code=None):
                     active_stocks[ticker] = {
                         "ticker": ticker,
                         "name": name,
-                        "scheme_id": r["id"],
                         "sources": set(),
-                        "quantity": qty,
+                        "quantity": 0,
                     }
                 active_stocks[ticker]["sources"].add("zerodha")
+                active_stocks[ticker]["zerodha_scheme_id"] = r["id"]
+                active_stocks[ticker]["quantity"] += qty
 
         # 4. MSFL Schemes & Active Holdings
         cur.execute("""
@@ -452,11 +453,12 @@ def discover_all_instruments(conn, specific_code=None):
                     active_stocks[ticker] = {
                         "ticker": ticker,
                         "name": name,
-                        "scheme_id": r["id"],
                         "sources": set(),
-                        "quantity": qty,
+                        "quantity": 0,
                     }
                 active_stocks[ticker]["sources"].add("msfl")
+                active_stocks[ticker]["msfl_scheme_id"] = r["id"]
+                active_stocks[ticker]["quantity"] += qty
 
         # 5. Watchlist Schemes
         cur.execute("SELECT id, scheme_name, category, instrument_type, scheme_code FROM portfolio.watchlist_schemes ORDER BY id;")
@@ -721,7 +723,8 @@ def update_stock_holdings_and_history(conn, stock, yahoo_data, dry_run=False):
                     last_fetched_at = EXCLUDED.last_fetched_at;
             """, (ticker, stock["name"], now_iso))
 
-            if current_price is not None:
+            z_scheme_id = stock.get("zerodha_scheme_id") or stock.get("scheme_id")
+            if current_price is not None and z_scheme_id:
                 # Update zerodha_holdings
                 cur.execute("""
                     UPDATE portfolio.zerodha_holdings
@@ -734,7 +737,7 @@ def update_stock_holdings_and_history(conn, stock, yahoo_data, dry_run=False):
                         END,
                         updated_at = NOW()
                     WHERE scheme_id = %s;
-                """, (current_price, current_price, current_price, current_price, stock["scheme_id"]))
+                """, (current_price, current_price, current_price, current_price, z_scheme_id))
 
         if "msfl" in sources:
             m_query = """
@@ -757,7 +760,8 @@ def update_stock_holdings_and_history(conn, stock, yahoo_data, dry_run=False):
                     last_fetched_at = EXCLUDED.last_fetched_at;
             """, (ticker, stock["name"], now_iso))
 
-            if current_price is not None:
+            m_scheme_id = stock.get("msfl_scheme_id") or stock.get("scheme_id")
+            if current_price is not None and m_scheme_id:
                 # Update msfl_holdings
                 cur.execute("""
                     UPDATE portfolio.msfl_holdings
@@ -770,7 +774,7 @@ def update_stock_holdings_and_history(conn, stock, yahoo_data, dry_run=False):
                         END,
                         updated_at = NOW()
                     WHERE scheme_id = %s;
-                """, (current_price, current_price, current_price, current_price, stock["scheme_id"]))
+                """, (current_price, current_price, current_price, current_price, m_scheme_id))
 
     conn.commit()
     return points_inserted
