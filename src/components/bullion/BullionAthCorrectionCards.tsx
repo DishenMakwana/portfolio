@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Coins, Crown, Sparkles, Layers, TrendingUp } from "lucide-react";
 import { formatInr } from "@/helpers/formatters";
 import {
@@ -10,8 +9,7 @@ import {
   SILVER_PURITIES,
   PLATINUM_PURITIES,
   type BullionAthCorrectionCardsProps,
-  type BullionAthMetric,
-  type BullionMetal,
+  type BullionCardConfig,
 } from "@/types/bullion";
 
 const cardVariants: Variants = {
@@ -22,13 +20,6 @@ const cardVariants: Variants = {
     transition: { delay: i * 0.04, duration: 0.3, ease: "easeOut" as const },
   }),
 };
-
-interface BullionCardConfig {
-  metric: BullionAthMetric;
-  metal: BullionMetal;
-  purity: string;
-  icon: typeof Coins;
-}
 
 export default function BullionAthCorrectionCards({
   athData,
