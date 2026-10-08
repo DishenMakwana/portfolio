@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
 
   experimental: {
-    viewTransition: true,
     optimizePackageImports: ["lucide-react", "framer-motion"],
   },
 };
