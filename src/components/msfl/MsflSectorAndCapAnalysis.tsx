@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { PieChart, Pie, Sector, ResponsiveContainer, Tooltip } from "recharts";
-import type { PieSectorDataItem } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Sector,
+  ResponsiveContainer,
+  Tooltip,
+  type PieSectorDataItem,
+} from "recharts";
 import { PieChart as PieIcon, ShieldAlert, Layers } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
-import type {
-  MsflSectorBreakdownItem,
-  MsflMarketCapBreakdownItem,
-} from "@/types/msfl";
-
-interface MsflSectorAndCapAnalysisProps {
-  sectorBreakdown: MsflSectorBreakdownItem[];
-  marketCapBreakdown: MsflMarketCapBreakdownItem[];
-}
+import type { MsflSectorAndCapAnalysisProps } from "@/types/msfl";
+import type { MarketCapConfigMap } from "@/types/marketCap";
+import type { PieActiveShapePayload } from "@/types/constants";
 
 const SECTOR_COLORS = [
   "#10b981", // Emerald
@@ -28,10 +28,7 @@ const SECTOR_COLORS = [
   "#64748b", // Slate
 ];
 
-const CAP_CONFIG: Record<
-  string,
-  { label: string; bg: string; text: string; border: string; desc: string }
-> = {
+const CAP_CONFIG: MarketCapConfigMap = {
   "Large Cap": {
     label: "Large Cap",
     bg: "bg-blue-950/40 hover:bg-blue-950/60",
@@ -123,14 +120,7 @@ export default function MsflSectorAndCapAnalysis({
                   animationEasing="ease-out"
                   onMouseEnter={(_, index) => setActiveIndex(index)}
                   onMouseLeave={() => setActiveIndex(null)}
-                  shape={(
-                    props: PieSectorDataItem & {
-                      index: number;
-                      cx: number;
-                      cy: number;
-                      midAngle?: number;
-                    }
-                  ) => {
+                  shape={(props: PieSectorDataItem & PieActiveShapePayload) => {
                     const isHovered = activeIndex === props.index;
                     const midAngle = props.midAngle ?? 0;
                     const RADIAN = Math.PI / 180;

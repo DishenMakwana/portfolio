@@ -1,44 +1,52 @@
 "use client";
 
-import MsflLeaderboardChart from "@/components/msfl/MsflLeaderboardChart";
+import {
+  useState,
+  useTransition,
+  useEffect,
+  useDeferredValue,
+  useMemo,
+} from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { BriefcaseBusiness } from "lucide-react";
+import { toast } from "react-hot-toast";
+
+import MsflHeaderUploadBanner from "@/components/msfl/MsflHeaderUploadBanner";
 import MsflHeroCards from "@/components/msfl/MsflHeroCards";
 import MsflBenchmarkAndSummaryCards from "@/components/msfl/MsflBenchmarkAndSummaryCards";
 import OverviewAthCorrectionCards from "@/components/mutual-fund/overview/OverviewAthCorrectionCards";
-import MsflHoldingsSection from "@/components/msfl/MsflHoldingsSection";
-import MsflSectorAndCapAnalysis from "@/components/msfl/MsflSectorAndCapAnalysis";
 import MsflPortfolioTimeSeriesChart from "@/components/msfl/MsflPortfolioTimeSeriesChart";
+import MsflSectorAndCapAnalysis from "@/components/msfl/MsflSectorAndCapAnalysis";
+import MsflLeaderboardCard from "@/components/msfl/MsflLeaderboardCard";
+import MsflHoldingsSection from "@/components/msfl/MsflHoldingsSection";
+import MsflUploadedFilesCard from "@/components/msfl/MsflUploadedFilesCard";
+import MsflMappingModal from "@/components/msfl/modal/MsflMappingModal";
 import ConfirmationModal from "@/components/shared/ConfirmationModal";
-import { useState, useTransition, useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+import { useTableSort } from "@/helpers/useTableSort";
+import { formatLocalDateStr } from "@/helpers/formatters";
 import {
-  Upload,
-  Trash,
-  Loader2,
-  BriefcaseBusiness,
-  BarChart3,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
-  Sparkles,
-  TrendingUp,
-  Search,
-  Building2,
-  Tag,
-} from "lucide-react";
-import type {
-  MsflHoldingData,
-  MsflDashboardClientProps,
-  MsflScheme,
-  MsflSortField,
-} from "@/types/msfl";
-import type { StockSearchResult } from "@/types/zerodha";
+  matchesSearchTokens,
+  getSearchTokens,
+  scoreItem,
+  PORTFOLIO_SEARCH_WEIGHTS,
+} from "@/helpers/search";
 import {
   uploadMsflHoldingsAction,
   deleteMsflHoldingsAction,
   updateMsflSchemeMappingAction,
 } from "@/actions/msfl";
 import { searchStockApiAction } from "@/actions/zerodha";
-import { toast } from "react-hot-toast";
+
+import type {
+  MsflHoldingData,
+  MsflDashboardClientProps,
+  MsflScheme,
+  MsflSortField,
+  MsflReportItem,
+} from "@/types/msfl";
+import type { StockSearchResult } from "@/types/zerodha";
+import type { SearchScoreMap } from "@/types/filters";
 
 export default function MsflDashboardClient({
   msflData,
@@ -49,25 +57,22 @@ export default function MsflDashboardClient({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<MsflReportItem | null>(
+    null
+  );
 
   const initialQ = searchParams.get("q") || "";
-  const initialSort =
-    (searchParams.get("sort") as MsflSortField) || "currentValue";
-  const initialOrder = (searchParams.get("order") as "asc" | "desc") || "desc";
-
   const [searchQuery, setSearchQuery] = useState(initialQ);
 
-  // Sorting state for MSFL Stock Holdings
-  const [sortField, setSortField] = useState<MsflSortField>(initialSort);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
+  // Sorting state for MSFL Stock Holdings with URL synchronization
+  const { sortField, sortOrder, toggleSort, renderSortIcon } =
+    useTableSort<MsflSortField>({
+      defaultField: "currentValue",
+      defaultOrder: "desc",
+    });
 
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "");
-    const sField =
-      (searchParams.get("sort") as MsflSortField) || "currentValue";
-    setSortField(sField);
-    const sOrder = (searchParams.get("order") as "asc" | "desc") || "desc";
-    setSortOrder(sOrder);
   }, [searchParams]);
 
   const updateUrl = (updates: Record<string, string | null>) => {
@@ -100,33 +105,6 @@ export default function MsflDashboardClient({
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  const toggleSort = (field: typeof sortField) => {
-    let nextOrder: "asc" | "desc" = "desc";
-    if (sortField === field) {
-      nextOrder = sortOrder === "asc" ? "desc" : "asc";
-    }
-    setSortField(field);
-    setSortOrder(nextOrder);
-    updateUrl({ sort: field, order: nextOrder });
-  };
-
-  const renderSortIcon = (field: typeof sortField) => {
-    const isActive = sortField === field;
-    if (isActive) {
-      return sortOrder === "asc" ? (
-        <ChevronUp size={12} className="inline ml-1 text-teal-400" />
-      ) : (
-        <ChevronDown size={12} className="inline ml-1 text-teal-400" />
-      );
-    }
-    return (
-      <ChevronsUpDown
-        size={12}
-        className="inline ml-1 text-slate-500 opacity-60"
-      />
-    );
-  };
 
   // Mapping modal states
   const [editingScheme, setEditingScheme] = useState<MsflScheme | null>(null);
@@ -195,25 +173,22 @@ export default function MsflDashboardClient({
     });
   };
 
-  // Snapshot Change Handler
-  const handleSnapshotChange = (reportId: number) => {
-    const params = new URLSearchParams(window.location.search);
-    params.set("msflReportId", String(reportId));
-    router.push(`${window.location.pathname}?${params.toString()}`);
-  };
-
   // Delete Snapshot Handler
   const handleConfirmDeleteSnapshot = async () => {
-    if (!selectedReport) return;
+    const target = reportToDelete || selectedReport;
+    if (!target) return;
 
     startTransition(async () => {
-      const res = await deleteMsflHoldingsAction(selectedReport.id);
+      const res = await deleteMsflHoldingsAction(target.id);
       setIsDeleteModalOpen(false);
+      setReportToDelete(null);
       if (res.success) {
         toast.success("MSFL report snapshot deleted successfully");
         router.refresh();
         const params = new URLSearchParams(window.location.search);
-        params.delete("msflReportId");
+        if (selectedReport?.id === target.id) {
+          params.delete("msflReportId");
+        }
         router.push(`${window.location.pathname}?${params.toString()}`);
       } else {
         toast.error(res.error || "Failed to delete snapshot");
@@ -278,20 +253,50 @@ export default function MsflDashboardClient({
     });
   };
 
-  // Filter holdings by search query and sort
-  const filteredHoldings = holdings
-    .filter((h) => h.symbol.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      let valA = a[sortField as keyof MsflHoldingData];
-      let valB = b[sortField as keyof MsflHoldingData];
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
-      // Handle null CAGR / metrics gracefully
-      if (valA === null || valA === undefined) {
-        valA = sortOrder === "asc" ? Infinity : -Infinity;
+  // Filter holdings by search query and sort
+  const filteredHoldings = useMemo(() => {
+    const tokens = getSearchTokens(deferredSearchQuery);
+    const isSearching = tokens.length > 0;
+
+    const matched = holdings.filter((h) => {
+      return (
+        tokens.length === 0 ||
+        matchesSearchTokens(tokens, [h.symbol, h.sector, h.marketCapCategory])
+      );
+    });
+
+    const scoreMap: SearchScoreMap = new Map();
+    if (isSearching) {
+      for (const h of matched) {
+        const res = scoreItem(tokens, [
+          { text: h.symbol, weight: PORTFOLIO_SEARCH_WEIGHTS.SYMBOL },
+          { text: h.sector, weight: PORTFOLIO_SEARCH_WEIGHTS.CATEGORY },
+          { text: h.marketCapCategory, weight: PORTFOLIO_SEARCH_WEIGHTS.OTHER },
+        ]);
+        scoreMap.set(h.id, res);
       }
-      if (valB === null || valB === undefined) {
-        valB = sortOrder === "asc" ? Infinity : -Infinity;
+    }
+
+    return [...matched].sort((a, b) => {
+      if (isSearching) {
+        const scoreA = scoreMap.get(a.id);
+        const scoreB = scoreMap.get(b.id);
+        const termsA = scoreA?.matchedTermsCount ?? 0;
+        const termsB = scoreB?.matchedTermsCount ?? 0;
+        if (termsB !== termsA) {
+          return termsB - termsA;
+        }
+        const totalA = scoreA?.totalScore ?? 0;
+        const totalB = scoreB?.totalScore ?? 0;
+        if (Math.abs(totalB - totalA) > 0.05) {
+          return totalB - totalA;
+        }
       }
+
+      const valA = a[sortField] ?? (sortOrder === "asc" ? Infinity : -Infinity);
+      const valB = b[sortField] ?? (sortOrder === "asc" ? Infinity : -Infinity);
 
       if (typeof valA === "string" && typeof valB === "string") {
         return sortOrder === "asc"
@@ -303,73 +308,12 @@ export default function MsflDashboardClient({
       const numB = typeof valB === "number" ? valB : Number(valB) || 0;
       return sortOrder === "asc" ? numA - numB : numB - numA;
     });
+  }, [holdings, deferredSearchQuery, sortField, sortOrder]);
 
   return (
     <div className="space-y-6">
       {/* Upload and snapshot control panel */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-5 rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-md shadow-xl">
-        <div className="flex items-center gap-3.5 flex-wrap">
-          <div>
-            <h2 className="text-sm font-bold text-slate-200">
-              MSFL Connect Portfolio
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Static stock investment portfolio snapshots
-            </p>
-          </div>
-          {reportsList.length > 0 && selectedReport && (
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  value={selectedReport.id}
-                  onChange={(e) => handleSnapshotChange(Number(e.target.value))}
-                  className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-slate-100 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none pr-9 h-[38px] transition"
-                >
-                  {reportsList.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.filename} (
-                      {new Date(r.asOfDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                      )
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                  <ChevronDown size={14} />
-                </div>
-              </div>
-              <button
-                onClick={() => setIsDeleteModalOpen(true)}
-                className="p-1.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition cursor-pointer h-[38px] w-[38px] flex items-center justify-center"
-                title="Delete Snapshot"
-              >
-                <Trash size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <label className="relative flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-slate-950 text-xs font-black transition shadow-lg shadow-teal-500/10 cursor-pointer">
-            {isPending ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Upload size={14} />
-            )}
-            Upload Report (.xlsx)
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleUpload}
-              disabled={isPending}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-          </label>
-        </div>
-      </div>
+      <MsflHeaderUploadBanner isPending={isPending} onUpload={handleUpload} />
 
       {reportsList.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/10 py-16 px-6 text-center">
@@ -426,22 +370,10 @@ export default function MsflDashboardClient({
           />
 
           {/* CAGR Leaderboard Chart */}
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/70 p-6 shadow-xl">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <BarChart3 size={15} className="text-teal-400" />
-              MSFL Stock CAGR Leaderboard
-            </h3>
-            {cagrHoldings.length > 0 ? (
-              <MsflLeaderboardChart
-                mfHoldings={cagrHoldings.slice(0, 10)}
-                niftyBenchmark={benchmark}
-              />
-            ) : (
-              <div className="py-12 text-center text-xs text-slate-500">
-                No MSFL stocks with CAGR history found in this snapshot.
-              </div>
-            )}
-          </div>
+          <MsflLeaderboardCard
+            cagrHoldings={cagrHoldings}
+            benchmark={benchmark}
+          />
 
           {/* Holdings Table & Outperforming vs Underperforming breakdown */}
           <MsflHoldingsSection
@@ -460,249 +392,50 @@ export default function MsflDashboardClient({
         </>
       )}
 
-      {/* ── POLISHED MANUAL SEARCH / MAP MODAL (Matching Zerodha Logic) ── */}
-      {editingScheme && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800/90 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-800/80 bg-slate-950/60">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4 text-teal-400" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-slate-100 text-sm tracking-tight">
-                    Map Scheme & Benchmark
-                  </h3>
-                  <p className="text-[11px] text-teal-300/80 font-medium truncate max-w-sm mt-0.5">
-                    {editingScheme.name}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setEditingScheme(null);
-                  setStockSearchQuery("");
-                  setStockSearchResults([]);
-                }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition cursor-pointer"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Uploaded XLSX Files Card */}
+      <MsflUploadedFilesCard
+        reportsList={reportsList}
+        selectedReportId={selectedReport?.id}
+        onDeleteReport={(report) => {
+          setReportToDelete(report);
+          setIsDeleteModalOpen(true);
+        }}
+      />
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-              {/* ── STOCK SEARCH VIEW ── */}
-              <div className="space-y-4">
-                <div className="space-y-2.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <TrendingUp size={11} className="text-teal-400" />
-                    <span>Search Stock Tickers (NSE & BSE)</span>
-                  </label>
+      {/* Manual Search / Map Modal */}
+      <MsflMappingModal
+        editingScheme={editingScheme}
+        onClose={() => {
+          setEditingScheme(null);
+          setStockSearchQuery("");
+          setStockSearchResults([]);
+        }}
+        stockSearchQuery={stockSearchQuery}
+        onStockSearch={handleStockSearch}
+        onClearStockSearch={() => {
+          setStockSearchQuery("");
+          setStockSearchResults([]);
+        }}
+        isSearchingStock={isSearchingStock}
+        stockSearchResults={stockSearchResults}
+        customTickerInput={customTickerInput}
+        onCustomTickerChange={setCustomTickerInput}
+        onMapScheme={handleMapScheme}
+        isPending={isPending}
+      />
 
-                  <div className="relative">
-                    <Search
-                      size={14}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Search stock symbol or name (e.g. ASHOKLEY, RELIANCE, TCS)..."
-                      value={stockSearchQuery}
-                      onChange={(e) => handleStockSearch(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800/80 focus:border-teal-500/60 focus:ring-1 focus:ring-teal-500/20 rounded-xl pl-9 pr-8 py-2.5 text-xs text-slate-200 placeholder:text-slate-500 outline-none transition"
-                      autoFocus
-                    />
-                    {isSearchingStock ? (
-                      <Loader2
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-400 animate-spin"
-                        size={14}
-                      />
-                    ) : stockSearchQuery ? (
-                      <button
-                        onClick={() => {
-                          setStockSearchQuery("");
-                          setStockSearchResults([]);
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-[10px] transition cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {/* Stock Search Results Panel */}
-                  <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-850/60 shadow-inner">
-                    {isSearchingStock ? (
-                      <div className="flex items-center justify-center py-8 text-slate-400 text-xs gap-2">
-                        <Loader2
-                          size={14}
-                          className="animate-spin text-teal-400"
-                        />
-                        Searching Yahoo Finance stock symbols…
-                      </div>
-                    ) : stockSearchResults.length > 0 ? (
-                      stockSearchResults.map((res) => {
-                        const isIndian =
-                          res.symbol.endsWith(".NS") ||
-                          res.symbol.endsWith(".BO") ||
-                          res.exchange.includes("NSE") ||
-                          res.exchange.includes("BSE") ||
-                          res.exchange.includes("Bombay");
-
-                        return (
-                          <div
-                            key={res.symbol}
-                            onClick={() => handleMapScheme(res.symbol)}
-                            className="flex items-center justify-between p-3 hover:bg-slate-900/90 cursor-pointer transition text-xs group"
-                          >
-                            <div className="min-w-0 flex-1 pr-3">
-                              <div className="font-bold text-slate-200 group-hover:text-teal-300 transition truncate flex items-center gap-1.5">
-                                <span>{res.name}</span>
-                                {isIndian && (
-                                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded">
-                                    India
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                <span className="flex items-center gap-1">
-                                  <Building2 size={10} />
-                                  {res.exchange}
-                                </span>
-                                {res.industry && <span>• {res.industry}</span>}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="text-xs font-mono font-bold text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2.5 py-1 rounded-lg group-hover:bg-teal-500/20 group-hover:border-teal-500/40 transition">
-                                {res.symbol}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="py-7 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-1">
-                        <span>
-                          {stockSearchQuery.trim().length < 2
-                            ? "Type stock symbol to search NSE/BSE tickers…"
-                            : "No ticker matches found on Yahoo Finance."}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Manual Ticker Entry with Quick Helper Pills */}
-                <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Tag size={11} className="text-teal-400" />
-                      <span>Manual Ticker Entry</span>
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const base = customTickerInput
-                            .replace(/\.(NS|BO)/gi, "")
-                            .trim();
-                          setCustomTickerInput(`${base}.NS`);
-                        }}
-                        className="text-[10px] font-bold text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 rounded transition cursor-pointer"
-                      >
-                        + .NS (NSE)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const base = customTickerInput
-                            .replace(/\.(NS|BO)/gi, "")
-                            .trim();
-                          setCustomTickerInput(`${base}.BO`);
-                        }}
-                        className="text-[10px] font-bold text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 px-2 py-0.5 rounded transition cursor-pointer"
-                      >
-                        + .BO (BSE)
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="E.G. ASHOKLEY.NS, 539574.BO"
-                      value={customTickerInput}
-                      onChange={(e) =>
-                        setCustomTickerInput(e.target.value.toUpperCase())
-                      }
-                      className="flex-1 bg-slate-950 border border-slate-800 focus:border-teal-500/60 focus:ring-1 focus:ring-teal-500/20 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-200 outline-none transition uppercase placeholder:normal-case placeholder:font-sans placeholder:text-slate-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (customTickerInput.trim()) {
-                          handleMapScheme(
-                            customTickerInput.trim().toUpperCase()
-                          );
-                        }
-                      }}
-                      disabled={!customTickerInput.trim() || isPending}
-                      className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer shrink-0 shadow-md shadow-teal-500/20"
-                    >
-                      Apply Ticker
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800/80 bg-slate-950/80">
-              {editingScheme.schemeCodeApi ? (
-                <button
-                  type="button"
-                  onClick={() => handleMapScheme(null)}
-                  disabled={isPending}
-                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <Trash size={12} />
-                  <span>Clear Mapping</span>
-                </button>
-              ) : (
-                <div />
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingScheme(null);
-                  setStockSearchQuery("");
-                  setStockSearchResults([]);
-                }}
-                className="px-4 py-2 rounded-xl border border-slate-800 text-xs font-bold text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 transition cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Confirmation Modal for Deleting MSFL Snapshot */}
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setReportToDelete(null);
+        }}
         onConfirm={handleConfirmDeleteSnapshot}
         title="Delete MSFL Snapshot?"
         description={`Are you sure you want to permanently delete the MSFL snapshot for ${
-          selectedReport
-            ? new Date(selectedReport.asOfDate).toLocaleDateString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
+          reportToDelete || selectedReport
+            ? formatLocalDateStr((reportToDelete || selectedReport)!.asOfDate)
             : "this report"
         }?`}
         warningNote="All stock holdings, valuations, and profit calculations for this MSFL snapshot will be permanently removed."

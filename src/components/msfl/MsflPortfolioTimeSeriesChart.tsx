@@ -12,13 +12,7 @@ import {
 } from "recharts";
 import { TrendingUp, Calendar } from "lucide-react";
 import { formatCurrency, formatPercent } from "@/helpers/formatters";
-import type { MsflTimeSeriesPoint } from "@/types/msfl";
-
-interface MsflPortfolioTimeSeriesChartProps {
-  timeSeries: MsflTimeSeriesPoint[];
-  currentValuation: number;
-  totalInvested: number;
-}
+import type { MsflPortfolioTimeSeriesChartProps } from "@/types/msfl";
 
 export default function MsflPortfolioTimeSeriesChart({
   timeSeries,
@@ -180,14 +174,14 @@ export default function MsflPortfolioTimeSeriesChart({
 
                     <div className="flex items-center justify-between gap-4 pt-1">
                       <span className="text-slate-400">Valuation:</span>
-                      <span className="font-bold text-slate-100 font-mono">
+                      <span className="font-bold text-slate-100 ">
                         {formatCurrency(data.currentValue)}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-slate-400">Invested:</span>
-                      <span className="font-semibold text-slate-300 font-mono">
+                      <span className="font-semibold text-slate-300 ">
                         {formatCurrency(data.invested)}
                       </span>
                     </div>
@@ -195,7 +189,7 @@ export default function MsflPortfolioTimeSeriesChart({
                     <div className="flex items-center justify-between gap-4 border-t border-slate-800/80 pt-1">
                       <span className="text-slate-400">Gain/Loss:</span>
                       <span
-                        className={`font-extrabold font-mono ${
+                        className={`font-extrabold  ${
                           gainPositive ? "text-emerald-400" : "text-rose-400"
                         }`}
                       >

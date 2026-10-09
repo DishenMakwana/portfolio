@@ -1,18 +1,15 @@
 "use client";
 
-import { MsflLeaderboardChartProps } from "@/types/msfl";
+import { MsflLeaderboardChartProps, MsflHoveredBarState } from "@/types/msfl";
 import { useState } from "react";
 
 export default function MsflLeaderboardChart({
   mfHoldings,
   niftyBenchmark,
 }: MsflLeaderboardChartProps) {
-  const [hoveredBar, setHoveredBar] = useState<{
-    x: number;
-    y: number;
-    symbol: string;
-    cagr: number;
-  } | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<MsflHoveredBarState | null>(
+    null
+  );
 
   const maxCagr = Math.max(...mfHoldings.map((m) => m.cagr), 0);
   const minCagr = Math.min(...mfHoldings.map((m) => m.cagr), 0);
