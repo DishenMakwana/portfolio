@@ -2,27 +2,8 @@
 
 import { Calculator, ChevronDown } from "lucide-react";
 import { formatInr } from "@/helpers/formatters";
-import {
-  BULLION_METALS,
-  GOLD_PURITIES,
-  SILVER_PURITIES,
-  PLATINUM_PURITIES,
-  type BullionMetal,
-  type BullionCalculatorProps,
-  type GstType,
-} from "@/types/bullion";
-
-function getPurityOptions(selectedTab: BullionMetal): string[] {
-  if (selectedTab === BULLION_METALS.GOLD)
-    return [GOLD_PURITIES.K24, GOLD_PURITIES.K22, GOLD_PURITIES.K18];
-  if (selectedTab === BULLION_METALS.SILVER)
-    return [SILVER_PURITIES.P999, SILVER_PURITIES.P925, SILVER_PURITIES.P800];
-  return [
-    PLATINUM_PURITIES.PT950,
-    PLATINUM_PURITIES.PT900,
-    PLATINUM_PURITIES.PT850,
-  ];
-}
+import { getPurityOptions } from "@/helpers/bullion";
+import type { BullionCalculatorProps, GstType } from "@/types/bullion";
 
 export default function BullionCalculator({
   selectedTab,

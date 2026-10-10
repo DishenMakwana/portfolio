@@ -2,28 +2,19 @@
 
 import { motion } from "framer-motion";
 import { formatInr } from "@/helpers/formatters";
-import { getAdjustedBullionPrice } from "@/helpers/bullion";
+import { getAdjustedBullionPrice, decimalsForChange } from "@/helpers/bullion";
 import {
   BULLION_METALS,
-  type BullionMetal,
   type BullionPriceCardsProps,
+  type PriceCardItemProps,
 } from "@/types/bullion";
-
-function decimalsForChange(selectedTab: BullionMetal): number {
-  return selectedTab === BULLION_METALS.GOLD ? 0 : 1;
-}
 
 function PriceCardItem({
   title,
   value,
   change,
   decimals,
-}: {
-  title: string;
-  value: number;
-  change: number;
-  decimals: number;
-}): React.JSX.Element {
+}: PriceCardItemProps): React.JSX.Element {
   const isUp = change >= 0;
   return (
     <motion.div
