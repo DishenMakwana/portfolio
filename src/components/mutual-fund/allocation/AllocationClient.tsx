@@ -1,170 +1,115 @@
 "use client";
 
-import { useState, useMemo, Fragment } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { PieChart, Pie, Sector, Tooltip, ResponsiveContainer } from "recharts";
-import type { PieSectorDataItem } from "recharts";
-import {
-  ChevronDown,
-  ChevronUp,
-  Info,
-  CheckSquare,
-  Square,
-} from "lucide-react";
-import {
-  formatCurrency,
-  formatIndianNumber,
-  formatPct,
-} from "@/helpers/formatters";
-import {
-  ALLOCATION_BG_CLASSES,
-  ALLOCATION_PALETTE,
-  AllocationClientProps,
-  ChartTooltipProps,
-  SortableRecord,
-  SortState,
-  SortOrder,
-} from "@/types/allocation";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import AllocationFilterBar from "./AllocationFilterBar";
+import AllocationOverviewSection from "./AllocationOverviewSection";
+import AllocationSubCategoryAndFundSection from "./AllocationSubCategoryAndFundSection";
+import AllocationCategoryAssetTableCard from "./AllocationCategoryAssetTableCard";
+import AllocationEquityCapTableCard from "./AllocationEquityCapTableCard";
+import AllocationSchemeGroupedTableCard from "./AllocationSchemeGroupedTableCard";
 import {
   getAmcName,
   getAssetRatios,
   getCapRatios,
   getSubCategory,
+  sortAllocationArray,
+  mapToAllocationPercentageArray,
 } from "@/helpers/allocation";
+import type {
+  AllocationClientProps,
+  SortState,
+  SchemeGroupItem,
+  AllocationFlattenedSchemeRow,
+} from "@/types/allocation";
+import type {
+  GrowwMarketCapData,
+  GrowwAssetAllocationData,
+} from "@/types/fund-details";
 
-/* ─── Custom Tooltip ─── */
-const ChartTooltip = ({
-  active,
-  payload,
-}: ChartTooltipProps): React.JSX.Element | null => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0];
-  return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 shadow-2xl z-50">
-      <div className="font-bold text-slate-100 text-sm">{d.name}</div>
-      <div className="text-teal-400 font-extrabold text-base mt-1">
-        {formatCurrency(d.value)}
-      </div>
-      <div className="text-slate-400 text-xs mt-0.5">
-        {d.payload.pct?.toFixed(2)}% of total
-      </div>
-    </div>
-  );
-};
-
-/* ─── Sortable header cell ─── */
-function SortTh({
-  label,
-  col,
-  sortCol,
-  sortDir,
-  onSort,
-  className = "",
-}: {
-  label: string;
-  col: string;
-  sortCol: string;
-  sortDir: "asc" | "desc";
-  onSort: (c: string) => void;
-  className?: string;
-}) {
-  const isActive = sortCol === col;
-  return (
-    <th
-      className={`px-4 py-3 font-semibold text-xs cursor-pointer hover:text-slate-200 transition select-none ${className}`}
-      onClick={() => onSort(col)}
-    >
-      <div className="flex items-center gap-1">
-        {label}
-        {isActive ? (
-          sortDir === "asc" ? (
-            <ChevronUp size={12} className="shrink-0 text-teal-400" />
-          ) : (
-            <ChevronDown size={12} className="shrink-0 text-teal-400" />
-          )
-        ) : (
-          <ChevronDown size={12} className="shrink-0 opacity-20" />
-        )}
-      </div>
-    </th>
-  );
-}
-
-/* ─── Teal total row ─── */
-function TotalRow({ cells }: { cells: (string | number)[] }) {
-  return (
-    <tr className="bg-teal-500 text-slate-950">
-      {cells.map((c, i) => (
-        <td
-          key={i}
-          className={`px-4 py-3 font-extrabold text-sm tabular-nums ${
-            i > 0 ? "text-right" : "text-left"
-          } ${
-            i === cells.length - 1
-              ? "bg-teal-600 border-l border-teal-400/30"
-              : ""
-          }`}
-        >
-          {c}
-        </td>
-      ))}
-    </tr>
-  );
-}
-
-/* ─── Card header ─── */
-function CardHeader({
-  accent,
-  title,
-  subtitle,
-  collapsed,
-  onToggle,
-}: {
-  accent: string;
-  title: string;
-  subtitle: string;
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
-  const isCollapsible = onToggle !== undefined;
-  return (
-    <div
-      className={`px-5 py-4 border-b border-slate-800 flex items-center gap-3 ${
-        isCollapsible
-          ? "cursor-pointer select-none hover:bg-slate-800/30 transition-colors"
-          : ""
-      }`}
-      onClick={onToggle}
-    >
-      <div className={`w-1 h-5 rounded-full shrink-0 ${accent}`} />
-      <h2 className="text-sm font-bold text-slate-200">{title}</h2>
-      <span className="text-xs text-slate-500 ml-1 flex-1">{subtitle}</span>
-      {isCollapsible && (
-        <div className="text-slate-400 shrink-0">
-          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════ */
 export default function AllocationClient({
   memberSummaries,
   holdings,
   selectedReport,
 }: AllocationClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const allMembers = useMemo(
+    () =>
+      [...memberSummaries]
+        .map((m) => m.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [memberSummaries]
+  );
+
   /* ── Filter state ── */
   const [investorOpen, setInvestorOpen] = useState(false);
   const [selectedInvestors, setSelectedInvestors] = useState<Set<string>>(
-    () => new Set(memberSummaries.map((m) => m.name))
+    () => {
+      const rawMembers = searchParams.get("members");
+      if (rawMembers) {
+        const parsed = rawMembers
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean);
+        if (parsed.length > 0) return new Set(parsed);
+      }
+      return new Set(memberSummaries.map((m) => m.name));
+    }
   );
-  const [activeInvestors, setActiveInvestors] = useState<Set<string>>(
-    () => new Set(memberSummaries.map((m) => m.name))
-  );
-  const [hoveredCell, setHoveredCell] = useState<number | null>(null);
+  const [activeInvestors, setActiveInvestors] = useState<Set<string>>(() => {
+    const rawMembers = searchParams.get("members");
+    if (rawMembers) {
+      const parsed = rawMembers
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean);
+      if (parsed.length > 0) return new Set(parsed);
+    }
+    return new Set(memberSummaries.map((m) => m.name));
+  });
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "") {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    const url = `${pathname}${query ? `?${query}` : ""}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
+  };
+
+  useEffect(() => {
+    const rawMembers = searchParams.get("members");
+    if (rawMembers) {
+      const parsed = rawMembers
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean);
+      if (parsed.length > 0) {
+        const s = new Set(parsed);
+        setSelectedInvestors(s);
+        setActiveInvestors(s);
+        return;
+      }
+    }
+    const defaultSet = new Set(memberSummaries.map((m) => m.name));
+    setSelectedInvestors(defaultSet);
+    setActiveInvestors(defaultSet);
+  }, [searchParams, memberSummaries]);
 
   /* ── Card collapse state (collapsed = hidden body) ── */
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -193,11 +138,6 @@ export default function AllocationClient({
     dir: "desc",
   });
 
-  const allMembers = useMemo(
-    () => memberSummaries.map((m) => m.name),
-    [memberSummaries]
-  );
-
   const isAllSelected = useMemo(() => {
     return (
       allMembers.length > 0 && allMembers.every((m) => selectedInvestors.has(m))
@@ -225,6 +165,11 @@ export default function AllocationClient({
   const handleApply = () => {
     setActiveInvestors(new Set(selectedInvestors));
     setInvestorOpen(false);
+    const membersParam =
+      selectedInvestors.size === allMembers.length
+        ? null
+        : Array.from(selectedInvestors).join(",");
+    updateUrl({ members: membersParam });
   };
 
   const investorLabel = useMemo(() => {
@@ -243,21 +188,6 @@ export default function AllocationClient({
         dir: prev.col === col && prev.dir === "desc" ? "asc" : "desc",
       }));
     };
-
-  const sortArr = <T extends SortableRecord>(
-    arr: T[],
-    col: string,
-    dir: SortOrder
-  ) =>
-    [...arr].sort((a, b) => {
-      const aValue = a[col];
-      const bValue = b[col];
-      const v =
-        typeof aValue === "string" && typeof bValue === "string"
-          ? aValue.localeCompare(bValue)
-          : Number(bValue) - Number(aValue);
-      return dir === "asc" ? -v : v;
-    });
 
   /* ── Filtered holdings ── */
   const filteredHoldings = useMemo(() => {
@@ -281,7 +211,14 @@ export default function AllocationClient({
     const memberMap = new Map<string, number>();
     const schemeMap = new Map<
       string,
-      { schemeName: string; category: string; subCat: string; total: number }
+      {
+        schemeName: string;
+        category: string;
+        subCat: string;
+        total: number;
+        marketCap?: GrowwMarketCapData | null;
+        assetAllocation?: GrowwAssetAllocationData | null;
+      }
     >();
 
     for (const h of filteredHoldings) {
@@ -295,23 +232,21 @@ export default function AllocationClient({
         (memberMap.get(h.memberName) || 0) + h.currentValue
       );
       const existing = schemeMap.get(h.schemeName);
-      if (existing) existing.total += h.currentValue;
-      else
+      if (existing) {
+        existing.total += h.currentValue;
+      } else {
         schemeMap.set(h.schemeName, {
           schemeName: h.schemeName,
           category: h.category,
           subCat,
           total: h.currentValue,
+          marketCap: h.marketCap,
+          assetAllocation: h.assetAllocation,
         });
+      }
     }
 
     const total = filteredHoldings.reduce((s, h) => s + h.currentValue, 0);
-    const toArr = (map: Map<string, number>) =>
-      Array.from(map.entries()).map(([name, value]) => ({
-        name,
-        value,
-        pct: total > 0 ? (value / total) * 100 : 0,
-      }));
 
     const memberArr = (
       activeInvestors.has("all")
@@ -323,7 +258,30 @@ export default function AllocationClient({
       pct: total > 0 ? ((memberMap.get(m.name) || 0) / total) * 100 : 0,
     }));
 
-    const schemeRowsArr = Array.from(schemeMap.values()).map((s) => {
+    const schemeRowsArr: AllocationFlattenedSchemeRow[] = Array.from(
+      schemeMap.values()
+    ).map((s) => {
+      if (s.assetAllocation) {
+        const eqPct = Number(s.assetAllocation.equity) || 0;
+        const debtPct = Number(s.assetAllocation.debt) || 0;
+        const commPct = Number(s.assetAllocation.commodities) || 0;
+        const otherPct =
+          (Number(s.assetAllocation.cash) || 0) +
+          (Number(s.assetAllocation.realEstate) || 0);
+
+        return {
+          schemeName: s.schemeName,
+          subCat: s.subCat,
+          debt: Math.round(s.total * (debtPct / 100)),
+          equity: Math.round(s.total * (eqPct / 100)),
+          globalEquity: 0,
+          gold: Math.round(s.total * (commPct / 100)),
+          other: Math.round(s.total * (otherPct / 100)),
+          total: s.total,
+          pct: total > 0 ? (s.total / total) * 100 : 0,
+        };
+      }
+
       const r = getAssetRatios(s.subCat);
       return {
         schemeName: s.schemeName,
@@ -346,6 +304,52 @@ export default function AllocationClient({
           s.subCat.includes("Hybrid")
       )
       .map((s) => {
+        const hasRealMc =
+          s.marketCap &&
+          (Number(s.marketCap.largeCap) > 0 ||
+            Number(s.marketCap.midCap) > 0 ||
+            Number(s.marketCap.smallCap) > 0);
+
+        if (hasRealMc && s.marketCap) {
+          const eqPct =
+            s.assetAllocation?.equity !== undefined &&
+            s.assetAllocation?.equity !== null
+              ? Number(s.assetAllocation.equity)
+              : 100;
+          const eqVal = s.total * (eqPct / 100);
+          const lPct = Number(s.marketCap.largeCap) || 0;
+          const mPct = Number(s.marketCap.midCap) || 0;
+          const sPct = Number(s.marketCap.smallCap) || 0;
+          const mcSum = lPct + mPct + sPct || 100;
+
+          return {
+            schemeName: s.schemeName,
+            subCat: s.subCat,
+            large: Math.round(eqVal * (lPct / mcSum)),
+            mid: Math.round(eqVal * (mPct / mcSum)),
+            small: Math.round(eqVal * (sPct / mcSum)),
+            total: s.total,
+            pct: 0,
+          };
+        }
+
+        const isSif =
+          s.subCat.includes("SIF") ||
+          s.schemeName.toLowerCase().includes("sif") ||
+          s.category?.toLowerCase().includes("sif");
+
+        if (isSif) {
+          return {
+            schemeName: s.schemeName,
+            subCat: s.subCat,
+            large: Math.round(s.total * 0.6),
+            mid: Math.round(s.total * 0.3),
+            small: Math.round(s.total * 0.1),
+            total: s.total,
+            pct: 0,
+          };
+        }
+
         const r = getCapRatios(s.subCat);
         return {
           schemeName: s.schemeName,
@@ -354,17 +358,16 @@ export default function AllocationClient({
           mid: Math.round(s.total * r.mid),
           small: Math.round(s.total * r.small),
           total: s.total,
-          pct: total > 0 ? (s.total / total) * 100 : 0,
+          pct: 0,
         };
       });
 
-    const groupMap = new Map<
-      string,
-      {
-        funds: { name: string; value: number; pct: number }[];
-        subTotal: number;
-      }
-    >();
+    const totalEquityCap = equityCapRowsArr.reduce((s, r) => s + r.total, 0);
+    for (const r of equityCapRowsArr) {
+      r.pct = totalEquityCap > 0 ? (r.total / totalEquityCap) * 100 : 0;
+    }
+
+    const groupMap = new Map<string, SchemeGroupItem>();
     for (const [, s] of schemeMap) {
       const fe = {
         name: s.schemeName,
@@ -387,9 +390,15 @@ export default function AllocationClient({
       .sort((a, b) => b.subTotal - a.subTotal);
 
     return {
-      categoryData: toArr(catMap).sort((a, b) => b.value - a.value),
-      subCatData: toArr(subCatMap).sort((a, b) => b.value - a.value),
-      amcData: toArr(amcMap).sort((a, b) => b.value - a.value),
+      categoryData: mapToAllocationPercentageArray(catMap, total).sort(
+        (a, b) => b.value - a.value
+      ),
+      subCatData: mapToAllocationPercentageArray(subCatMap, total).sort(
+        (a, b) => b.value - a.value
+      ),
+      amcData: mapToAllocationPercentageArray(amcMap, total).sort(
+        (a, b) => b.value - a.value
+      ),
       memberData: memberArr,
       grandTotal: total,
       schemeRows: schemeRowsArr,
@@ -420,19 +429,27 @@ export default function AllocationClient({
     [schemeRows, grandTotal]
   );
 
-  const sortedMembers = sortArr(memberData, investorSort.col, investorSort.dir);
-  const sortedSubCat = sortArr(
+  const sortedMembers = sortAllocationArray(
+    memberData,
+    investorSort.col,
+    investorSort.dir
+  );
+  const sortedSubCat = sortAllocationArray(
     subCatData,
     subCatSort.col === "name" ? "name" : "value",
     subCatSort.dir
   );
-  const sortedAmc = sortArr(
+  const sortedAmc = sortAllocationArray(
     amcData,
     amcSort.col === "name" ? "name" : "value",
     amcSort.dir
   );
-  const sortedCat = sortArr(schemeRows, catSort.col, catSort.dir);
-  const sortedCap = sortArr(equityCapRows, capSort.col, capSort.dir);
+  const sortedCat = sortAllocationArray(schemeRows, catSort.col, catSort.dir);
+  const sortedCap = sortAllocationArray(
+    equityCapRows,
+    capSort.col,
+    capSort.dir
+  );
 
   const asOfDate = selectedReport
     ? new Date(selectedReport.asOfDate).toLocaleDateString("en-IN", {
@@ -453,905 +470,87 @@ export default function AllocationClient({
       <div className="absolute top-1/2 -right-40 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none z-0" />
 
       {/* ── FILTER BAR ── */}
-      <div
-        className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl p-5 shadow-xl space-y-4 relative z-30 hover:border-slate-700/80 transition-all duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <Info size={14} className="text-teal-400 shrink-0" />
-          <span>
-            View detailed allocation analysis of your current investments.
-          </span>
-          {asOfDate && (
-            <span className="ml-1 text-teal-400 font-medium">
-              As of {asOfDate}
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-end gap-4">
-          {/* Investor dropdown */}
-          <div className="w-full max-w-[420px] relative">
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-              Investor :
-            </label>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setInvestorOpen((o) => !o);
-              }}
-              className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-950/60 border border-slate-700 rounded-xl text-sm font-medium text-slate-200 hover:border-slate-600 transition-all cursor-pointer"
-            >
-              <span className="truncate">{investorLabel}</span>
-              <ChevronDown
-                size={15}
-                className={`shrink-0 text-slate-400 transition-transform ${investorOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-            <AnimatePresence>
-              {investorOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute z-50 top-full left-0 mt-1 w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto"
-                >
-                  <button
-                    onClick={() => toggleInvestor("all")}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-slate-800 transition cursor-pointer"
-                  >
-                    {isAllSelected ? (
-                      <CheckSquare
-                        size={15}
-                        className="text-teal-400 shrink-0"
-                      />
-                    ) : (
-                      <Square size={15} className="text-slate-500 shrink-0" />
-                    )}
-                    <span
-                      className={
-                        isAllSelected
-                          ? "text-teal-300 font-semibold"
-                          : "text-slate-300"
-                      }
-                    >
-                      All Selected
-                    </span>
-                  </button>
-                  <div className="border-t border-slate-800" />
-                  {allMembers.map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => toggleInvestor(name)}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-slate-800 transition cursor-pointer border-t border-slate-800/60"
-                    >
-                      {selectedInvestors.has(name) ? (
-                        <CheckSquare
-                          size={15}
-                          className="text-teal-400 shrink-0"
-                        />
-                      ) : (
-                        <Square size={15} className="text-slate-500 shrink-0" />
-                      )}
-                      <span
-                        className={
-                          selectedInvestors.has(name)
-                            ? "text-teal-300 font-semibold"
-                            : "text-slate-300"
-                        }
-                      >
-                        {name}
-                      </span>
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div>
-            <button
-              onClick={handleApply}
-              className="px-8 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-extrabold text-sm shadow-lg hover:shadow-teal-500/10 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-      </div>
+      <AllocationFilterBar
+        asOfDate={asOfDate}
+        allMembers={allMembers}
+        selectedInvestors={selectedInvestors}
+        investorOpen={investorOpen}
+        onToggleDropdown={(e) => {
+          e.stopPropagation();
+          setInvestorOpen((o) => !o);
+        }}
+        onToggleInvestor={toggleInvestor}
+        onApply={handleApply}
+        isAllSelected={isAllSelected}
+        investorLabel={investorLabel}
+      />
 
       {grandTotal === 0 ? (
-        <div className="bg-slate-900/50 border border-dashed border-slate-800 rounded-2xl p-20 text-center text-slate-500">
-          No portfolio data available. Upload a report to get started.
+        <div className="bg-slate-900/50 border border-dashed border-slate-800 rounded-2xl p-20 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+          <p>No portfolio data available for the selected investors.</p>
+          {activeInvestors.size !== allMembers.length && (
+            <button
+              onClick={() => {
+                const defaultSet = new Set(allMembers);
+                setSelectedInvestors(defaultSet);
+                setActiveInvestors(defaultSet);
+                updateUrl({ members: null });
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold transition cursor-pointer"
+            >
+              Reset Investors
+            </button>
+          )}
         </div>
       ) : (
         <>
           {/* ── MAIN: Tables + Pie Chart ── */}
-          <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-5 items-start relative z-10">
-            {/* LEFT: Investor table */}
-            <div className="space-y-4">
-              {/* Investor table */}
-              <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <SortTh
-                        label="Investor"
-                        col="name"
-                        sortCol={investorSort.col}
-                        sortDir={investorSort.dir}
-                        onSort={makeSorter(setInvestorSort)}
-                        className="text-left text-slate-400"
-                      />
-                      <SortTh
-                        label="Amount"
-                        col="value"
-                        sortCol={investorSort.col}
-                        sortDir={investorSort.dir}
-                        onSort={makeSorter(setInvestorSort)}
-                        className="text-right text-slate-400"
-                      />
-                      <SortTh
-                        label="Share(%)"
-                        col="value"
-                        sortCol={investorSort.col}
-                        sortDir={investorSort.dir}
-                        onSort={makeSorter(setInvestorSort)}
-                        className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28"
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <TotalRow
-                      cells={[
-                        "Total",
-                        formatIndianNumber(grandTotal),
-                        "100.00",
-                      ]}
-                    />
-                    {sortedMembers.map((m, i) => (
-                      <tr
-                        key={m.name}
-                        className={`border-t border-slate-800/60 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/20" : ""}`}
-                      >
-                        <td className="px-5 py-3 text-slate-200 font-medium text-xs uppercase tracking-wide">
-                          {m.name}
-                        </td>
-                        <td className="px-5 py-3 text-right text-slate-200 tabular-nums font-medium">
-                          {formatIndianNumber(m.value)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {formatPct(m.pct)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* RIGHT: Product table top + Legend + Pie underneath */}
-            <div className="space-y-4">
-              {/* Product table (Mutual Fund only) */}
-              <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800">
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400">
-                        Product
-                      </th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400">
-                        Amount
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28 whitespace-nowrap">
-                        Share(%)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <TotalRow
-                      cells={[
-                        "Total",
-                        formatIndianNumber(grandTotal),
-                        "100.00",
-                      ]}
-                    />
-                    <tr className="border-t border-slate-800/60 hover:bg-slate-800/20 transition">
-                      <td className="px-5 py-3 text-slate-300 font-medium">
-                        Mutual Fund
-                      </td>
-                      <td className="px-5 py-3 text-right text-slate-300 tabular-nums">
-                        {formatIndianNumber(grandTotal)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 tabular-nums">
-                        100.00
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Legend + Pie Chart */}
-              <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl p-6 shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300">
-                <div className="flex flex-col lg:flex-row items-start gap-6">
-                  <div className="lg:w-56 w-full h-[320px] overflow-y-auto custom-scrollbar [scrollbar-gutter:stable] space-y-0.5 pr-1">
-                    {categoryData.map((d, i) => (
-                      <div
-                        key={d.name}
-                        className="flex items-start gap-2.5 py-2 border-b border-slate-800/30 last:border-0"
-                      >
-                        <div
-                          className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${ALLOCATION_BG_CLASSES[i % ALLOCATION_BG_CLASSES.length]}`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div
-                            className="text-slate-200 text-xs font-semibold leading-tight truncate"
-                            title={d.name}
-                          >
-                            {d.name}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-slate-300 text-xs tabular-nums font-medium">
-                              {formatIndianNumber(d.value)}
-                            </span>
-                            <span className="text-slate-600 text-xs">·</span>
-                            <span className="text-slate-400 text-xs tabular-nums">
-                              {formatPct(d.pct)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex-1 w-full min-h-[300px]">
-                    <ResponsiveContainer width="100%" height={320}>
-                      <PieChart>
-                        <Pie
-                          data={categoryData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          innerRadius={65}
-                          dataKey="value"
-                          stroke="none"
-                          startAngle={90}
-                          endAngle={-270}
-                          shape={(
-                            props: PieSectorDataItem & {
-                              index: number;
-                              cx: number;
-                              cy: number;
-                              midAngle?: number;
-                            }
-                          ) => {
-                            const { index } = props;
-                            const isHovered = hoveredCell === index;
-                            const midAngle = props.midAngle ?? 0;
-                            const RADIAN = Math.PI / 180;
-                            const popDist = isHovered ? 8 : 0;
-                            const dx = Math.cos(-midAngle * RADIAN) * popDist;
-                            const dy = Math.sin(-midAngle * RADIAN) * popDist;
-                            const opacity =
-                              hoveredCell === null || hoveredCell === index
-                                ? 1
-                                : 0.4;
-                            return (
-                              <g className="transition-all duration-300 cursor-pointer">
-                                <Sector
-                                  {...props}
-                                  cx={props.cx + dx}
-                                  cy={props.cy + dy}
-                                  outerRadius={isHovered ? 105 : 100}
-                                  fill={
-                                    ALLOCATION_PALETTE[
-                                      index % ALLOCATION_PALETTE.length
-                                    ]
-                                  }
-                                  opacity={opacity}
-                                  onMouseEnter={() => setHoveredCell(index)}
-                                  onMouseLeave={() => setHoveredCell(null)}
-                                />
-                              </g>
-                            );
-                          }}
-                        />
-                        <text
-                          x="50%"
-                          y="46%"
-                          textAnchor="middle"
-                          className="fill-slate-400 font-medium text-[11px] tracking-wide uppercase"
-                        >
-                          {hoveredCell !== null && categoryData[hoveredCell]
-                            ? categoryData[hoveredCell].name.length > 14
-                              ? `${categoryData[hoveredCell].name.slice(0, 12)}..`
-                              : categoryData[hoveredCell].name
-                            : "Total Value"}
-                        </text>
-                        <text
-                          x="50%"
-                          y="58%"
-                          textAnchor="middle"
-                          className="fill-teal-400 font-extrabold text-sm tracking-tight"
-                        >
-                          {hoveredCell !== null && categoryData[hoveredCell]
-                            ? formatCurrency(categoryData[hoveredCell].value)
-                            : formatCurrency(
-                                categoryData.reduce(
-                                  (acc, c) => acc + c.value,
-                                  0
-                                )
-                              )}
-                        </text>
-                        <Tooltip content={<ChartTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AllocationOverviewSection
+            sortedMembers={sortedMembers}
+            grandTotal={grandTotal}
+            investorSort={investorSort}
+            onInvestorSort={makeSorter(setInvestorSort)}
+            categoryData={categoryData}
+          />
 
           {/* ══ CARD 1: Sub Category & Fund (side by side but separate) ══ */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            {/* Sub Category Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl"
-            >
-              <CardHeader
-                accent="bg-teal-400"
-                title="Sub Category"
-                subtitle="— allocation by sub-category"
-              />
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-950/40">
-                      <SortTh
-                        label="Sub Category"
-                        col="name"
-                        sortCol={subCatSort.col}
-                        sortDir={subCatSort.dir}
-                        onSort={makeSorter(setSubCatSort)}
-                        className="text-left text-slate-400"
-                      />
-                      <SortTh
-                        label="Amount"
-                        col="value"
-                        sortCol={subCatSort.col}
-                        sortDir={subCatSort.dir}
-                        onSort={makeSorter(setSubCatSort)}
-                        className="text-right text-slate-400"
-                      />
-                      <SortTh
-                        label="Share(%)"
-                        col="value"
-                        sortCol={subCatSort.col}
-                        sortDir={subCatSort.dir}
-                        onSort={makeSorter(setSubCatSort)}
-                        className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28"
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <TotalRow
-                      cells={[
-                        "Total",
-                        formatIndianNumber(grandTotal),
-                        "100.00",
-                      ]}
-                    />
-                    {sortedSubCat.map((s, i) => (
-                      <tr
-                        key={s.name}
-                        className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                      >
-                        <td className="px-4 py-3 text-slate-200 font-medium text-sm">
-                          {s.name}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                          {formatIndianNumber(s.value)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {formatPct(s.pct)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
+          <AllocationSubCategoryAndFundSection
+            grandTotal={grandTotal}
+            sortedSubCat={sortedSubCat}
+            subCatSort={subCatSort}
+            onSubCatSort={makeSorter(setSubCatSort)}
+            sortedAmc={sortedAmc}
+            amcSort={amcSort}
+            onAmcSort={makeSorter(setAmcSort)}
+          />
 
-            {/* Fund Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.07 }}
-              className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl"
-            >
-              <CardHeader
-                accent="bg-teal-400"
-                title="Fund"
-                subtitle="— allocation by fund house"
-              />
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-950/40">
-                      <SortTh
-                        label="Fund"
-                        col="name"
-                        sortCol={amcSort.col}
-                        sortDir={amcSort.dir}
-                        onSort={makeSorter(setAmcSort)}
-                        className="text-left text-slate-400"
-                      />
-                      <SortTh
-                        label="Amount"
-                        col="value"
-                        sortCol={amcSort.col}
-                        sortDir={amcSort.dir}
-                        onSort={makeSorter(setAmcSort)}
-                        className="text-right text-slate-400"
-                      />
-                      <SortTh
-                        label="Share(%)"
-                        col="value"
-                        sortCol={amcSort.col}
-                        sortDir={amcSort.dir}
-                        onSort={makeSorter(setAmcSort)}
-                        className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28"
-                      />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <TotalRow
-                      cells={[
-                        "Total",
-                        formatIndianNumber(grandTotal),
-                        "100.00",
-                      ]}
-                    />
-                    {sortedAmc.map((a, i) => (
-                      <tr
-                        key={a.name}
-                        className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                      >
-                        <td className="px-4 py-3 text-slate-200 font-medium text-sm">
-                          {a.name}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                          {formatIndianNumber(a.value)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
-                          {formatPct(a.pct)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
-          </div>
+          {/* ══ CARD 2: Category (asset class breakdown) ══ */}
+          <AllocationCategoryAssetTableCard
+            isOpen={categoryOpen}
+            onToggle={() => setCategoryOpen((v) => !v)}
+            sortedCat={sortedCat}
+            catTotals={catTotals}
+            catSort={catSort}
+            onSort={makeSorter(setCatSort)}
+          />
 
-          {/* ════════════════════════════════════════
-            CARD 2 — Category (asset class breakdown)
-        ════════════════════════════════════════ */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300"
-          >
-            <CardHeader
-              accent="bg-blue-400"
-              title="Category"
-              subtitle="— asset class breakdown per scheme (Debt / Equity / Global Equity / Gold / Other)"
-              collapsed={!categoryOpen}
-              onToggle={() => setCategoryOpen((v) => !v)}
-            />
-            <AnimatePresence initial={false}>
-              {categoryOpen && (
-                <motion.div
-                  key="category-body"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className="overflow-hidden"
-                >
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/40">
-                          <SortTh
-                            label="Scheme Name"
-                            col="schemeName"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-left text-slate-400 min-w-52"
-                          />
-                          <SortTh
-                            label="Sub Category"
-                            col="subCat"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-left text-slate-400 min-w-36"
-                          />
-                          <SortTh
-                            label="Debt"
-                            col="debt"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Equity"
-                            col="equity"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Global Equity"
-                            col="globalEquity"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Gold"
-                            col="gold"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Other"
-                            col="other"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Total"
-                            col="total"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Share(%)"
-                            col="total"
-                            sortCol={catSort.col}
-                            sortDir={catSort.dir}
-                            onSort={makeSorter(setCatSort)}
-                            className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
-                          />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-teal-500 text-slate-950">
-                          <td
-                            className="px-4 py-3 font-extrabold text-sm"
-                            colSpan={2}
-                          >
-                            Total
-                          </td>
-                          {[
-                            catTotals.debt,
-                            catTotals.equity,
-                            catTotals.globalEquity,
-                            catTotals.gold,
-                            catTotals.other,
-                            catTotals.total,
-                          ].map((v, i) => (
-                            <td
-                              key={i}
-                              className="px-4 py-3 text-right font-extrabold tabular-nums"
-                            >
-                              {formatIndianNumber(v)}
-                            </td>
-                          ))}
-                          <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
-                            100.00
-                          </td>
-                        </tr>
-                        {sortedCat.map((r, i) => (
-                          <tr
-                            key={r.schemeName}
-                            className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                          >
-                            <td className="px-4 py-3 text-slate-200 font-medium text-xs">
-                              {r.schemeName}
-                            </td>
-                            <td className="px-4 py-3 text-slate-400 text-xs">
-                              {r.subCat}
-                            </td>
-                            {[
-                              r.debt,
-                              r.equity,
-                              r.globalEquity,
-                              r.gold,
-                              r.other,
-                              r.total,
-                            ].map((v, j) => (
-                              <td
-                                key={j}
-                                className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
-                              >
-                                {v > 0 ? formatIndianNumber(v) : "0"}
-                              </td>
-                            ))}
-                            <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                              {formatPct(r.pct)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+          {/* ══ CARD 3: Equity Cap ══ */}
+          <AllocationEquityCapTableCard
+            isOpen={equityCapOpen}
+            onToggle={() => setEquityCapOpen((v) => !v)}
+            sortedCap={sortedCap}
+            capTotals={capTotals}
+            capSort={capSort}
+            onSort={makeSorter(setCapSort)}
+          />
 
-          {/* ════════════════════════════════════════
-            CARD 3 — Equity Cap
-        ════════════════════════════════════════ */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300"
-          >
-            <CardHeader
-              accent="bg-emerald-400"
-              title="Equity Cap for Mutual Fund"
-              subtitle="— large cap / mid cap / small cap breakdown per scheme"
-              collapsed={!equityCapOpen}
-              onToggle={() => setEquityCapOpen((v) => !v)}
-            />
-            <AnimatePresence initial={false}>
-              {equityCapOpen && (
-                <motion.div
-                  key="equitycap-body"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className="overflow-hidden"
-                >
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/40">
-                          <SortTh
-                            label="Scheme Name"
-                            col="schemeName"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-left text-slate-400 min-w-52"
-                          />
-                          <SortTh
-                            label="Sub Category"
-                            col="subCat"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-left text-slate-400 min-w-36"
-                          />
-                          <SortTh
-                            label="Equity Large Cap"
-                            col="large"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Equity Mid Cap"
-                            col="mid"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Equity Small Cap"
-                            col="small"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Total"
-                            col="total"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-right text-slate-400"
-                          />
-                          <SortTh
-                            label="Share(%)"
-                            col="total"
-                            sortCol={capSort.col}
-                            sortDir={capSort.dir}
-                            onSort={makeSorter(setCapSort)}
-                            className="text-right text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-24"
-                          />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-teal-500 text-slate-950">
-                          <td
-                            className="px-4 py-3 font-extrabold text-sm"
-                            colSpan={2}
-                          >
-                            Total
-                          </td>
-                          {[
-                            capTotals.large,
-                            capTotals.mid,
-                            capTotals.small,
-                            capTotals.total,
-                          ].map((v, i) => (
-                            <td
-                              key={i}
-                              className="px-4 py-3 text-right font-extrabold tabular-nums"
-                            >
-                              <div>{formatIndianNumber(v)}</div>
-                              {capTotals.total > 0 && (
-                                <div className="text-[10px] font-semibold opacity-75">
-                                  ({((v / capTotals.total) * 100).toFixed(2)}%)
-                                </div>
-                              )}
-                            </td>
-                          ))}
-                          <td className="px-4 py-3 text-right font-extrabold bg-teal-600 border-l border-teal-400/30 tabular-nums">
-                            100.00
-                          </td>
-                        </tr>
-                        {sortedCap.map((r, i) => (
-                          <tr
-                            key={r.schemeName}
-                            className={`border-t border-slate-800/40 hover:bg-slate-800/20 transition ${i % 2 === 1 ? "bg-slate-950/10" : ""}`}
-                          >
-                            <td className="px-4 py-3 text-slate-200 font-medium text-xs">
-                              {r.schemeName}
-                            </td>
-                            <td className="px-4 py-3 text-slate-400 text-xs">
-                              {r.subCat}
-                            </td>
-                            {[r.large, r.mid, r.small, r.total].map((v, j) => (
-                              <td
-                                key={j}
-                                className="px-4 py-3 text-right tabular-nums text-slate-300 text-xs"
-                              >
-                                {v > 0 ? formatIndianNumber(v) : "0"}
-                              </td>
-                            ))}
-                            <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10 text-xs">
-                              {formatPct(r.pct)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-
-          {/* ════════════════════════════════════════
-            CARD 4 — Scheme / Scrip (grouped tree)
-        ════════════════════════════════════════ */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-slate-900/40 backdrop-blur-md border border-slate-800/60 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:translate-y-[-2px] transition-all duration-300"
-          >
-            <CardHeader
-              accent="bg-violet-400"
-              title="Scheme / Scrip"
-              subtitle="— grouped by sub-category with sub-totals"
-              collapsed={!schemeScripOpen}
-              onToggle={() => setSchemeScripOpen((v) => !v)}
-            />
-            <AnimatePresence initial={false}>
-              {schemeScripOpen && (
-                <motion.div
-                  key="schemescrip-body"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className="overflow-hidden"
-                >
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-950/40">
-                          <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400">
-                            Scheme / Scrip
-                          </th>
-                          <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400">
-                            Amount
-                          </th>
-                          <th className="px-4 py-3 text-right text-xs font-semibold text-teal-400 bg-teal-500/10 border-l border-teal-500/20 w-28 whitespace-nowrap">
-                            Share(%)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <TotalRow
-                          cells={[
-                            "Grand Total :",
-                            formatIndianNumber(grandTotal),
-                            "100.00",
-                          ]}
-                        />
-                        {schemeGrouped.map((group) => (
-                          <Fragment key={group.subCat}>
-                            <tr className="border-t border-slate-700/50 bg-slate-800/40">
-                              <td
-                                colSpan={3}
-                                className="px-5 py-2.5 text-sm font-bold text-teal-400"
-                              >
-                                {group.subCat}
-                              </td>
-                            </tr>
-                            {group.funds.map((f) => (
-                              <tr
-                                key={f.name}
-                                className="border-t border-slate-800/30 hover:bg-slate-800/20 transition"
-                              >
-                                <td className="px-8 py-2.5 text-slate-300 text-xs">
-                                  {f.name}
-                                </td>
-                                <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                                  {formatIndianNumber(f.value)}
-                                </td>
-                                <td className="px-4 py-2.5 text-right tabular-nums text-slate-400 text-xs border-l border-teal-500/10 w-28">
-                                  {formatPct(f.pct)}
-                                </td>
-                              </tr>
-                            ))}
-                            <tr className="border-t border-slate-700/60 bg-slate-900/60 font-bold">
-                              <td className="px-5 py-2.5 text-xs text-slate-400">
-                                Sub Total :
-                              </td>
-                              <td className="px-5 py-2.5 text-right tabular-nums text-slate-300 text-xs">
-                                {formatIndianNumber(group.subTotal)}
-                              </td>
-                              <td className="px-4 py-2.5 text-right tabular-nums text-slate-300 text-xs bg-teal-500/5 border-l border-teal-500/10 w-28">
-                                {formatPct(group.pct)}
-                              </td>
-                            </tr>
-                          </Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+          {/* ══ CARD 4: Scheme / Scrip (grouped tree) ══ */}
+          <AllocationSchemeGroupedTableCard
+            isOpen={schemeScripOpen}
+            onToggle={() => setSchemeScripOpen((v) => !v)}
+            grandTotal={grandTotal}
+            schemeGrouped={schemeGrouped}
+          />
         </>
       )}
     </div>
