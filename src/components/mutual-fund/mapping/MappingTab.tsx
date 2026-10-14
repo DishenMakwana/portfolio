@@ -1,84 +1,213 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  ShieldCheck,
-  AlertTriangle,
-  Zap,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  X,
-} from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { toast } from "react-hot-toast";
 import {
   searchMfApiAction,
   updateSchemeMappingAction,
   autoMapAllSchemesAction,
 } from "@/actions/portfolio";
-import { AutoMapResult } from "@/types/portfolio";
-import { MappingTabProps } from "@/types/mapping";
-import { MfSearchResult } from "@/types/mf-api";
-
-const STATUS_META: Record<
-  AutoMapResult["status"],
-  {
-    label: string;
-    color: string;
-    bg: string;
-    border: string;
-    icon: React.ComponentType<{ size?: number; className?: string }>;
-  }
-> = {
-  mapped: {
-    label: "Auto-Mapped",
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/30",
-    icon: CheckCircle2,
-  },
-  low_confidence: {
-    label: "Low Confidence",
-    color: "text-amber-400",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
-    icon: HelpCircle,
-  },
-  not_found: {
-    label: "Not Found",
-    color: "text-red-400",
-    bg: "bg-red-500/10",
-    border: "border-red-500/30",
-    icon: XCircle,
-  },
-  already_mapped: {
-    label: "Already Mapped",
-    color: "text-teal-400",
-    bg: "bg-teal-500/10",
-    border: "border-teal-500/30",
-    icon: ShieldCheck,
-  },
-  api_error: {
-    label: "API Error",
-    color: "text-slate-400",
-    bg: "bg-slate-500/10",
-    border: "border-slate-500/30",
-    icon: AlertTriangle,
-  },
-};
+import {
+  getCategoryOptions,
+  matchCategoryFilter,
+  parseCategoryFilters,
+  serializeCategoryFilters,
+} from "@/helpers/holdingsCategory";
+import AutoMapResultsPanel from "./automap/AutoMapResultsPanel";
+import MappingFilterModal from "./modal/MappingFilterModal";
+import ManualSearchModal from "./modal/ManualSearchModal";
+import SchemeListPanel from "./scheme/SchemeListPanel";
+import MappingHeaderPanel from "./MappingHeaderPanel";
+import MappingToolbar from "./MappingToolbar";
+import type { HoldingsCategoryFilters } from "@/types/holdings";
+import {
+  MAPPING_SORT_FIELDS,
+  type MappingTabProps,
+  type MappingStatusFilter,
+  type MappingSortField,
+  type SchemeHoldingFilter,
+} from "@/types/mapping";
+import type { MfSearchResult } from "@/types/mf-api";
+import type { AutoMapResult } from "@/types/portfolio";
 
 export default function MappingTab({ allSchemes }: MappingTabProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  // ── Filter state
-  const [mappingFilter, setMappingFilter] = useState<
-    "all" | "mapped" | "unmapped"
-  >("all");
+  // Read initial states from URL query parameters
+  const initialSearch = searchParams.get("q") || "";
+  const initialStatus =
+    (searchParams.get("status") as MappingStatusFilter) || "all";
+  const initialHolding =
+    (searchParams.get("holding") as SchemeHoldingFilter) || "all";
+  const initialCategoryFilters = parseCategoryFilters(
+    searchParams.get("category")
+  );
+  const rawSort = searchParams.get("sort");
+  const initialSort = (
+    (MAPPING_SORT_FIELDS as readonly string[]).includes(rawSort || "")
+      ? rawSort
+      : "name"
+  ) as MappingSortField;
+  const rawOrder = searchParams.get("order");
+  const initialOrder = (
+    rawOrder === "asc" || rawOrder === "desc" ? rawOrder : "asc"
+  ) as "asc" | "desc";
+  const initialAutoFilter =
+    (searchParams.get("autoFilter") as
+      "all" | "mapped" | "low_confidence" | "not_found") || "all";
+
+  // ── Local Search & Filter State
+  const [searchVal, setSearchVal] = useState(initialSearch);
+  const [mappingFilter, setMappingFilter] =
+    useState<MappingStatusFilter>(initialStatus);
+  const [holdingFilter, setHoldingFilter] =
+    useState<SchemeHoldingFilter>(initialHolding);
+  const [categoryFilters, setCategoryFilters] =
+    useState<HoldingsCategoryFilters>(initialCategoryFilters);
+  const [sortField, setSortField] = useState<MappingSortField>(initialSort);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialOrder);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const [autoMapFilter, setAutoMapFilter] = useState<
+    "all" | "mapped" | "low_confidence" | "not_found"
+  >(initialAutoFilter);
+
+  // Dynamic Category Options from schemes
+  const categoryOptions = useMemo(
+    () => getCategoryOptions(allSchemes.map((s) => s.category)),
+    [allSchemes]
+  );
+
+  // Synchronize state when URL query params change (e.g. Back/Forward browser navigation)
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    setSearchVal(q);
+    setMappingFilter(
+      (searchParams.get("status") as MappingStatusFilter) || "all"
+    );
+    setHoldingFilter(
+      (searchParams.get("holding") as SchemeHoldingFilter) || "all"
+    );
+    setCategoryFilters(parseCategoryFilters(searchParams.get("category")));
+    const rawS = searchParams.get("sort");
+    setSortField(
+      ((MAPPING_SORT_FIELDS as readonly string[]).includes(rawS || "")
+        ? rawS
+        : "name") as MappingSortField
+    );
+    const rawO = searchParams.get("order");
+    setSortOrder(
+      (rawO === "asc" || rawO === "desc" ? rawO : "asc") as "asc" | "desc"
+    );
+    setAutoMapFilter(
+      (searchParams.get("autoFilter") as
+        "all" | "mapped" | "low_confidence" | "not_found") || "all"
+    );
+  }, [searchParams]);
+
+  // Helper to update query string parameters in the URL
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
+    for (const [key, value] of Object.entries(updates)) {
+      if (
+        value === null ||
+        value === "" ||
+        value === "all" ||
+        (key === "sort" && value === "name" && current.get("order") === "asc")
+      ) {
+        current.delete(key);
+      } else {
+        current.set(key, value);
+      }
+    }
+    const query = current.toString();
+    const url = `${pathname}${query ? `?${query}` : ""}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
+  };
+
+  // Debounced search query update in URL
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentUrlQ = searchParams.get("q") || "";
+      if (currentUrlQ !== searchVal) {
+        updateUrl({ q: searchVal });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchVal]);
+
+  const handleMappingFilterChange = (filter: MappingStatusFilter) => {
+    setMappingFilter(filter);
+    updateUrl({ status: filter });
+  };
+
+  const handleHoldingFilterChange = (filter: SchemeHoldingFilter) => {
+    setHoldingFilter(filter);
+    updateUrl({ holding: filter === "all" ? null : filter });
+  };
+
+  const handleCategoryToggle = (category: string): void => {
+    const nextCategoryFilters = categoryFilters.includes(category)
+      ? categoryFilters.filter((filter) => filter !== category)
+      : [...categoryFilters, category];
+    setCategoryFilters(nextCategoryFilters);
+    updateUrl({ category: serializeCategoryFilters(nextCategoryFilters) });
+  };
+
+  const handleCategoryClear = (): void => {
+    setCategoryFilters([]);
+    updateUrl({ category: null });
+  };
+
+  const handleSortChange = (field: MappingSortField) => {
+    let nextOrder: "asc" | "desc" = "asc";
+    if (sortField === field) {
+      nextOrder = sortOrder === "asc" ? "desc" : "asc";
+    }
+    setSortField(field);
+    setSortOrder(nextOrder);
+    updateUrl({ sort: field, order: nextOrder });
+  };
+
+  const handleClearAll = () => {
+    setSearchVal("");
+    setMappingFilter("all");
+    setHoldingFilter("all");
+    setCategoryFilters([]);
+    setSortField("name");
+    setSortOrder("asc");
+    updateUrl({
+      q: null,
+      status: null,
+      holding: null,
+      category: null,
+      sort: null,
+      order: null,
+    });
+  };
+
+  const handleAutoMapFilterChange = (
+    filter: "all" | "mapped" | "low_confidence" | "not_found"
+  ) => {
+    setAutoMapFilter(filter);
+    updateUrl({ autoFilter: filter });
+  };
 
   // ── Manual assign modal state
   const [mappingSchemeId, setMappingSchemeId] = useState<number | null>(null);
@@ -94,11 +223,7 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
   const [autoMapResults, setAutoMapResults] = useState<AutoMapResult[] | null>(
     null
   );
-
   const [expandedResult, setExpandedResult] = useState<number | null>(null);
-  const [autoMapFilter, setAutoMapFilter] = useState<
-    "all" | "mapped" | "low_confidence" | "not_found"
-  >("all");
 
   // ── Search for the manual modal
   const handleApiSearch = async (query: string) => {
@@ -114,7 +239,12 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
   };
 
   const handleMapScheme = async (schemeId: number, code: string | null) => {
-    await updateSchemeMappingAction(schemeId, code);
+    const res = await updateSchemeMappingAction(schemeId, code);
+    if (res.success) {
+      toast.success(code ? "Scheme successfully mapped" : "Scheme unmapped");
+    } else {
+      toast.error(res.error || "Failed to update mapping");
+    }
     setMappingSchemeId(null);
     setApiSearchQuery("");
     setApiSearchResults([]);
@@ -146,20 +276,108 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
     try {
       const { results } = await autoMapAllSchemesAction(true);
       setAutoMapResults(results);
+      const mappedSuccessCount = results.filter(
+        (r) => r.status === "mapped"
+      ).length;
+      toast.success(
+        `Auto-mapping complete: ${mappedSuccessCount} schemes mapped.`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Auto-mapping encountered an error"
+      );
     } finally {
       setIsAutoMapping(false);
       router.refresh();
     }
   };
 
-  const filteredSchemes = allSchemes.filter((scheme) => {
-    if (mappingFilter === "mapped") return !!scheme.schemeCodeApi;
-    if (mappingFilter === "unmapped") return !scheme.schemeCodeApi;
-    return true;
-  });
+  // ── Filtered and Sorted Schemes
+  const filteredSchemes = useMemo(() => {
+    const query = searchVal.trim().toLowerCase();
+    return allSchemes
+      .filter((scheme) => {
+        // Holding status filter
+        if (holdingFilter === "active" && (scheme.activeFoliosCount ?? 0) === 0)
+          return false;
+        if (
+          holdingFilter === "sold" &&
+          ((scheme.activeFoliosCount ?? 0) > 0 ||
+            (scheme.zeroBalanceFoliosCount ?? 0) === 0)
+        )
+          return false;
+
+        // Status filter
+        if (mappingFilter === "mapped" && !scheme.schemeCodeApi) return false;
+        if (mappingFilter === "unmapped" && scheme.schemeCodeApi) return false;
+
+        // Category filter
+        if (!matchCategoryFilter(scheme.category, categoryFilters))
+          return false;
+
+        // Search query
+        if (query) {
+          const matchName = scheme.name.toLowerCase().includes(query);
+          const matchCat = (scheme.category || "")
+            .toLowerCase()
+            .includes(query);
+          const matchCode = (scheme.schemeCodeApi || "")
+            .toLowerCase()
+            .includes(query);
+          const matchFolio =
+            scheme.activeFolios?.some((f) => f.includes(query)) ||
+            scheme.zeroBalanceFolios?.some((f) => f.includes(query));
+          if (!matchName && !matchCat && !matchCode && !matchFolio)
+            return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortField === "name") {
+          cmp = a.name.localeCompare(b.name);
+        } else if (sortField === "category") {
+          cmp = (a.category || "").localeCompare(b.category || "");
+        } else if (sortField === "status") {
+          const aMapped = a.schemeCodeApi ? 1 : 0;
+          const bMapped = b.schemeCodeApi ? 1 : 0;
+          cmp = aMapped - bMapped;
+        } else if (sortField === "code") {
+          cmp = (a.schemeCodeApi || "").localeCompare(b.schemeCodeApi || "");
+        } else if (sortField === "activeFolios") {
+          cmp = (a.activeFoliosCount ?? 0) - (b.activeFoliosCount ?? 0);
+        } else if (sortField === "soldFolios") {
+          cmp =
+            (a.zeroBalanceFoliosCount ?? 0) - (b.zeroBalanceFoliosCount ?? 0);
+        }
+        return sortOrder === "asc" ? cmp : -cmp;
+      });
+  }, [
+    allSchemes,
+    searchVal,
+    holdingFilter,
+    mappingFilter,
+    categoryFilters,
+    sortField,
+    sortOrder,
+  ]);
 
   const unmappedCount = allSchemes.filter((s) => !s.schemeCodeApi).length;
   const mappedCount = allSchemes.filter((s) => !!s.schemeCodeApi).length;
+  const activeHoldingSchemesCount = useMemo(
+    () => allSchemes.filter((s) => (s.activeFoliosCount ?? 0) > 0).length,
+    [allSchemes]
+  );
+  const soldHoldingSchemesCount = useMemo(
+    () =>
+      allSchemes.filter(
+        (s) =>
+          (s.activeFoliosCount ?? 0) === 0 &&
+          (s.zeroBalanceFoliosCount ?? 0) > 0
+      ).length,
+    [allSchemes]
+  );
 
   // Filter the auto-map result list
   const filteredAutoResults = autoMapResults
@@ -175,6 +393,24 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
       })
     : null;
 
+  const activeFilterCount =
+    (mappingFilter !== "all" ? 1 : 0) +
+    (holdingFilter !== "all" ? 1 : 0) +
+    categoryFilters.length +
+    (sortField !== "name" || sortOrder !== "asc" ? 1 : 0);
+
+  const handleOpenManualModal = (schemeId: number, schemeName: string) => {
+    setMappingSchemeId(schemeId);
+    setMappingSchemeName(schemeName);
+    const q = schemeName
+      .replace(/Reg(?:ular)?/gi, "")
+      .replace(/\(G\)/g, "")
+      .trim()
+      .slice(0, 30);
+    setApiSearchQuery(q);
+    handleApiSearch(q);
+  };
+
   return (
     <motion.div
       key="mapping"
@@ -184,464 +420,110 @@ export default function MappingTab({ allSchemes }: MappingTabProps) {
       transition={{ duration: 0.25 }}
       className="space-y-5"
     >
-      {/* ── HEADER PANEL ── */}
-      <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-          <div>
-            <h3 className="text-xl font-bold text-slate-100">
-              Scheme API Mappings
-            </h3>
-            <p className="text-slate-400 text-sm mt-1">
-              Link each fund to its{" "}
-              <span className="text-teal-400">api.mfapi.in</span> scheme code
-              for live NAV, XIRR, and Alpha calculations.
-            </p>
-          </div>
-          <button
-            onClick={handleAutoMapAll}
-            disabled={isAutoMapping || unmappedCount === 0}
-            className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-bold px-5 py-2.5 rounded-xl shadow-lg cursor-pointer transition duration-200 shrink-0"
-          >
-            {isAutoMapping ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Auto-fetching…
-              </>
-            ) : (
-              <>
-                <Zap size={16} /> Auto-Fetch All ({unmappedCount} unmapped)
-              </>
-            )}
-          </button>
-        </div>
+      {/* ── FILTER MODAL / DRAWER ── */}
+      <MappingFilterModal
+        isOpen={mounted && filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        mappingFilter={mappingFilter}
+        onMappingFilterChange={handleMappingFilterChange}
+        holdingFilter={holdingFilter}
+        onHoldingFilterChange={handleHoldingFilterChange}
+        categoryFilters={categoryFilters}
+        onCategoryChange={setCategoryFilters}
+        onCategoryClear={handleCategoryClear}
+        categoryOptions={categoryOptions}
+        sortField={sortField}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
+        onOrderChange={(order) => {
+          setSortOrder(order);
+          updateUrl({ order });
+        }}
+        onClearAll={handleClearAll}
+        filteredCount={filteredSchemes.length}
+        totalCount={allSchemes.length}
+        mappedCount={mappedCount}
+        unmappedCount={unmappedCount}
+        activeHoldingSchemesCount={activeHoldingSchemesCount}
+        soldHoldingSchemesCount={soldHoldingSchemesCount}
+      />
 
-        {/* Stats row */}
-        <div className="flex flex-wrap gap-3 mt-4">
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5 text-xs font-semibold text-emerald-400">
-            <ShieldCheck size={13} /> {mappedCount} Mapped
-          </div>
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 text-xs font-semibold text-amber-400">
-            <AlertTriangle size={13} /> {unmappedCount} Unmapped
-          </div>
-          <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400">
-            Total: {allSchemes.length} schemes
-          </div>
-        </div>
-      </div>
+      {/* ── HEADER PANEL ── */}
+      <MappingHeaderPanel
+        unmappedCount={unmappedCount}
+        mappedCount={mappedCount}
+        activeHoldingSchemesCount={activeHoldingSchemesCount}
+        soldHoldingSchemesCount={soldHoldingSchemesCount}
+        totalSchemesCount={allSchemes.length}
+        isAutoMapping={isAutoMapping}
+        onAutoMapAll={handleAutoMapAll}
+      />
 
       {/* ── AUTO-MAP RESULTS PANEL ── */}
-      <AnimatePresence>
-        {(isAutoMapping || autoMapResults) && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-bold text-slate-100 flex items-center gap-2">
-                <Zap size={18} className="text-teal-400" />
-                Auto-Fetch Results
-              </h4>
-              {autoMapResults && (
-                <div className="flex items-center gap-2 text-xs font-semibold">
-                  <span className="text-emerald-400">
-                    {autoMapResults.filter((r) => r.status === "mapped").length}{" "}
-                    auto-saved
-                  </span>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-amber-400">
-                    {
-                      autoMapResults.filter(
-                        (r) => r.status === "low_confidence"
-                      ).length
-                    }{" "}
-                    need review
-                  </span>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-red-400">
-                    {
-                      autoMapResults.filter(
-                        (r) =>
-                          r.status === "not_found" || r.status === "api_error"
-                      ).length
-                    }{" "}
-                    not found
-                  </span>
-                </div>
-              )}
-            </div>
+      <AutoMapResultsPanel
+        isAutoMapping={isAutoMapping}
+        autoMapResults={autoMapResults}
+        filteredAutoResults={filteredAutoResults}
+        autoMapFilter={autoMapFilter}
+        onAutoMapFilterChange={handleAutoMapFilterChange}
+        expandedResult={expandedResult}
+        onToggleExpandResult={(schemeId) =>
+          setExpandedResult((prev) => (prev === schemeId ? null : schemeId))
+        }
+        onOpenManualModal={handleOpenManualModal}
+        onMapScheme={handleMapScheme}
+      />
 
-            {isAutoMapping && (
-              <div className="flex flex-col items-center justify-center py-10 gap-3">
-                <Loader2 size={36} className="text-teal-400 animate-spin" />
-                <p className="text-slate-400 text-sm">
-                  Querying api.mfapi.in for each scheme… this may take a moment.
-                </p>
-              </div>
-            )}
-
-            {autoMapResults && (
-              <>
-                {/* Result filter pills */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {(
-                    ["all", "mapped", "low_confidence", "not_found"] as const
-                  ).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setAutoMapFilter(f)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${autoMapFilter === f ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
-                    >
-                      {f === "all" && `All (${autoMapResults.length})`}
-                      {f === "mapped" &&
-                        `✅ Mapped (${autoMapResults.filter((r) => r.status === "mapped" || r.status === "already_mapped").length})`}
-                      {f === "low_confidence" &&
-                        `⚠️ Low Confidence (${autoMapResults.filter((r) => r.status === "low_confidence").length})`}
-                      {f === "not_found" &&
-                        `❌ Not Found (${autoMapResults.filter((r) => r.status === "not_found" || r.status === "api_error").length})`}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                  {filteredAutoResults?.map((result) => {
-                    const meta = STATUS_META[result.status];
-                    const Icon = meta.icon;
-                    const isExpanded = expandedResult === result.schemeId;
-
-                    return (
-                      <div
-                        key={result.schemeId}
-                        className={`border ${meta.border} ${meta.bg} rounded-xl overflow-hidden`}
-                      >
-                        <div
-                          className="flex items-center justify-between p-3 cursor-pointer"
-                          onClick={() =>
-                            setExpandedResult(
-                              isExpanded ? null : result.schemeId
-                            )
-                          }
-                        >
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <Icon
-                              size={16}
-                              className={`${meta.color} shrink-0 mt-0.5`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-slate-200 text-sm truncate">
-                                {result.schemeName}
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span
-                                  className={`text-xs font-bold ${meta.color}`}
-                                >
-                                  {meta.label}
-                                </span>
-                                {result.schemeCode && (
-                                  <span className="text-xs text-slate-400">
-                                    Code:{" "}
-                                    <span className="text-teal-400 font-bold">
-                                      {result.schemeCode}
-                                    </span>
-                                  </span>
-                                )}
-                                {result.confidence !== null && (
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                      <motion.div
-                                        className={`h-full rounded-full ${result.confidence >= 75 ? "bg-emerald-500" : result.confidence >= 55 ? "bg-amber-500" : "bg-red-500"}`}
-                                        initial={{ width: 0 }}
-                                        animate={{
-                                          width: `${result.confidence}%`,
-                                        }}
-                                      />
-                                    </div>
-                                    <span
-                                      className={`text-xs font-semibold ${result.confidence >= 75 ? "text-emerald-400" : result.confidence >= 55 ? "text-amber-400" : "text-red-400"}`}
-                                    >
-                                      {result.confidence}% conf.
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            {/* Quick re-assign */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMappingSchemeId(result.schemeId);
-                                setMappingSchemeName(result.schemeName);
-                                const q = result.schemeName
-                                  .replace(/Reg(?:ular)?/gi, "")
-                                  .replace(/\(G\)/g, "")
-                                  .trim()
-                                  .slice(0, 30);
-                                setApiSearchQuery(q);
-                                handleApiSearch(q);
-                              }}
-                              className="text-xs text-teal-400 border border-teal-500/30 bg-teal-500/5 hover:bg-teal-500/15 font-semibold px-2.5 py-1.5 rounded-lg transition duration-150 cursor-pointer"
-                            >
-                              {result.schemeCode ? "Remap" : "Assign"}
-                            </button>
-                            {result.topMatches.length > 0 &&
-                              (isExpanded ? (
-                                <ChevronUp
-                                  size={14}
-                                  className="text-slate-500"
-                                />
-                              ) : (
-                                <ChevronDown
-                                  size={14}
-                                  className="text-slate-500"
-                                />
-                              ))}
-                          </div>
-                        </div>
-
-                        {/* Expandable: top API matches */}
-                        <AnimatePresence>
-                          {isExpanded && result.topMatches.length > 0 && (
-                            <motion.div
-                              initial={{ height: 0 }}
-                              animate={{ height: "auto" }}
-                              exit={{ height: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="border-t border-slate-800/60 px-3 pb-3 pt-2 space-y-1">
-                                <p className="text-xs text-slate-500 font-semibold mb-1.5">
-                                  Top API matches — click to apply:
-                                </p>
-                                {result.topMatches.map((match) => (
-                                  <div
-                                    key={match.schemeCode}
-                                    onClick={() =>
-                                      handleMapScheme(
-                                        result.schemeId,
-                                        String(match.schemeCode)
-                                      )
-                                    }
-                                    className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800/80 cursor-pointer transition border border-transparent hover:border-slate-700"
-                                  >
-                                    <span className="text-xs text-slate-300">
-                                      {match.schemeName}
-                                    </span>
-                                    <span className="text-xs text-teal-400 font-bold ml-3 shrink-0">
-                                      {match.schemeCode}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ── SEARCH + FILTERS TOOLBAR CARD ── */}
+      <MappingToolbar
+        searchVal={searchVal}
+        setSearchVal={setSearchVal}
+        activeFilterCount={activeFilterCount}
+        onOpenFilterPanel={() => setFilterPanelOpen(true)}
+        mappingFilter={mappingFilter}
+        onMappingFilterChange={handleMappingFilterChange}
+        holdingFilter={holdingFilter}
+        onHoldingFilterChange={handleHoldingFilterChange}
+        categoryFilters={categoryFilters}
+        onCategoryToggle={handleCategoryToggle}
+        sortField={sortField}
+        sortOrder={sortOrder}
+        onResetSort={() => {
+          setSortField("name");
+          setSortOrder("asc");
+          updateUrl({ sort: null, order: null });
+        }}
+        onClearAll={handleClearAll}
+      />
 
       {/* ── SCHEME LIST PANEL ── */}
-      <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="font-bold text-slate-100">All Schemes</h4>
-          {/* Filter pills */}
-          <div className="flex gap-2">
-            {(["all", "mapped", "unmapped"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setMappingFilter(f)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition duration-200 cursor-pointer ${mappingFilter === f ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
-              >
-                {f === "all" && `All (${allSchemes.length})`}
-                {f === "mapped" && `Mapped (${mappedCount})`}
-                {f === "unmapped" && `Unmapped (${unmappedCount})`}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {filteredSchemes.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl text-slate-500 text-sm">
-              No schemes match the &ldquo;{mappingFilter}&rdquo; filter.
-            </div>
-          ) : (
-            filteredSchemes.map((scheme) => (
-              <div
-                key={scheme.id}
-                className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-slate-950/40 border border-slate-800 rounded-xl gap-3 hover:border-slate-700 transition"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-200 text-sm">
-                    {scheme.name}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-400">
-                      {scheme.category}
-                    </span>
-                    {scheme.schemeCodeApi ? (
-                      <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                        <ShieldCheck size={12} />
-                        Code: <span className="">{scheme.schemeCodeApi}</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-amber-500 font-semibold">
-                        <AlertTriangle size={12} /> Not mapped
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {scheme.schemeCodeApi && (
-                    <button
-                      onClick={() => handleMapScheme(scheme.id, null)}
-                      className="text-xs text-red-400 hover:text-red-300 font-semibold px-3 py-1.5 border border-red-800/40 bg-red-950/20 hover:bg-red-950/50 rounded-lg transition cursor-pointer"
-                    >
-                      Reset
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setMappingSchemeId(scheme.id);
-                      setMappingSchemeName(scheme.name);
-                      const q = scheme.name
-                        .replace(/Reg(?:ular)?/gi, "")
-                        .replace(/\(G\)/g, "")
-                        .trim()
-                        .slice(0, 30);
-                      setApiSearchQuery(q);
-                      handleApiSearch(q);
-                    }}
-                    className="text-xs text-slate-950 bg-teal-400 hover:bg-teal-300 font-bold px-4 py-1.5 rounded-lg transition cursor-pointer"
-                  >
-                    {scheme.schemeCodeApi ? "Remap" : "Assign Code"}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <SchemeListPanel
+        schemes={filteredSchemes}
+        totalSchemesCount={allSchemes.length}
+        holdingFilter={holdingFilter}
+        onHoldingFilterChange={handleHoldingFilterChange}
+        activeHoldingSchemesCount={activeHoldingSchemesCount}
+        soldHoldingSchemesCount={soldHoldingSchemesCount}
+        onOpenManualModal={handleOpenManualModal}
+        onMapScheme={handleMapScheme}
+      />
 
       {/* ── MANUAL SEARCH MODAL ── */}
-      {mappingSchemeId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full flex flex-col shadow-2xl overflow-hidden"
-          >
-            <div className="p-5 border-b border-slate-800 flex justify-between items-start">
-              <div>
-                <h4 className="font-bold text-lg text-slate-100">
-                  Search Scheme Code
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5 max-w-md line-clamp-2">
-                  {mappingSchemeName}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setMappingSchemeId(null);
-                  setApiSearchQuery("");
-                  setApiSearchResults([]);
-                }}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer flex items-center justify-center p-1 rounded hover:bg-slate-800 transition mt-0.5"
-                aria-label="Close"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Type scheme name (e.g. Aditya Birla Flexi)…"
-                  value={apiSearchQuery}
-                  onChange={(e) => handleApiSearch(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  autoFocus
-                />
-                <Search
-                  className="absolute left-3.5 top-3 text-slate-500"
-                  size={16}
-                />
-                {isSearchingApi && (
-                  <Loader2
-                    className="absolute right-3.5 top-3 text-teal-400 animate-spin"
-                    size={16}
-                  />
-                )}
-              </div>
-
-              <div className="h-64 overflow-y-auto bg-slate-950 rounded-xl border border-slate-800 p-2 space-y-1">
-                {isSearchingApi ? (
-                  <div className="h-full flex items-center justify-center text-slate-500 text-sm gap-2">
-                    <Loader2 size={16} className="animate-spin" /> Searching…
-                  </div>
-                ) : apiSearchResults.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-                    {apiSearchQuery.trim().length < 3
-                      ? "Type at least 3 letters to search"
-                      : "❌ No results found"}
-                  </div>
-                ) : (
-                  apiSearchResults.map((res: MfSearchResult) => (
-                    <div
-                      key={res.schemeCode}
-                      onClick={() =>
-                        handleMapScheme(mappingSchemeId, String(res.schemeCode))
-                      }
-                      className="flex justify-between items-center p-2.5 hover:bg-slate-900 rounded-lg cursor-pointer transition border border-transparent hover:border-slate-700"
-                    >
-                      <span className="font-medium text-slate-300 text-sm">
-                        {res.schemeName}
-                      </span>
-                      <span className="text-teal-400 text-xs ml-4 font-bold shrink-0">
-                        #{res.schemeCode}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Manual code entry */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-3 border-t border-slate-800">
-                <span className="text-slate-400 text-xs shrink-0 font-medium">
-                  Enter code directly:
-                </span>
-                <div className="flex-1 flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. 120716"
-                    id="manualCodeInput"
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 flex-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "manualCodeInput"
-                      ) as HTMLInputElement;
-                      if (input?.value.trim())
-                        handleMapScheme(mappingSchemeId, input.value.trim());
-                    }}
-                    className="bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition cursor-pointer"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <ManualSearchModal
+        isOpen={mappingSchemeId !== null}
+        onClose={() => {
+          setMappingSchemeId(null);
+          setApiSearchQuery("");
+          setApiSearchResults([]);
+        }}
+        schemeId={mappingSchemeId}
+        schemeName={mappingSchemeName}
+        searchQuery={apiSearchQuery}
+        onSearchQueryChange={handleApiSearch}
+        searchResults={apiSearchResults}
+        isSearching={isSearchingApi}
+        onSelectScheme={handleMapScheme}
+      />
     </motion.div>
   );
 }
