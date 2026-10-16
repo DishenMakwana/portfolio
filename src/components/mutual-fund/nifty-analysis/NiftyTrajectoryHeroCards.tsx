@@ -11,15 +11,7 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { formatIndianAmount } from "@/helpers/formatters";
-import type {
-  NiftyAnalysisSummary,
-  NiftyTradeMode,
-} from "@/types/nifty-analysis";
-
-interface NiftyTrajectoryHeroCardsProps {
-  summary: NiftyAnalysisSummary;
-  tradeMode: NiftyTradeMode;
-}
+import type { NiftyTrajectoryHeroCardsProps } from "@/types/nifty-analysis";
 
 export default function NiftyTrajectoryHeroCards({
   summary,
