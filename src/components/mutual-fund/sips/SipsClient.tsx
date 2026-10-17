@@ -2,24 +2,22 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Upload,
-  Repeat2,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  Trash2,
-  ChevronDown,
-  Users,
-  IndianRupee,
-} from "lucide-react";
-import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
-import { formatCurrency } from "@/lib/formatters";
-import { parseMonthYear, formatHoldingDuration } from "@/helpers/dates";
-import type { SipMandateRow } from "@/types/portfolio";
-import type { SipsClientProps } from "@/types/sips";
+import { Repeat2 } from "lucide-react";
 import { toast } from "react-hot-toast";
+
+import { uploadSipAction, clearSipMandatesAction } from "@/actions/portfolio";
+import { parseMonthYear } from "@/helpers/dates";
+import type { SipMandateRow } from "@/types/portfolio";
+import type { SipsClientProps, SipMemberStatsMap } from "@/types/sips";
+
+import SipsHeaderUploadBanner from "./SipsHeaderUploadBanner";
+import SipsKpiCards from "./SipsKpiCards";
+import SipsMemberFilterPills from "./SipsMemberFilterPills";
+import SipMemberSection from "./table/SipMemberSection";
+import SipGrandTotalCard from "./table/SipGrandTotalCard";
+import SipUploadLoadingModal from "./modal/SipUploadLoadingModal";
+import SipCategoryAnalysisCard from "./SipCategoryAnalysisCard";
+import ConfirmationModal from "@/components/shared/ConfirmationModal";
 
 export default function SipsClient({ mandates }: SipsClientProps) {
   const router = useRouter();
@@ -31,13 +29,19 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
   const [filterMember, setFilterMember] = useState<string>(initialMember);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     setFilterMember(searchParams.get("member") || "all");
   }, [searchParams]);
 
   const updateUrl = (updates: Record<string, string | null>) => {
-    const current = new URLSearchParams(searchParams.toString());
+    const searchString =
+      typeof window !== "undefined"
+        ? window.location.search
+        : searchParams.toString();
+    const current = new URLSearchParams(searchString);
     for (const [key, value] of Object.entries(updates)) {
       if (value === null || value === "" || value === "all") {
         current.delete(key);
@@ -46,7 +50,11 @@ export default function SipsClient({ mandates }: SipsClientProps) {
       }
     }
     const query = current.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    const url = `${pathname}${query ? `?${query}` : ""}`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", url);
+    }
+    router.replace(url, { scroll: false });
   };
 
   const handleMemberChange = (member: string) => {
@@ -74,10 +82,12 @@ export default function SipsClient({ mandates }: SipsClientProps) {
     e.target.value = "";
   };
 
-  // ── Clear handler
-  const handleClear = async () => {
-    if (!confirm("Delete all SIP mandates from the database?")) return;
+  // ── Confirm Clear handler
+  const handleConfirmClear = async () => {
+    setIsClearing(true);
     const res = await clearSipMandatesAction();
+    setIsClearing(false);
+    setIsClearModalOpen(false);
     if (res.success) {
       toast.success("Successfully cleared all SIP mandates.");
       startTransition(() => router.refresh());
@@ -89,7 +99,9 @@ export default function SipsClient({ mandates }: SipsClientProps) {
   // ── Derived data
   const { members, totalMonthly, activeSips, pausedSips, byMember, monthCols } =
     useMemo(() => {
-      const mems = Array.from(new Set(mandates.map((m) => m.memberName)));
+      const mems = Array.from(new Set(mandates.map((m) => m.memberName))).sort(
+        (a, b) => a.localeCompare(b)
+      );
       const filtered =
         filterMember === "all"
           ? mandates
@@ -108,12 +120,20 @@ export default function SipsClient({ mandates }: SipsClientProps) {
         grouped[m.memberName].push(m);
       });
 
-      const unsortedMonthCols =
-        mandates.length > 0 ? Object.keys(mandates[0].monthlyHistory) : [];
+      const allMonthKeys = new Set<string>();
+      mandates.forEach((m) => {
+        if (m.monthlyHistory) {
+          Object.keys(m.monthlyHistory).forEach((k) => allMonthKeys.add(k));
+        }
+      });
 
-      const sortedCols = [...unsortedMonthCols].sort((a, b) => {
+      const sortedCols = Array.from(allMonthKeys).sort((a, b) => {
         return parseMonthYear(a).getTime() - parseMonthYear(b).getTime();
       });
+
+      // Show latest 5 cumulative months (e.g. MAY 26 to SEP 26), removing APR 26 and earlier records
+      const displayedCols =
+        sortedCols.length > 5 ? sortedCols.slice(-5) : sortedCols;
 
       return {
         members: mems,
@@ -121,18 +141,12 @@ export default function SipsClient({ mandates }: SipsClientProps) {
         activeSips: act,
         pausedSips: psd,
         byMember: grouped,
-        monthCols: sortedCols,
+        monthCols: displayedCols,
       };
     }, [mandates, filterMember]);
 
   const memberTotals = useMemo(() => {
-    const totals: Record<
-      string,
-      {
-        memberTotal: number;
-        monthlyTotals: Record<string, number>;
-      }
-    > = {};
+    const totals: SipMemberStatsMap = {};
 
     for (const [memberName, sips] of Object.entries(byMember)) {
       const memberTotal = sips.reduce((a, s) => a + s.monthlyAmount, 0);
@@ -162,86 +176,15 @@ export default function SipsClient({ mandates }: SipsClientProps) {
     return totals;
   }, [mandates, monthCols]);
 
-  const rawCards = [
-    {
-      label: "Total Monthly SIP",
-      value: formatCurrency(totalMonthly),
-      sub: "Active mandates only",
-      color: "text-teal-400",
-      icon: IndianRupee,
-      bg: "bg-teal-500/10",
-      border: "border-teal-500/20",
-    },
-    {
-      label: "Total Mandates",
-      value: String(mandates.length),
-      sub: `${activeSips} active`,
-      color: "text-slate-100",
-      icon: Repeat2,
-      bg: "bg-slate-700/30",
-      border: "border-slate-700/50",
-    },
-    {
-      label: "Active SIPs",
-      value: String(activeSips),
-      sub: "Running this month",
-      color: "text-emerald-400",
-      icon: CheckCircle2,
-      bg: "bg-emerald-500/10",
-      border: "border-emerald-500/20",
-    },
-    {
-      label: "Paused / Stopped",
-      value: String(pausedSips),
-      sub: "Zero in latest month",
-      color: "text-amber-400",
-      icon: AlertTriangle,
-      bg: "bg-amber-500/10",
-      border: "border-amber-500/20",
-    },
-  ];
-
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       {/* ── HEADER + UPLOAD ── */}
-      <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-              <Repeat2 size={20} className="text-teal-400" /> My SIP Mandates
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Fixed monthly SIP schedule for all family members. Upload your
-              &ldquo;My SIP&rsquo;s&rdquo; Excel export to sync.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {mandates.length > 0 && (
-              <button
-                onClick={handleClear}
-                className="flex items-center gap-2 text-red-400 hover:text-red-300 border border-red-800/40 bg-red-950/20 hover:bg-red-950/50 px-3 py-2 rounded-xl text-sm font-semibold transition cursor-pointer"
-              >
-                <Trash2 size={14} /> Clear All
-              </button>
-            )}
-            <label className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-950 font-bold px-5 py-2.5 rounded-xl shadow-lg cursor-pointer transition text-sm">
-              {isUploading ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Upload size={15} />
-              )}
-              {isUploading ? "Uploading…" : "Upload SIP's Excel"}
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={handleUpload}
-                className="hidden"
-                disabled={isUploading}
-              />
-            </label>
-          </div>
-        </div>
-      </div>
+      <SipsHeaderUploadBanner
+        mandatesCount={mandates.length}
+        isUploading={isUploading}
+        onUpload={handleUpload}
+        onOpenClearModal={() => setIsClearModalOpen(true)}
+      />
 
       {mandates.length === 0 ? (
         /* Empty state */
@@ -258,313 +201,88 @@ export default function SipsClient({ mandates }: SipsClientProps) {
       ) : (
         <>
           {/* ── KPI SUMMARY CARDS ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {rawCards.map((card, i) => (
-              <motion.div
-                key={card.label}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.07 }}
-                className={`bg-slate-900/70 backdrop-blur-md border ${card.border} rounded-2xl p-5 shadow-xl`}
-              >
-                <div className={`inline-flex p-2 rounded-xl ${card.bg} mb-3`}>
-                  <card.icon size={18} className={card.color} />
-                </div>
-                <div className={`text-2xl font-extrabold ${card.color}`}>
-                  {card.value}
-                </div>
-                <div className="text-xs text-slate-500 mt-1 font-medium">
-                  {card.label}
-                </div>
-                <div className="text-[11px] text-slate-600 mt-0.5">
-                  {card.sub}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+          <SipsKpiCards
+            totalMonthly={totalMonthly}
+            totalMandates={mandates.length}
+            activeSips={activeSips}
+            pausedSips={pausedSips}
+          />
 
           {/* ── MEMBER FILTER ── */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleMemberChange("all")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${filterMember === "all" ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
-            >
-              All Members ({mandates.length})
-            </button>
-            {members.map((m) => {
-              const count = mandates.filter((x) => x.memberName === m).length;
-              return (
-                <button
-                  key={m}
-                  onClick={() => handleMemberChange(m)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${filterMember === m ? "bg-teal-500 text-slate-950 border-teal-500" : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"}`}
-                >
-                  {m.split(" ")[0]} ({count})
-                </button>
-              );
-            })}
-          </div>
+          <SipsMemberFilterPills
+            members={members}
+            mandates={mandates}
+            filterMember={filterMember}
+            onSelectMember={handleMemberChange}
+          />
 
           {/* ── PER-MEMBER TABLES ── */}
           <div className="space-y-4">
-            {Object.entries(byMember).map(([memberName, sips]) => {
-              const stats = memberTotals[memberName];
-              const isExpanded =
-                expandedMember === null || expandedMember === memberName;
-
-              return (
-                <motion.div
-                  key={memberName}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl"
-                >
-                  {/* Member header */}
-                  <button
-                    onClick={() =>
-                      setExpandedMember(
-                        expandedMember === memberName ? null : memberName
-                      )
-                    }
-                    className="w-full flex items-center justify-between px-6 py-4 border-b border-slate-800/60 cursor-pointer hover:bg-slate-800/20 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500/30 to-emerald-500/20 flex items-center justify-center border border-teal-500/20">
-                        <Users size={16} className="text-teal-400" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-bold text-slate-100 text-sm">
-                          {memberName}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {sips.filter((s) => s.isActive).length} active ·{" "}
-                          {sips.filter((s) => !s.isActive).length} paused
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500 font-medium">
-                          Monthly SIP
-                        </div>
-                        <div className="text-base font-extrabold text-teal-400">
-                          {formatCurrency(stats?.memberTotal ?? 0)}
-                        </div>
-                      </div>
-                      <ChevronDown
-                        size={16}
-                        className={`text-slate-500 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-                      />
-                    </div>
-                  </button>
-
-                  {/* SIP table */}
-                  <AnimatePresence initial={false}>
-                    {isExpanded && (
-                      <motion.div
-                        key="content"
-                        initial="collapsed"
-                        animate="open"
-                        exit="collapsed"
-                        variants={{
-                          open: { opacity: 1, height: "auto" },
-                          collapsed: { opacity: 0, height: 0 },
-                        }}
-                        transition={{
-                          duration: 0.3,
-                          ease: [0.04, 0.62, 0.23, 0.98],
-                        }}
-                        className="overflow-hidden"
-                      >
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-slate-950/50">
-                                <th className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                                  Scheme
-                                </th>
-                                <th className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                                  Folio
-                                </th>
-                                <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                                  SIP Amount
-                                </th>
-                                {monthCols.map((col) => (
-                                  <th
-                                    key={col}
-                                    className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap"
-                                  >
-                                    {col}
-                                  </th>
-                                ))}
-                                <th className="px-5 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                  Status
-                                </th>
-                                <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                                  Holding Days
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/40">
-                              {sips.map((sip, i) => (
-                                <tr
-                                  key={sip.id}
-                                  className={
-                                    i % 2 === 0 ? "" : "bg-slate-950/20"
-                                  }
-                                >
-                                  <td className="px-5 py-3 font-medium text-slate-200 max-w-xs">
-                                    <div className="truncate">
-                                      {sip.schemeName}
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-3 text-xs text-slate-400">
-                                    {sip.folioNo}
-                                  </td>
-                                  <td className="px-5 py-3 text-right font-bold text-slate-100">
-                                    {formatCurrency(sip.monthlyAmount)}
-                                  </td>
-                                  {monthCols.map((col) => {
-                                    const amt = sip.monthlyHistory[col] ?? 0;
-                                    return (
-                                      <td
-                                        key={col}
-                                        className={`px-3 py-3 text-right text-xs font-semibold ${amt > 0 ? "text-emerald-400" : "text-slate-600"}`}
-                                      >
-                                        {amt > 0
-                                          ? `₹${amt.toLocaleString("en-IN")}`
-                                          : "—"}
-                                      </td>
-                                    );
-                                  })}
-                                  <td className="px-5 py-3 text-center">
-                                    {sip.isActive ? (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />{" "}
-                                        Active
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                                        Paused
-                                      </span>
-                                    )}
-                                  </td>
-                                  {(() => {
-                                    const duration = formatHoldingDuration(
-                                      sip.firstTxDate
-                                    );
-                                    return (
-                                      <td className="px-5 py-3 text-right whitespace-nowrap">
-                                        {duration ? (
-                                          <div>
-                                            <div className="font-extrabold text-slate-100 text-sm tracking-tight">
-                                              {duration.days}
-                                            </div>
-                                            <div className="text-[11px] text-slate-500 font-medium">
-                                              {duration.label}
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <span className="text-slate-600 text-xs">
-                                            —
-                                          </span>
-                                        )}
-                                      </td>
-                                    );
-                                  })()}
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t border-slate-700/60 bg-slate-950/40">
-                                <td
-                                  colSpan={2}
-                                  className="px-5 py-3 text-xs font-bold text-slate-400 uppercase"
-                                >
-                                  {memberName.split(" ")[0]}&apos;s Total
-                                </td>
-                                <td className="px-5 py-3 text-right font-extrabold text-teal-400">
-                                  {formatCurrency(stats?.memberTotal ?? 0)}
-                                </td>
-                                {monthCols.map((col) => {
-                                  const colTotal =
-                                    stats?.monthlyTotals[col] ?? 0;
-                                  return (
-                                    <td
-                                      key={col}
-                                      className={`px-3 py-3 text-right text-xs font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
-                                    >
-                                      {colTotal > 0
-                                        ? `₹${colTotal.toLocaleString("en-IN")}`
-                                        : "—"}
-                                    </td>
-                                  );
-                                })}
-                                <td />
-                                <td />
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
+            {Object.entries(byMember).map(([memberName, sips]) => (
+              <SipMemberSection
+                key={memberName}
+                memberName={memberName}
+                sips={sips}
+                monthCols={monthCols}
+                stats={memberTotals[memberName]}
+                isExpanded={
+                  expandedMember === null || expandedMember === memberName
+                }
+                onToggleExpand={() =>
+                  setExpandedMember(
+                    expandedMember === memberName ? null : memberName
+                  )
+                }
+                onSelectFund={(url) => router.push(url)}
+              />
+            ))}
           </div>
 
           {/* ── GRAND TOTAL ROW ── */}
-          <div className="bg-slate-900/70 backdrop-blur-md border border-teal-500/20 rounded-2xl p-5 shadow-xl">
-            <div className="flex flex-wrap justify-between items-center gap-4">
-              <div className="text-sm font-bold text-slate-300">
-                Family Grand Total — {activeSips} active SIPs across{" "}
-                {members.length} investors
+          <SipGrandTotalCard
+            activeSips={activeSips}
+            membersCount={members.length}
+            monthCols={monthCols}
+            grandMonthlyTotals={grandMonthlyTotals}
+            totalMonthly={totalMonthly}
+          />
+
+          {/* ── SECTION SEPARATOR & STRATEGIC INSIGHTS DIVIDER ── */}
+          <div className="pt-8 pb-3">
+            <div className="flex items-center gap-4">
+              <div className="h-px bg-slate-800/80 flex-1" />
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 shadow-inner text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                Category &amp; Strategic Allocation
               </div>
-              <div className="flex items-center gap-6">
-                {monthCols.map((col) => {
-                  const colTotal = grandMonthlyTotals[col] ?? 0;
-                  return (
-                    <div key={col} className="text-center">
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        {col}
-                      </div>
-                      <div
-                        className={`text-sm font-bold ${colTotal > 0 ? "text-teal-400" : "text-slate-600"}`}
-                      >
-                        {colTotal > 0 ? formatCurrency(colTotal) : "—"}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="text-center border-l border-slate-700 pl-6">
-                  <div className="text-[11px] text-slate-500 font-medium">
-                    Monthly
-                  </div>
-                  <div className="text-xl font-extrabold text-teal-400">
-                    {formatCurrency(totalMonthly)}
-                  </div>
-                </div>
-              </div>
+              <div className="h-px bg-slate-800/80 flex-1" />
             </div>
           </div>
+
+          {/* ── MONTHLY CATEGORY SIP ALLOCATION & FUTURE ADVISORY ── */}
+          <SipCategoryAnalysisCard
+            mandates={mandates}
+            filterMember={filterMember}
+          />
         </>
       )}
 
       {/* Full-screen upload loader */}
-      {isUploading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
-            <div className="w-14 h-14 border-4 border-teal-500/20 border-t-teal-500 rounded-full animate-spin mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-100">
-              Parsing SIP file…
-            </h3>
-            <p className="text-slate-400 mt-2 text-sm">
-              Reading monthly mandate amounts for all investors.
-            </p>
-          </div>
-        </div>
-      )}
+      <SipUploadLoadingModal isOpen={isUploading} />
+
+      {/* Confirmation Modal for Clearing SIP Mandates */}
+      <ConfirmationModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={handleConfirmClear}
+        title="Clear All SIP Mandates?"
+        description="Are you sure you want to delete all SIP mandates and monthly history records from the database? This action cannot be undone."
+        warningNote="All existing family member mandates will be permanently erased. You will need to re-upload your SIP Excel file to restore them."
+        confirmText="Clear All Mandates"
+        cancelText="Cancel"
+        variant="danger"
+        isPending={isClearing}
+      />
     </div>
   );
 }
