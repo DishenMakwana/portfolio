@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   Wallet,
@@ -13,7 +12,7 @@ import {
   Crown,
   Minus,
 } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatAthVal, formatAthDiffAmount } from "@/helpers/formatters";
 import type {
   OverviewAthCorrectionCardsProps,
   MetricCardConfig,
@@ -109,26 +108,6 @@ export default function OverviewAthCorrectionCards({
           const isCorrection = m.diff < -0.01;
           const isAboveAth = m.diff > 0.01;
 
-          const formatVal = (v: number) =>
-            m.isCurrency
-              ? formatCurrency(v)
-              : v.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                });
-
-          const formatDiffAmount = (v: number) => {
-            if (Math.abs(v) < 0.01) return m.isCurrency ? "₹0.00" : "0.00 pts";
-            const sign = v > 0 ? "+" : "-";
-            const absVal = Math.abs(v);
-            return m.isCurrency
-              ? `${sign}${formatCurrency(absVal)}`
-              : `${sign}${absVal.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })} pts`;
-          };
-
           return (
             <motion.div
               key={m.title}
@@ -172,7 +151,7 @@ export default function OverviewAthCorrectionCards({
                     </span>
                   </div>
                   <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight mt-1">
-                    {formatVal(m.currentValue)}
+                    {formatAthVal(m.currentValue, Boolean(m.isCurrency))}
                   </div>
                 </div>
 
@@ -194,7 +173,7 @@ export default function OverviewAthCorrectionCards({
                   </div>
                   <div className="flex items-baseline justify-between">
                     <div className="text-sm font-bold text-slate-300 tracking-tight">
-                      {formatVal(m.athValue)}
+                      {formatAthVal(m.athValue, Boolean(m.isCurrency))}
                     </div>
                     <span className="text-[10px] text-slate-500 font-medium">
                       {m.dayDiff === 0
@@ -217,7 +196,7 @@ export default function OverviewAthCorrectionCards({
                             : "text-slate-300"
                       }`}
                     >
-                      {formatDiffAmount(m.diff)}
+                      {formatAthDiffAmount(m.diff, Boolean(m.isCurrency))}
                     </span>
                   </div>
 

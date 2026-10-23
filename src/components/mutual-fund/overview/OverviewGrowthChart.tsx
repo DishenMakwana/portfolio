@@ -55,17 +55,27 @@ export default function OverviewGrowthChart({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3, duration: 0.4 }}
-      className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl"
+      className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl"
     >
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <TrendingUp className="text-teal-400" size={18} />
-            Portfolio Growth Timeline
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Current value vs. invested cost across uploaded snapshots
-          </p>
+      {/* Header Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/60 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-300 shrink-0">
+            <TrendingUp size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight">
+                Portfolio Growth Timeline
+              </h3>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300 bg-slate-800/80 border border-slate-700/60 px-2 py-0.5 rounded-full">
+                Value vs Cost
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Current value vs. invested cost across uploaded snapshots
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
@@ -89,8 +99,9 @@ export default function OverviewGrowthChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
+              key={`overview-growth-chart-${timelineData.length}`}
               data={timelineData}
-              margin={{ top: 15, right: 20, left: 15, bottom: 30 }}
+              margin={{ top: 10, right: 15, left: 8, bottom: 18 }}
             >
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -106,44 +117,42 @@ export default function OverviewGrowthChart({
               <XAxis
                 dataKey="date"
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
-                height={45}
-                tick={{ dy: 2 }}
+                height={34}
+                tick={{ dy: 3 }}
               >
                 <Label
                   value="Snapshot Date"
                   position="insideBottom"
-                  offset={0}
+                  offset={-8}
                   fill="#94a3b8"
-                  fontSize={11}
-                  fontWeight={700}
+                  fontSize={10}
+                  fontWeight={600}
                 />
               </XAxis>
               <YAxis
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(tick) =>
-                  "₹" +
                   Intl.NumberFormat("en-IN", {
                     notation: "compact",
                     maximumFractionDigits: 1,
                   }).format(tick)
                 }
-                width={65}
+                width={56}
               >
                 <Label
                   value="Portfolio Valuation (₹)"
                   angle={-90}
                   position="insideLeft"
-                  style={{
-                    textAnchor: "middle",
-                    fill: "#94a3b8",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
+                  offset={2}
+                  fill="#94a3b8"
+                  fontSize={10}
+                  fontWeight={600}
+                  style={{ textAnchor: "middle" }}
                 />
               </YAxis>
               <Tooltip content={<CustomAreaTooltip />} />
@@ -157,6 +166,10 @@ export default function OverviewGrowthChart({
                 fill="url(#colorValue)"
                 dot={false}
                 activeDot={{ r: 5, fill: "#10b981" }}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={100}
               />
               <Area
                 type="monotone"
@@ -169,6 +182,10 @@ export default function OverviewGrowthChart({
                 fill="url(#colorInvested)"
                 dot={false}
                 activeDot={{ r: 4, fill: "#8b5cf6" }}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={200}
               />
             </AreaChart>
           </ResponsiveContainer>

@@ -54,17 +54,27 @@ export default function OverviewXirrChart({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.32, duration: 0.4 }}
-      className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 shadow-xl"
+      className="bg-slate-900/70 backdrop-blur-md border border-slate-800/80 rounded-2xl p-5 sm:p-6 shadow-xl"
     >
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Activity className="text-amber-400" size={18} />
-            XIRR Return Timeline
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Portfolio XIRR vs benchmark XIRR across uploaded snapshot dates
-          </p>
+      {/* Header Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/60 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 shrink-0">
+            <Activity size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight">
+                XIRR Return Timeline
+              </h3>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300 bg-slate-800/80 border border-slate-700/60 px-2 py-0.5 rounded-full">
+                Benchmark Comparison
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Portfolio XIRR vs benchmark XIRR across uploaded snapshot dates
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
@@ -93,45 +103,45 @@ export default function OverviewXirrChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
+              key={`overview-xirr-chart-${timelineData.length}`}
               data={timelineData}
-              margin={{ top: 15, right: 20, left: 10, bottom: 30 }}
+              margin={{ top: 10, right: 15, left: 8, bottom: 18 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis
                 dataKey="date"
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
-                height={45}
-                tick={{ dy: 2 }}
+                height={34}
+                tick={{ dy: 3 }}
               >
                 <Label
                   value="Snapshot Date"
                   position="insideBottom"
-                  offset={0}
+                  offset={-8}
                   fill="#94a3b8"
-                  fontSize={11}
-                  fontWeight={700}
+                  fontSize={10}
+                  fontWeight={600}
                 />
               </XAxis>
               <YAxis
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(tick) => `${Number(tick).toFixed(0)}%`}
-                width={55}
+                width={56}
               >
                 <Label
                   value="XIRR Return (%)"
                   angle={-90}
                   position="insideLeft"
-                  style={{
-                    textAnchor: "middle",
-                    fill: "#94a3b8",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
+                  offset={2}
+                  fill="#94a3b8"
+                  fontSize={10}
+                  fontWeight={600}
+                  style={{ textAnchor: "middle" }}
                 />
               </YAxis>
               <Tooltip content={<CustomXirrTooltip />} />
@@ -143,6 +153,10 @@ export default function OverviewXirrChart({
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: "#f59e0b", strokeWidth: 0 }}
                 activeDot={{ r: 5, fill: "#f59e0b" }}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={100}
               />
               <Line
                 type="monotone"
@@ -153,6 +167,10 @@ export default function OverviewXirrChart({
                 strokeDasharray="6 4"
                 dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 0 }}
                 activeDot={{ r: 5, fill: "#8b5cf6" }}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={200}
               />
             </LineChart>
           </ResponsiveContainer>

@@ -1,16 +1,40 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ChevronUp, ChevronDown } from "lucide-react";
-import type { OverviewTabProps } from "@/types/overview";
+import { useTableSort } from "@/helpers/useTableSort";
+import {
+  INVESTOR_SORT_FIELDS,
+  type OverviewTabProps,
+  type InvestorSortField,
+} from "@/types/overview";
+import CardErrorBoundary from "@/components/shared/CardErrorBoundary";
 import OverviewHeroCards from "./OverviewHeroCards";
 import OverviewBenchmarkCards from "./OverviewBenchmarkCards";
-import OverviewGrowthChart from "./OverviewGrowthChart";
-import OverviewXirrChart from "./OverviewXirrChart";
+import OverviewAthCorrectionCards from "./OverviewAthCorrectionCards";
 import OverviewAllocationPanels from "./OverviewAllocationPanels";
+import OverviewMarketCapCard from "./OverviewMarketCapCard";
 import OverviewMemberAndSubCategorySection from "./OverviewMemberAndSubCategorySection";
+
+const OverviewGrowthChart = dynamic(() => import("./OverviewGrowthChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-80 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+      Loading growth chart...
+    </div>
+  ),
+});
+
+const OverviewXirrChart = dynamic(() => import("./OverviewXirrChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-80 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+      Loading XIRR chart...
+    </div>
+  ),
+});
 
 export default function OverviewTab({
   totals,
@@ -21,42 +45,25 @@ export default function OverviewTab({
   capAllocation,
   memberSummaries,
   holdings,
+  athData,
 }: OverviewTabProps): React.JSX.Element {
   const searchParams = useSearchParams();
   const reportId = searchParams?.get("reportId");
   const reportIdParam = reportId ? `?reportId=${reportId}` : "";
 
-  // Sort state for Investor Table
-  const [investorSortField, setInvestorSortField] = useState<
-    "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha"
-  >("currentValue");
-  const [investorSortOrder, setInvestorSortOrder] = useState<"asc" | "desc">(
-    "desc"
-  );
-
-  const toggleInvestorSort = (
-    field:
-      "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha"
-  ) => {
-    if (investorSortField === field) {
-      setInvestorSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setInvestorSortField(field);
-      setInvestorSortOrder("desc");
-    }
-  };
-
-  const renderInvestorSortIcon = (
-    field:
-      "name" | "invested" | "currentValue" | "gain" | "cagr" | "xirr" | "alpha"
-  ) => {
-    if (investorSortField !== field) return null;
-    return investorSortOrder === "asc" ? (
-      <ChevronUp size={12} className="inline ml-0.5 text-teal-400" />
-    ) : (
-      <ChevronDown size={12} className="inline ml-0.5 text-teal-400" />
-    );
-  };
+  // Sort state for Investor Table with URL synchronization
+  const {
+    sortField: investorSortField,
+    sortOrder: investorSortOrder,
+    handleSort: toggleInvestorSort,
+    renderSortIcon: renderInvestorSortIcon,
+  } = useTableSort<InvestorSortField>({
+    defaultField: "currentValue",
+    defaultOrder: "desc",
+    sortParamKey: "investorSort",
+    orderParamKey: "investorOrder",
+    allowedFields: INVESTOR_SORT_FIELDS,
+  });
 
   const activeHoldings = useMemo(() => {
     return holdings.filter(
@@ -92,20 +99,40 @@ export default function OverviewTab({
   }, [activeHoldings]);
 
   const taxEstimate = useMemo(() => {
-    let ltcg = 0;
-    let stcg = 0;
+    // Calculate per-member LTCG & STCG so each active member gets their ₹1.25L Section 112A exemption
+    const memberGains = new Map<string, { ltcg: number; stcg: number }>();
     for (const h of activeHoldings) {
+      const mName = h.memberName?.trim() || "Default";
+      const current = memberGains.get(mName) || { ltcg: 0, stcg: 0 };
       const gain = Math.max(h.gain, 0);
       if (h.holdingDays >= 365) {
-        ltcg += gain;
+        current.ltcg += gain;
       } else {
-        stcg += gain;
+        current.stcg += gain;
       }
+      memberGains.set(mName, current);
     }
+
+    let totalLtcg = 0;
+    let totalStcg = 0;
+    let totalTaxableLtcg = 0;
+    const memberExemption = 125000;
+
+    for (const { ltcg, stcg } of memberGains.values()) {
+      totalLtcg += ltcg;
+      totalStcg += stcg;
+      totalTaxableLtcg += Math.max(0, ltcg - memberExemption);
+    }
+
+    if (memberGains.size === 0) {
+      totalTaxableLtcg = Math.max(0, totalLtcg - memberExemption);
+    }
+
     return {
-      ltcgEstimate: ltcg,
-      stcgEstimate: stcg,
-      totalTaxEstimate: Math.max(ltcg - 125000, 0) * 0.125 + stcg * 0.2,
+      ltcgEstimate: totalLtcg,
+      stcgEstimate: totalStcg,
+      taxableLtcg: totalTaxableLtcg,
+      totalTaxEstimate: totalTaxableLtcg * 0.125 + totalStcg * 0.2,
     };
   }, [activeHoldings]);
 
@@ -117,28 +144,40 @@ export default function OverviewTab({
     };
   }, [categoryAllocation, amcAllocation, activeHoldings]);
 
+  const activeInvested = useMemo(() => {
+    return (
+      activeHoldings.reduce((acc, h) => acc + (h.purchaseValue || 0), 0) ||
+      totals.invested ||
+      1
+    );
+  }, [activeHoldings, totals.invested]);
+
+  const avgHoldingDays = useMemo(() => {
+    return activeHoldings.length > 0
+      ? Math.round(
+          activeHoldings.reduce(
+            (acc, h) => acc + (h.holdingDays || 0) * (h.purchaseValue || 0),
+            0
+          ) / activeInvested
+        )
+      : 0;
+  }, [activeHoldings, activeInvested]);
+
   const concentrationInsights = useMemo(() => {
     const totalVal = totals.currentValue || 1;
     const topCatName = categoryAllocation[0]?.name || "—";
     const topCatVal = categoryAllocation[0]?.value || 0;
     const topAmcName = amcAllocation[0]?.name || "—";
     const topAmcVal = amcAllocation[0]?.value || 0;
-    const weightedDays = activeHoldings.reduce(
-      (acc, h) => acc + h.holdingDays * h.currentValue,
-      0
-    );
-    const avgDays = activeHoldings.length
-      ? Math.round(weightedDays / totalVal)
-      : 0;
 
     return {
       topCategory: topCatName,
       categoryPct: (topCatVal / totalVal) * 100,
       topAmc: topAmcName,
       amcPct: (topAmcVal / totalVal) * 100,
-      avgDays,
+      avgDays: avgHoldingDays,
     };
-  }, [totals.currentValue, categoryAllocation, amcAllocation, activeHoldings]);
+  }, [totals.currentValue, categoryAllocation, amcAllocation, avgHoldingDays]);
 
   const benchmarkLabel = "UTI Nifty 50 Index Direct";
   const mfCagrDelta = metricDeltas.cagr;
@@ -179,20 +218,40 @@ export default function OverviewTab({
         mfCagrDelta={mfCagrDelta}
         cagrAlpha={cagrAlpha}
         portfolioCagr={portfolioCagr}
+        avgHoldingDays={avgHoldingDays}
         reportIdParam={reportIdParam}
       />
 
-      {/* ROW 3: Growth Timeline Chart */}
-      <OverviewGrowthChart
-        timelineData={timelineData}
-        totals={totals}
-        metricDeltas={metricDeltas}
+      {/* ROW 3: All-Time High (ATH) & Correction Cards */}
+      {athData && (
+        <OverviewAthCorrectionCards
+          athData={athData}
+          reportIdParam={reportIdParam}
+        />
+      )}
+
+      {/* ROW 4: Growth Timeline Chart */}
+      <CardErrorBoundary title="Portfolio Growth Timeline">
+        <OverviewGrowthChart
+          timelineData={timelineData}
+          totals={totals}
+          metricDeltas={metricDeltas}
+        />
+      </CardErrorBoundary>
+
+      {/* ROW 5: XIRR Timeline Chart */}
+      <CardErrorBoundary title="Portfolio XIRR Timeline">
+        <OverviewXirrChart timelineData={timelineData} />
+      </CardErrorBoundary>
+
+      {/* ROW 6: Market Cap Distribution Breakdown (Layout 1) */}
+      <OverviewMarketCapCard
+        holdings={activeHoldings}
+        totalCurrentValue={totals.currentValue}
+        reportId={reportId ? parseInt(reportId, 10) : undefined}
       />
 
-      {/* ROW 4: XIRR Timeline Chart */}
-      <OverviewXirrChart timelineData={timelineData} />
-
-      {/* ROW 5: Category, AMC & Tax Allocation Panels */}
+      {/* ROW 7: Category, AMC & Tax Allocation Panels */}
       <OverviewAllocationPanels
         categoryAllocation={categoryAllocation}
         amcAllocation={amcAllocation}

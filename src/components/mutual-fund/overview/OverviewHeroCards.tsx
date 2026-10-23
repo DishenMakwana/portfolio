@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { Shield, IndianRupee, TrendingUp, TrendingDown } from "lucide-react";
 import {
@@ -26,13 +25,7 @@ export default function OverviewHeroCards({
   worstFund,
   metricDeltas,
   reportIdParam,
-}: OverviewHeroCardsProps & {
-  metricDeltas: {
-    currentValueDiff: number | null;
-    investedDiff: number | null;
-  };
-  reportIdParam: string;
-}) {
+}: OverviewHeroCardsProps) {
   const router = useRouter();
   const pushWithReportId = (href: string) => {
     router.push(`${href}${reportIdParam}`);

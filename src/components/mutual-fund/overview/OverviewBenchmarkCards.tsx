@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   BarChart2,
@@ -10,8 +9,13 @@ import {
   ArrowDownRight,
   Activity,
   Target,
+  Clock,
 } from "lucide-react";
-import { formatPercent, formatNullablePercent } from "@/helpers/formatters";
+import {
+  formatPercent,
+  formatNullablePercent,
+  formatHoldingYearsAndDays,
+} from "@/helpers/formatters";
 import DeltaBadge from "@/components/shared/DeltaBadge";
 import type { OverviewBenchmarkCardsProps } from "@/types/overview";
 
@@ -20,7 +24,7 @@ const cardVariants: Variants = {
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.07, duration: 0.4, ease: "easeOut" as const },
+    transition: { delay: i * 0.05, duration: 0.35, ease: "easeOut" as const },
   }),
 };
 
@@ -28,6 +32,7 @@ export default function OverviewBenchmarkCards({
   totals,
   metricDeltas,
   portfolioCagr,
+  avgHoldingDays,
   reportIdParam,
 }: OverviewBenchmarkCardsProps & {
   portfolioCagr: number | null;
@@ -40,7 +45,7 @@ export default function OverviewBenchmarkCards({
 
   const isAlphaPositive = totals.alpha >= 0;
 
-  const performanceCards = [
+  const cards = [
     {
       label: "Portfolio XIRR",
       value: formatPercent(totals.portfolioXirr),
@@ -49,11 +54,46 @@ export default function OverviewBenchmarkCards({
       icon: Activity,
       iconBg: "bg-amber-500/10",
       iconColor: "text-amber-400",
-      gradFrom: "from-amber-500/10",
+      gradFrom: "from-amber-500/5",
       border: "border-amber-500/20",
-      delta: metricDeltas.portfolioXirr,
-      href: "/holdings",
       hoverBorder: "hover:border-amber-500/40",
+      badge: <DeltaBadge delta={metricDeltas.portfolioXirr} />,
+      href: "/holdings",
+    },
+    {
+      label: "Benchmark XIRR",
+      value: formatPercent(totals.benchmarkXirr),
+      sub: "UTI Nifty 50 Index Direct",
+      subColor: "text-slate-400",
+      icon: BarChart2,
+      iconBg: "bg-violet-500/10",
+      iconColor: "text-violet-400",
+      gradFrom: "from-violet-500/5",
+      border: "border-violet-500/20",
+      hoverBorder: "hover:border-violet-500/40",
+      badge: <DeltaBadge delta={metricDeltas.benchmarkXirr} />,
+      href: "/holdings",
+    },
+    {
+      label: "Alpha Generated",
+      value: `${totals.alpha >= 0 ? "+" : ""}${totals.alpha.toFixed(2)}%`,
+      sub: isAlphaPositive ? "Outperforming market" : "Underperforming market",
+      subColor: isAlphaPositive ? "text-emerald-400" : "text-red-400",
+      icon: Zap,
+      iconBg: isAlphaPositive ? "bg-emerald-500/10" : "bg-red-500/10",
+      iconColor: isAlphaPositive ? "text-emerald-400" : "text-red-400",
+      gradFrom: isAlphaPositive ? "from-emerald-500/5" : "from-red-500/5",
+      border: isAlphaPositive ? "border-emerald-500/20" : "border-red-500/20",
+      hoverBorder: isAlphaPositive
+        ? "hover:border-emerald-500/40"
+        : "hover:border-red-500/40",
+      badge: <DeltaBadge delta={metricDeltas.alpha} />,
+      badgeSubIcon: isAlphaPositive ? (
+        <ArrowUpRight size={12} className="inline mr-1 text-emerald-400" />
+      ) : (
+        <ArrowDownRight size={12} className="inline mr-1 text-red-400" />
+      ),
+      href: "/holdings",
     },
     {
       label: "Portfolio CAGR",
@@ -66,128 +106,70 @@ export default function OverviewBenchmarkCards({
       icon: Target,
       iconBg: "bg-pink-500/10",
       iconColor: "text-pink-400",
-      gradFrom: "from-pink-500/10",
+      gradFrom: "from-pink-500/5",
       border: "border-pink-500/20",
-      delta: metricDeltas.cagr,
-      href: "/holdings",
       hoverBorder: "hover:border-pink-500/40",
+      badge: <DeltaBadge delta={metricDeltas.cagr} />,
+      href: "/holdings",
+    },
+    {
+      label: "Holding Days",
+      value: avgHoldingDays
+        ? `${Math.round(avgHoldingDays).toLocaleString("en-IN")} Days`
+        : "—",
+      sub: "Weighted Avg",
+      subColor: "text-slate-400",
+      icon: Clock,
+      iconBg: "bg-cyan-500/10",
+      iconColor: "text-cyan-400",
+      gradFrom: "from-cyan-500/5",
+      border: "border-cyan-500/20",
+      hoverBorder: "hover:border-cyan-500/40",
+      badge: (
+        <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-300">
+          {avgHoldingDays
+            ? formatHoldingYearsAndDays(avgHoldingDays)
+            : "No data"}
+        </span>
+      ),
+      href: "/holdings",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* Benchmark XIRR */}
-      <motion.div
-        custom={5}
-        initial="hidden"
-        animate="visible"
-        variants={cardVariants}
-        onClick={() => pushWithReportId("/holdings")}
-        className="relative overflow-hidden bg-slate-900/70 backdrop-blur-md border border-violet-500/20 rounded-2xl p-5 shadow-xl cursor-pointer hover:border-violet-500/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]"
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Benchmark XIRR
-            </span>
-            <div className="p-2 rounded-xl bg-violet-500/10">
-              <BarChart2 size={17} className="text-violet-400" />
-            </div>
-          </div>
-          <div className="text-xl font-extrabold text-violet-400 leading-tight tracking-tight">
-            {formatPercent(totals.benchmarkXirr)}
-          </div>
-          <div className="mt-2">
-            <DeltaBadge delta={metricDeltas.benchmarkXirr} />
-          </div>
-          <div className="text-xs font-semibold mt-2 text-slate-400">
-            UTI Nifty 50 Index Direct
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Alpha */}
-      <motion.div
-        custom={6}
-        initial="hidden"
-        animate="visible"
-        variants={cardVariants}
-        onClick={() => pushWithReportId("/holdings")}
-        className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${isAlphaPositive ? "border-emerald-500/20" : "border-red-500/20"} rounded-2xl p-5 shadow-xl cursor-pointer hover:border-${isAlphaPositive ? "emerald-500" : "red-500"}/40 hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]`}
-      >
-        <div
-          className={`absolute inset-0 bg-gradient-to-br ${isAlphaPositive ? "from-emerald-500/10" : "from-red-500/10"} to-transparent pointer-events-none`}
-        />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Alpha Generated
-            </span>
-            <div
-              className={`p-2 rounded-xl ${isAlphaPositive ? "bg-emerald-500/10" : "bg-red-500/10"}`}
-            >
-              <Zap
-                size={17}
-                className={
-                  isAlphaPositive ? "text-emerald-400" : "text-red-400"
-                }
-              />
-            </div>
-          </div>
-          <div
-            className={`text-xl font-extrabold leading-tight tracking-tight ${isAlphaPositive ? "text-emerald-400" : "text-red-400"}`}
-          >
-            {totals.alpha >= 0 ? "+" : ""}
-            {totals.alpha.toFixed(2)}%
-          </div>
-          <div className="mt-2">
-            <DeltaBadge delta={metricDeltas.alpha} />
-          </div>
-          <div
-            className={`text-xs font-semibold mt-2 flex items-center gap-1 ${isAlphaPositive ? "text-emerald-400" : "text-red-400"}`}
-          >
-            {isAlphaPositive ? (
-              <ArrowUpRight size={12} />
-            ) : (
-              <ArrowDownRight size={12} />
-            )}
-            {isAlphaPositive
-              ? "Outperforming market"
-              : "Underperforming market"}
-          </div>
-        </div>
-      </motion.div>
-
-      {performanceCards.map((card, i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-3.5">
+      {cards.map((card, i) => (
         <motion.div
           key={card.label}
-          custom={7 + i}
+          custom={5 + i}
           initial="hidden"
           animate="visible"
           variants={cardVariants}
           onClick={() => pushWithReportId(card.href)}
-          className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${card.border} rounded-2xl p-5 shadow-xl cursor-pointer ${card.hoverBorder} hover:bg-slate-900 transition-all duration-200 active:scale-[0.99]`}
+          className={`relative overflow-hidden bg-slate-900/70 backdrop-blur-md border ${card.border} rounded-2xl p-4 sm:p-4.5 shadow-xl cursor-pointer ${card.hoverBorder} hover:bg-slate-900 transition-all duration-200 active:scale-[0.99] flex flex-col justify-between`}
         >
           <div
             className={`absolute inset-0 bg-gradient-to-br ${card.gradFrom} to-transparent pointer-events-none`}
           />
           <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <div className="flex items-center justify-between gap-1 mb-2 sm:mb-2.5">
+              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 truncate">
                 {card.label}
               </span>
-              <div className={`p-2 rounded-xl ${card.iconBg}`}>
-                <card.icon size={17} className={card.iconColor} />
+              <div className={`p-1.5 rounded-lg ${card.iconBg} shrink-0`}>
+                <card.icon size={15} className={card.iconColor} />
               </div>
             </div>
-            <div className="text-xl font-extrabold text-slate-100 leading-tight tracking-tight">
+            <div className="text-lg sm:text-xl font-extrabold text-slate-100 leading-tight tracking-tight whitespace-nowrap">
               {card.value}
             </div>
-            <div className="mt-2">
-              <DeltaBadge delta={card.delta ?? null} />
+            <div className="mt-1.5 sm:mt-2 min-h-[22px] flex items-center">
+              {card.badge}
             </div>
-            <div className={`text-xs font-semibold mt-2 ${card.subColor}`}>
+            <div
+              className={`text-[11px] sm:text-xs font-medium mt-1.5 sm:mt-2 truncate ${card.subColor}`}
+            >
+              {"badgeSubIcon" in card && card.badgeSubIcon}
               {card.sub}
             </div>
           </div>
