@@ -139,8 +139,6 @@ export default function FundDetailsHeader({
           </span>
         </div>
 
-        <NotificationBellDropdown />
-
         <button
           onClick={onGlobalRefresh}
           disabled={isRefreshingGlobal}
@@ -153,6 +151,8 @@ export default function FundDetailsHeader({
           />
           <span>{isRefreshingGlobal ? "Refreshing..." : "Refresh Data"}</span>
         </button>
+
+        <NotificationBellDropdown />
       </div>
     </header>
   );

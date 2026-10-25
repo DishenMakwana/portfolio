@@ -27,6 +27,7 @@ import type { RollingHorizon } from "@/types/rollingReturns";
 import type {
   FundRollingReturnsCardProps,
   CustomRollingTooltipProps,
+  RollingHorizonTabOption,
 } from "@/types/fund-details";
 
 function CustomRollingTooltip({
@@ -135,7 +136,7 @@ export default function FundRollingReturnsCard({
     }
   }, [rollingReturns, selectedHorizon, defaultHorizon]);
 
-  const horizons: Array<{ key: RollingHorizon; label: string }> = [
+  const horizons: RollingHorizonTabOption[] = [
     { key: "1y", label: "1 Year" },
     { key: "3y", label: "3 Years" },
     { key: "5y", label: "5 Years" },

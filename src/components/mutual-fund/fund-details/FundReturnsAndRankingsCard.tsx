@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { RotateCw, Info, Award, CheckCircle2 } from "lucide-react";
 import { refreshSchemeCategoryRankingAction } from "@/actions/fundRankings";
 import { isCacheFresh } from "@/helpers/dates";
+import { formatDateSlashDDMMYYYY } from "@/helpers/formatters";
 import type {
   FundReturnsAndRankingsCardProps,
   SchemeCategoryRankingsData,
@@ -281,7 +282,7 @@ export default function FundReturnsAndRankingsCard({
         </div>
         {data?.lastScrapedAt && (
           <span>
-            Last synced: {new Date(data.lastScrapedAt).toLocaleString()}
+            Last synced: {formatDateSlashDDMMYYYY(data.lastScrapedAt)}
           </span>
         )}
       </div>

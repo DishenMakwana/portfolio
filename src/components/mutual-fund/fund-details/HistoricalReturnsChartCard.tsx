@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import {
   AreaChart,
   Area,
@@ -13,197 +14,24 @@ import {
   ReferenceDot,
   Label,
 } from "recharts";
-import {
-  TrendingUp,
-  AlertTriangle,
-  Calendar,
-  Layers,
-  Sparkles,
-  X,
-  Check,
-} from "lucide-react";
-import { formatNullableDate } from "@/helpers/formatters";
+import { TrendingUp, AlertTriangle } from "lucide-react";
 import { parseToLocalMidnight } from "@/helpers/dates";
-import {
-  HistoricalReturnsChartCardProps,
-  FundTimeframe,
+import type {
   EntryPointMarker,
-  CustomTooltipProps,
+  FundTimeframe,
+  HistoricalReturnsChartCardProps,
 } from "@/types/fund-details";
-import { FactsheetChartPoint } from "@/types/portfolio";
+import type { FactsheetChartPoint } from "@/types/portfolio";
 import { fetchChartData } from "@/actions/chartActions";
 
-function CustomChartTooltip({
-  active,
-  payload,
-  benchmarkName,
-}: CustomTooltipProps) {
-  if (!active || !payload || !payload.length) return null;
-
-  const data = payload[0].payload;
-  if (!data) return null;
-
-  const fullDateStr = data.timestamp
-    ? new Date(data.timestamp).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : data.date;
-
-  return (
-    <div className="bg-slate-900/95 border border-slate-700/80 p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-2 min-w-[200px]">
-      <div className="text-slate-400 font-semibold border-b border-slate-800 pb-1.5 flex items-center justify-between">
-        <span>{fullDateStr}</span>
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            Fund Return:
-          </span>
-          <span className="font-bold text-slate-100">
-            {data.fundReturn >= 0 ? "+" : ""}
-            {data.fundReturn.toFixed(2)}%
-          </span>
-        </div>
-        <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between">
-          <span>NAV:</span>
-          <span>₹{data.fundNav.toFixed(2)}</span>
-        </div>
-
-        {data.benchReturn !== null && data.benchReturn !== undefined && (
-          <>
-            <div className="flex items-center justify-between gap-4 border-t border-slate-800/60 pt-1.5">
-              <span className="text-indigo-400 font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                {benchmarkName || "Benchmark"}:
-              </span>
-              <span className="font-bold text-slate-100">
-                {data.benchReturn >= 0 ? "+" : ""}
-                {data.benchReturn.toFixed(2)}%
-              </span>
-            </div>
-            {data.benchNav !== null && (
-              <div className="text-[11px] text-slate-400 pl-3.5 flex justify-between">
-                <span>Index NAV:</span>
-                <span>₹{data.benchNav.toFixed(2)}</span>
-              </div>
-            )}
-          </>
-        )}
-
-        {data.txs && data.txs.length > 0 && (
-          <div className="pt-2 border-t border-slate-800 flex flex-col gap-1">
-            {data.txs.map((tx: any, idx: number) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between text-[11px] bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/50"
-              >
-                <span
-                  className={`font-semibold ${
-                    tx.type === "BUY" ? "text-emerald-400" : "text-rose-400"
-                  }`}
-                >
-                  {tx.type === "BUY" ? "BUY TRANSACTION" : "SELL TRANSACTION"}
-                </span>
-                {tx.amount > 0 && (
-                  <span className="text-slate-200 font-mono">
-                    ₹{tx.amount.toLocaleString("en-IN")}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const HighLabelBadge = (props: {
-  viewBox?: { x?: number; y?: number };
-  value?: string;
-}) => {
-  const { viewBox, value } = props;
-  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
-    return null;
-  const { x, y } = viewBox;
-
-  const isNearRightEdge = x > 620;
-  const rectX = isNearRightEdge ? -108 : -54;
-  const textX = isNearRightEdge ? -54 : 0;
-
-  return (
-    <g transform={`translate(${x}, ${y - 14})`}>
-      <rect
-        x={rectX}
-        y={-18}
-        width={108}
-        height={22}
-        rx={6}
-        fill="#047857"
-        stroke="#34d399"
-        strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
-      />
-      <text
-        x={textX}
-        y={-6}
-        fill="#ecfdf5"
-        fontSize={11}
-        fontWeight="800"
-        textAnchor="middle"
-        dominantBaseline="middle"
-      >
-        {value}
-      </text>
-    </g>
-  );
-};
-
-const LowLabelBadge = (props: {
-  viewBox?: { x?: number; y?: number };
-  value?: string;
-}) => {
-  const { viewBox, value } = props;
-  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined)
-    return null;
-  const { x, y } = viewBox;
-
-  const isNearRightEdge = x > 620;
-  const rectX = isNearRightEdge ? -100 : -50;
-  const textX = isNearRightEdge ? -50 : 0;
-
-  return (
-    <g transform={`translate(${x}, ${y + 14})`}>
-      <rect
-        x={rectX}
-        y={-4}
-        width={100}
-        height={22}
-        rx={6}
-        fill="#be123c"
-        stroke="#f43f5e"
-        strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
-      />
-      <text
-        x={textX}
-        y={8}
-        fill="#fff1f2"
-        fontSize={11}
-        fontWeight="800"
-        textAnchor="middle"
-        dominantBaseline="middle"
-      >
-        {value}
-      </text>
-    </g>
-  );
-};
+import HistoricalReturnsChartHeader from "./HistoricalReturnsChartHeader";
+import HistoricalReturnsChartTooltip from "./HistoricalReturnsChartTooltip";
+import {
+  HighLabelBadge,
+  LowLabelBadge,
+  FundActiveDot,
+  BenchmarkActiveDot,
+} from "./HistoricalReturnsChartBadges";
 
 export default function HistoricalReturnsChartCard({
   holding,
@@ -212,7 +40,6 @@ export default function HistoricalReturnsChartCard({
   currentChartData,
   earliestFundDateStr,
   earliestBenchDateStr,
-  isStock,
   isApproximateProxy,
   schemeCodeApi,
   benchmarkCode,
@@ -248,7 +75,6 @@ export default function HistoricalReturnsChartCard({
   );
 
   // Timeframes that are subsets of a wider cached range.
-  // 3m and 6m can always be sliced from 1y data client-side.
   const SUBSET_PARENTS: Partial<Record<FundTimeframe, FundTimeframe>> = {
     "3m": "1y",
     "6m": "1y",
@@ -270,7 +96,7 @@ export default function HistoricalReturnsChartCard({
         "5y": 60,
       };
       const monthsToSubtract = tfMonths[tf] ?? 0;
-      if (monthsToSubtract === 0) return parentData; // "all" or unknown
+      if (monthsToSubtract === 0) return parentData;
 
       const latestTime = parentData[parentData.length - 1].timestamp;
       const cutoffDate = new Date(latestTime);
@@ -502,8 +328,6 @@ export default function HistoricalReturnsChartCard({
     [customFromDate, customToDate, ensureAllDataFetched, sliceByDateRange]
   );
 
-  // The active data is already pre-indexed by the server, so filteredChartData = activeChartData.
-  // For the initial 1y render, the server data is used directly.
   const filteredChartData = activeChartData;
 
   // Calculate Period High and Period Low data points within the active timeframe
@@ -556,11 +380,10 @@ export default function HistoricalReturnsChartCard({
     const firstTime = filteredChartData[0].timestamp;
     const lastTime = filteredChartData[filteredChartData.length - 1].timestamp;
 
-    // For short timeframes (3M, 6M, 1Y): Tick per month (MMM-YY)
     if (timeframe === "3m" || timeframe === "6m" || timeframe === "1y") {
       const ticks: number[] = [];
       const current = new Date(firstTime);
-      current.setDate(1); // start at beginning of month
+      current.setDate(1);
 
       while (current.getTime() <= lastTime) {
         if (current.getTime() >= firstTime) {
@@ -571,7 +394,6 @@ export default function HistoricalReturnsChartCard({
       return ticks.length >= 2 ? ticks : undefined;
     }
 
-    // For 3Y timeframe: Quarterly ticks (MMM-YY)
     if (timeframe === "3y") {
       const ticks: number[] = [];
       const current = new Date(firstTime);
@@ -586,7 +408,6 @@ export default function HistoricalReturnsChartCard({
       return ticks.length >= 2 ? ticks : undefined;
     }
 
-    // For 5Y timeframe: Bi-annual ticks (every 6 months)
     if (timeframe === "5y") {
       const ticks: number[] = [];
       const current = new Date(firstTime);
@@ -601,7 +422,6 @@ export default function HistoricalReturnsChartCard({
       return ticks.length >= 2 ? ticks : undefined;
     }
 
-    // For ALL timeframe: Annual ticks (every 12 months)
     if (timeframe === "all") {
       const ticks: number[] = [];
       const current = new Date(firstTime);
@@ -718,208 +538,35 @@ export default function HistoricalReturnsChartCard({
   }, [filteredChartData, currentChartData, holding.purchaseNav, transactions]);
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
-      <div className="flex flex-col gap-4 mb-6">
-        {/* Row 1: Section Title + Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h3 className="text-lg font-black text-slate-100 flex items-center gap-2.5">
-            <TrendingUp size={20} className="text-teal-400" />
-            <span>Historical Returns Analysis (%)</span>
-          </h3>
-
-          {/* Timeframe Filter Buttons, Inv Date & Custom Date Range Filter */}
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap relative">
-            <div className="flex items-center bg-slate-950/80 border border-slate-800/80 p-1 rounded-xl shadow-inner gap-1">
-              {(["3m", "6m", "1y", "3y", "5y", "all"] as FundTimeframe[]).map(
-                (tf) => (
-                  <button
-                    key={tf}
-                    onClick={() => {
-                      setIsCustomDatePickerOpen(false);
-                      handleTimeframeChange(tf);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${timeframe === tf ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105" : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"}`}
-                  >
-                    {tf}
-                  </button>
-                )
-              )}
-
-              {/* Inv Date Button (Starts graph from 1st Tx to Current Date!) */}
-              {earliestTxDateStr && (
-                <button
-                  onClick={handleInvDateClick}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition duration-200 cursor-pointer flex items-center gap-1.5 ${timeframe === "invDate" ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/50 scale-105 font-black" : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40"}`}
-                  title={`Start graph from first transaction date (${earliestTxDateStr})`}
-                >
-                  <Sparkles size={12} className="animate-pulse" />
-                  <span>Since 1st Tx</span>
-                </button>
-              )}
-            </div>
-
-            {/* Custom Date Range Filter (Dribbble/Pinterest Inspired Glass Popover) */}
-            <div className="relative">
-              <button
-                onClick={() => setIsCustomDatePickerOpen((prev) => !prev)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${timeframe === "custom" || timeframe === "invDate" ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-teal-950/40" : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"}`}
-              >
-                <Calendar
-                  size={13}
-                  className={
-                    timeframe === "custom" || timeframe === "invDate"
-                      ? "text-teal-400"
-                      : ""
-                  }
-                />
-                <span>
-                  {timeframe === "custom" && customFromDate && customToDate
-                    ? `${customFromDate} - ${customToDate}`
-                    : timeframe === "invDate" && customFromDate
-                      ? `1st Tx (${customFromDate})`
-                      : "Custom Date"}
-                </span>
-              </button>
-
-              {/* Dribbble-style Popover */}
-              {isCustomDatePickerOpen && (
-                <div className="absolute right-0 top-full mt-2.5 z-50 bg-slate-900/95 border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl w-72 flex flex-col gap-3.5 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                    <span className="font-extrabold text-slate-100 flex items-center gap-1.5">
-                      <Calendar size={14} className="text-teal-400" />
-                      Custom Date Filter
-                    </span>
-                    <button
-                      onClick={() => setIsCustomDatePickerOpen(false)}
-                      className="text-slate-500 hover:text-slate-300 p-0.5 rounded-md hover:bg-slate-800/60 transition"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    <div>
-                      <label className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider block mb-1">
-                        From Date
-                      </label>
-                      <input
-                        type="date"
-                        value={customFromDate}
-                        onChange={(e) => setCustomFromDate(e.target.value)}
-                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-teal-500 transition"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider block mb-1">
-                        To Date
-                      </label>
-                      <input
-                        type="date"
-                        value={customToDate}
-                        onChange={(e) => setCustomToDate(e.target.value)}
-                        className="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-teal-500 transition"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Quick Presets */}
-                  <div className="border-t border-slate-800/80 pt-2.5 space-y-1">
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1.5">
-                      Quick Presets
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {earliestTxDateStr && (
-                        <button
-                          onClick={() => {
-                            const todayStr =
-                              holding.asOfDate ||
-                              new Date().toISOString().split("T")[0];
-                            setCustomFromDate(earliestTxDateStr);
-                            setCustomToDate(todayStr);
-                            handleApplyCustomRange(earliestTxDateStr, todayStr);
-                          }}
-                          className="px-2.5 py-1 bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 rounded-lg text-[11px] font-bold hover:bg-emerald-900/60 transition"
-                        >
-                          Since 1st Tx ({earliestTxDateStr})
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          const todayStr =
-                            holding.asOfDate ||
-                            new Date().toISOString().split("T")[0];
-                          const ytdStr = `${new Date().getFullYear()}-01-01`;
-                          setCustomFromDate(ytdStr);
-                          setCustomToDate(todayStr);
-                          handleApplyCustomRange(ytdStr, todayStr);
-                        }}
-                        className="px-2.5 py-1 bg-slate-800/60 text-slate-300 border border-slate-700/50 rounded-lg text-[11px] font-bold hover:bg-slate-700/60 transition"
-                      >
-                        YTD (Jan 1)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Apply Button */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
-                    <button
-                      onClick={() => handleApplyCustomRange()}
-                      disabled={!customFromDate || !customToDate}
-                      className="flex-1 bg-teal-500 hover:bg-teal-400 disabled:opacity-50 text-slate-950 font-black py-1.5 px-3 rounded-xl transition duration-200 text-xs shadow-md shadow-teal-950/40 flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Check size={13} />
-                      <span>Apply Range</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setShowHighLow(!showHighLow)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition duration-200 cursor-pointer border flex items-center gap-1.5 shadow-sm ${showHighLow ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-950/40" : "bg-slate-950/80 text-slate-400 border-slate-800/80 hover:text-slate-200 hover:bg-slate-900/60"}`}
-              title="Toggle High and Low points on graph"
-            >
-              <Layers size={13} />
-              <span>High / Low</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Legend Cards (Fund & Benchmark Side-by-Side) */}
-        <div className="flex flex-wrap items-center gap-3 pt-2.5 border-t border-slate-800/60">
-          {/* Fund Name & Color Dot & Available Date */}
-          <div className="inline-flex items-center gap-2 text-xs font-medium bg-slate-950/70 border border-slate-800/80 px-3.5 py-1.5 rounded-xl text-slate-300 shadow-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
-            <span className="font-bold text-slate-200">
-              {holding.schemeName || "Fund"}
-            </span>
-            <span className="text-slate-500">•</span>
-            <span className="text-slate-400">
-              Available Since:{" "}
-              <strong className="text-slate-200">
-                {formatNullableDate(earliestFundDateStr || null)}
-              </strong>
-            </span>
-          </div>
-
-          {/* Benchmark Name & Color Dot & Available Date */}
-          <div className="inline-flex items-center gap-2 text-xs font-medium bg-slate-950/70 border border-slate-800/80 px-3.5 py-1.5 rounded-xl text-slate-300 shadow-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 shrink-0"></span>
-            <span className="font-bold text-slate-200">
-              {factsheetMeta.profile.benchmarkName || "Benchmark"}
-            </span>
-            <span className="text-slate-500">•</span>
-            <span className="text-slate-400">
-              Available Since:{" "}
-              <strong className="text-slate-200">
-                {formatNullableDate(earliestBenchDateStr || null)}
-              </strong>
-            </span>
-          </div>
-        </div>
-      </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm"
+    >
+      <HistoricalReturnsChartHeader
+        timeframe={timeframe}
+        onTimeframeChange={handleTimeframeChange}
+        earliestTxDateStr={earliestTxDateStr}
+        onInvDateClick={handleInvDateClick}
+        customFromDate={customFromDate}
+        customToDate={customToDate}
+        onCustomFromDateChange={setCustomFromDate}
+        onCustomToDateChange={setCustomToDate}
+        isCustomDatePickerOpen={isCustomDatePickerOpen}
+        onToggleCustomDatePicker={() =>
+          setIsCustomDatePickerOpen((prev) => !prev)
+        }
+        onCloseCustomDatePicker={() => setIsCustomDatePickerOpen(false)}
+        onApplyCustomRange={handleApplyCustomRange}
+        showHighLow={showHighLow}
+        onToggleHighLow={() => setShowHighLow(!showHighLow)}
+        schemeName={holding.schemeName}
+        benchmarkName={factsheetMeta.profile.benchmarkName}
+        earliestFundDateStr={earliestFundDateStr ?? null}
+        earliestBenchDateStr={earliestBenchDateStr ?? null}
+        asOfDate={holding.asOfDate}
+      />
 
       {/* Chart Viewport */}
       {filteredChartData.length > 0 || isLoadingChart ? (
@@ -934,14 +581,15 @@ export default function HistoricalReturnsChartCard({
               </div>
             </div>
           )}
+
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={filteredChartData}
-              margin={{ top: 15, right: 15, left: 10, bottom: 30 }}
+              margin={{ top: 28, right: 30, left: 0, bottom: 0 }}
             >
               <defs>
                 <linearGradient id="colorFund" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="colorBench" x1="0" y1="0" x2="0" y2="1">
@@ -951,40 +599,33 @@ export default function HistoricalReturnsChartCard({
               </defs>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#334155"
-                opacity={0.3}
+                stroke="#1e293b"
+                vertical={false}
               />
               <XAxis
                 dataKey="timestamp"
-                type="number"
                 domain={["dataMin", "dataMax"]}
+                type="number"
+                scale="time"
                 ticks={xAxisTicks}
-                tickFormatter={(val: number) => {
-                  const d = new Date(val);
-                  return d.toLocaleDateString("en-IN", {
-                    month: "short",
-                    year: "2-digit",
-                  });
-                }}
                 stroke="#64748b"
-                tick={{ fill: "#64748b", fontSize: 11, dy: 3 }}
-                height={45}
-              >
-                <Label
-                  value="Date"
-                  position="insideBottom"
-                  offset={0}
-                  fill="#94a3b8"
-                  fontSize={11}
-                  fontWeight={700}
-                />
-              </XAxis>
+                tick={{ fill: "#64748b", fontSize: 10 }}
+                tickFormatter={(ts: number) => {
+                  const d = new Date(ts);
+                  const mon = d.toLocaleDateString("en-IN", {
+                    month: "short",
+                    timeZone: "UTC",
+                  });
+                  const yr = String(d.getUTCFullYear()).slice(-2);
+                  return `${mon}-${yr}`;
+                }}
+              />
               <YAxis
                 domain={yDomain}
-                width={60}
-                dx={-4}
+                width={56}
+                dx={-2}
                 stroke="#64748b"
-                tick={{ fill: "#64748b", fontSize: 11 }}
+                tick={{ fill: "#64748b", fontSize: 10 }}
                 tickFormatter={(val: number) => {
                   if (Math.abs(val) >= 100) return `${val.toFixed(0)}%`;
                   return `${val.toFixed(1)}%`;
@@ -994,17 +635,16 @@ export default function HistoricalReturnsChartCard({
                   value="Return (%)"
                   angle={-90}
                   position="insideLeft"
-                  style={{
-                    textAnchor: "middle",
-                    fill: "#94a3b8",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
+                  offset={2}
+                  fill="#94a3b8"
+                  fontSize={10}
+                  fontWeight={600}
+                  style={{ textAnchor: "middle" }}
                 />
               </YAxis>
               <Tooltip
                 content={
-                  <CustomChartTooltip
+                  <HistoricalReturnsChartTooltip
                     benchmarkName={factsheetMeta.profile.benchmarkName}
                   />
                 }
@@ -1018,6 +658,11 @@ export default function HistoricalReturnsChartCard({
                 strokeWidth={2.5}
                 fillOpacity={1}
                 fill="url(#colorFund)"
+                activeDot={<FundActiveDot />}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={100}
               />
 
               <Area
@@ -1029,6 +674,11 @@ export default function HistoricalReturnsChartCard({
                 fillOpacity={1}
                 fill="url(#colorBench)"
                 strokeDasharray="4 4"
+                activeDot={<BenchmarkActiveDot />}
+                isAnimationActive={true}
+                animationDuration={1200}
+                animationEasing="ease-out"
+                animationBegin={150}
               />
 
               {entryPoints.map((ep, idx) => (
@@ -1067,170 +717,112 @@ export default function HistoricalReturnsChartCard({
 
               {showHighLow && periodHighLow && (
                 <>
-                  {/* Period High Reference Lines */}
                   <ReferenceLine
                     x={periodHighLow.highPt.timestamp}
                     stroke="#10b981"
                     strokeDasharray="3 3"
-                    strokeWidth={1.5}
-                    opacity={0.6}
-                  />
-                  <ReferenceLine
-                    y={periodHighLow.highPt.fundReturn}
-                    stroke="#10b981"
-                    strokeDasharray="3 3"
-                    strokeWidth={1.5}
-                    opacity={0.6}
+                    strokeOpacity={0.6}
                   />
                   <ReferenceDot
                     x={periodHighLow.highPt.timestamp}
                     y={periodHighLow.highPt.fundReturn}
-                    r={8}
+                    r={6}
                     fill="#10b981"
-                    stroke="#022c22"
-                    strokeWidth={2.5}
-                    label={
-                      <HighLabelBadge
-                        value={`High: +${periodHighLow.highPt.fundReturn.toFixed(1)}%`}
-                      />
-                    }
-                  />
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    style={{
+                      filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.4))",
+                    }}
+                  >
+                    <Label
+                      content={
+                        <HighLabelBadge
+                          value={`High: ${periodHighLow.highPt.fundReturn >= 0 ? "+" : ""}${periodHighLow.highPt.fundReturn.toFixed(1)}%`}
+                        />
+                      }
+                    />
+                  </ReferenceDot>
 
-                  {/* Period Low Reference Lines */}
                   <ReferenceLine
                     x={periodHighLow.lowPt.timestamp}
                     stroke="#f43f5e"
                     strokeDasharray="3 3"
-                    strokeWidth={1.5}
-                    opacity={0.6}
+                    strokeOpacity={0.6}
                   />
-                  <ReferenceLine
+                  <ReferenceDot
+                    x={periodHighLow.lowPt.timestamp}
                     y={periodHighLow.lowPt.fundReturn}
-                    stroke="#f43f5e"
-                    strokeDasharray="3 3"
-                    strokeWidth={1.5}
-                    opacity={0.6}
-                  />
-                  {periodHighLow.lowPt.timestamp !==
-                    periodHighLow.highPt.timestamp && (
-                    <ReferenceDot
-                      x={periodHighLow.lowPt.timestamp}
-                      y={periodHighLow.lowPt.fundReturn}
-                      r={8}
-                      fill="#f43f5e"
-                      stroke="#4c0519"
-                      strokeWidth={2.5}
-                      label={
+                    r={6}
+                    fill="#f43f5e"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    style={{
+                      filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.4))",
+                    }}
+                  >
+                    <Label
+                      content={
                         <LowLabelBadge
                           value={`Low: ${periodHighLow.lowPt.fundReturn >= 0 ? "+" : ""}${periodHighLow.lowPt.fundReturn.toFixed(1)}%`}
                         />
                       }
                     />
-                  )}
+                  </ReferenceDot>
                 </>
               )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      ) : isStock ? (
-        <div className="h-72 border border-dashed border-slate-800 rounded-xl flex flex-col justify-center items-center text-center p-8 bg-slate-950/40">
-          <AlertTriangle className="text-amber-500 mb-3" size={32} />
-          <h4 className="text-sm font-bold text-slate-300">
-            Unlisted Stock / No Price History
-          </h4>
-          <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
-            This asset is currently unlisted or suspended from trading on the
-            stock exchange. No historical price tracking feed is available.
-          </p>
-        </div>
       ) : (
-        <div className="h-72 border border-dashed border-slate-800 rounded-xl flex flex-col justify-center items-center text-center p-8 bg-slate-950/40">
-          <AlertTriangle className="text-amber-500 mb-3" size={32} />
-          <h4 className="text-sm font-bold text-slate-300">
-            NAV History Not Found
-          </h4>
-          <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
-            Please map this scheme to an AMFI Scheme Code in the mapping tab to
-            unlock dynamic line chart visualisations and comparison stats.
+        <div className="h-64 flex flex-col items-center justify-center text-slate-500">
+          <TrendingUp size={36} className="mb-2 opacity-50" />
+          <p className="text-sm font-semibold">
+            Historical NAV data unavailable
+          </p>
+          <p className="text-xs text-slate-600 mt-1">
+            Data points will appear once sync is complete.
           </p>
         </div>
       )}
 
-      {/* High / Low Stat Pill Summary Bar (Under Graph View) */}
-      {showHighLow && periodHighLow && (
-        <div className="mt-5 p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-slate-400 font-semibold">Period High:</span>
-            <strong className="text-emerald-400 font-bold">
-              ₹{periodHighLow.highPt.fundNav.toFixed(2)}
-            </strong>
-            <span className="text-slate-500">
-              (
-              {new Date(periodHighLow.highPt.timestamp).toLocaleDateString(
-                "en-IN",
-                { day: "2-digit", month: "short", year: "numeric" }
-              )}
-              , +{periodHighLow.highPt.fundReturn.toFixed(1)}%)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
-            <span className="text-slate-400 font-semibold">Period Low:</span>
-            <strong className="text-rose-400 font-bold">
-              ₹{periodHighLow.lowPt.fundNav.toFixed(2)}
-            </strong>
-            <span className="text-slate-500">
-              (
-              {new Date(periodHighLow.lowPt.timestamp).toLocaleDateString(
-                "en-IN",
-                { day: "2-digit", month: "short", year: "numeric" }
-              )}
-              , {periodHighLow.lowPt.fundReturn >= 0 ? "+" : ""}
-              {periodHighLow.lowPt.fundReturn.toFixed(1)}%)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-slate-300 font-medium border-t sm:border-t-0 sm:border-l border-slate-800 pt-2 sm:pt-0 sm:pl-3">
-            <span>Range:</span>
-            <strong className="text-amber-400 font-bold">
-              {(
-                periodHighLow.highPt.fundReturn - periodHighLow.lowPt.fundReturn
-              ).toFixed(1)}
-              %
-            </strong>
-
-            {(() => {
-              const daysDiff = Math.round(
-                Math.abs(
-                  periodHighLow.highPt.timestamp - periodHighLow.lowPt.timestamp
-                ) /
-                  (24 * 60 * 60 * 1000)
-              );
-              return (
-                <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300 ml-1">
-                  <Calendar size={12} className="text-amber-400" />
-                  <span>
-                    {daysDiff} {daysDiff === 1 ? "day" : "days"} apart
-                  </span>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
+      {/* Approximate Benchmark Notice */}
       {isApproximateProxy && (
-        <div className="mt-4 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5">
-          <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
-          <p className="text-xs text-amber-300 leading-relaxed font-medium">
-            {holding.category?.toLowerCase().includes("multi asset")
-              ? "Approximate Proxy: No clean passive equivalent or index fund exists for the Multi Asset Allocation category. ICICI Prudential Equity & Debt (Aggressive Hybrid) is used as a proxy, so alpha figures represent an approximation."
-              : "Strategy Mismatch: This is a Long-Short / Specialized SIF strategy, which targets absolute/hedged returns rather than traditional long-only benchmarks. Comparing performance to the Nifty 50 TRI is for informational purposes only and alpha metrics are not directly comparable to regular long-only mutual funds."}
-          </p>
+        <div className="mt-4 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-lg">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>
+            Showing category-average benchmark proxy. Exact index NAV tracking
+            will reflect on full sync.
+          </span>
         </div>
       )}
-    </div>
+
+      {/* Interactive Legend & Transaction Markers Guide Footer */}
+      <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 font-medium">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Green line: Fund Return
+          </span>
+          <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
+            <span className="w-2 h-2 rotate-45 rounded-[0.5px] bg-indigo-400"></span>
+            Dashed blue: Benchmark Return
+          </span>
+          <span className="flex items-center gap-1.5 text-teal-300 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-teal-400"></span>
+            Dots: Buy / Sell Transactions
+          </span>
+        </div>
+
+        <div className="text-[11px] text-slate-500 font-semibold">
+          {filteredChartData.length} data points
+          {filteredChartData.length > 0 && (
+            <span className="ml-1 text-slate-400">
+              ({filteredChartData[0].date} to{" "}
+              {filteredChartData[filteredChartData.length - 1].date})
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
