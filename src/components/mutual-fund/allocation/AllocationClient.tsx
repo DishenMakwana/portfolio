@@ -462,12 +462,14 @@ export default function AllocationClient({
   /* ═══════════════════ RENDER ═══════════════════ */
   return (
     <div
-      className="space-y-6 max-w-[1400px] mx-auto relative min-h-screen pb-12 selection:bg-teal-500/30"
+      className="space-y-6 w-full max-w-full relative min-h-screen pb-12 selection:bg-teal-500/30"
       onClick={() => investorOpen && setInvestorOpen(false)}
     >
-      {/* Ambient background glows */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-teal-500/10 rounded-full blur-[120px] pointer-events-none z-0" />
-      <div className="absolute top-1/2 -right-40 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none z-0" />
+      {/* Ambient full-width background washes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-0 inset-x-0 h-[500px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(20,184,166,0.06),transparent_70%)]" />
+        <div className="absolute bottom-0 inset-x-0 h-[500px] bg-[radial-gradient(ellipse_80%_60%_at_50%_110%,rgba(59,130,246,0.03),transparent_70%)]" />
+      </div>
 
       {/* ── FILTER BAR ── */}
       <AllocationFilterBar
