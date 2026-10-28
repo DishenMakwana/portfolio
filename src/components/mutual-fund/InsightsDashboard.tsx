@@ -468,6 +468,12 @@ export default function InsightsDashboard({
                       s.category.toLowerCase().includes("sif")
                   ).length
                 }
+                activeCount={
+                  data.schemes.filter((s) => (s.current ?? 0) > 0.0001).length
+                }
+                notActiveCount={
+                  data.schemes.filter((s) => (s.current ?? 0) <= 0.0001).length
+                }
               />
             )}
 
