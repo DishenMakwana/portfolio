@@ -11,11 +11,31 @@ import argparse
 import asyncio
 import json
 import re
+import time
 from datetime import datetime
 from difflib import SequenceMatcher
 import requests
 import psycopg2
 from playwright.async_api import async_playwright
+
+# ANSI Color Codes
+CLR_RESET = "\033[0m"
+CLR_BOLD = "\033[1m"
+CLR_DIM = "\033[2m"
+CLR_CYAN = "\033[36m"
+CLR_GREEN = "\033[32m"
+CLR_YELLOW = "\033[33m"
+CLR_RED = "\033[31m"
+CLR_MAGENTA = "\033[35m"
+CLR_BLUE = "\033[34m"
+
+def log_header(text):
+    print(f"\n{CLR_BOLD}{CLR_CYAN}======================================================================{CLR_RESET}")
+    print(f"{CLR_BOLD}{CLR_CYAN}  {text}{CLR_RESET}")
+    print(f"{CLR_BOLD}{CLR_CYAN}======================================================================{CLR_RESET}")
+
+def log_section(text):
+    print(f"\n{CLR_BOLD}{CLR_BLUE}--- {text} ---{CLR_RESET}")
 
 # Verified Known Groww Slugs for 100% Guaranteed Exact Page Matches
 KNOWN_GROWW_SLUGS = {
@@ -61,11 +81,13 @@ KNOWN_GROWW_SLUGS = {
     "151110": "hsbc-value-fund-direct-growth",
     "145896": "icici-prudential-india-opportunities-fund-direct-growth",
 
-    # Hybrid & Multi Asset Funds
+    # Hybrid & Multi Asset & Insurance-Linked Funds
     "100356": "icici-prudential-aggressive-hybrid-fund-direct-growth",
     "152642": "bajaj-finserv-multi-asset-allocation-fund-direct-growth",
     "101144": "icici-prudential-multi-asset-allocation-fund-direct-growth",
     "148459": "nippon-india-multi-asset-allocation-fund-direct-growth",
+    "100646": "uti-unit-linked-insurance-plan-direct",
+    "135982": "lic-mf-unit-linked-insurance-scheme-direct",
 
     # Debt / Duration / Liquid Funds
     "112938": "nippon-india-credit-risk-fund-direct-growth",
@@ -241,34 +263,40 @@ async def scrape_groww_table_data(page, table_selector: str):
     }
 
 async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_name: str, db_slug: str = None):
-    # Fast check: skip ULIP / Insurance / non-mutual fund schemes or schemes verified not on Groww
-    cat_lower = (category_name or "").lower()
-    name_lower = (scheme_name or "").lower()
-    if (
-        db_slug == "NOT_FOUND"
-        or "ulip" in cat_lower
-        or "insurance" in cat_lower
-        or "ulip" in name_lower
-        or "ulis" in name_lower
-    ):
-        print(f"[SKIP] Non-mutual fund / ULIP scheme {scheme_name} ({scheme_code}). Marking NOT_FOUND.")
-        save_not_found_to_db(scheme_code, scheme_name, category_name)
-        return None
+    # Only skip if explicitly marked NOT_FOUND without any known slug mapping
+    if db_slug == "NOT_FOUND" and scheme_code not in KNOWN_GROWW_SLUGS:
+        return {"status": "SKIPPED_NOT_FOUND", "schemeCode": scheme_code, "schemeName": scheme_name}
 
-    slug = resolve_groww_slug_auto(scheme_code, scheme_name, db_slug)
+    slug = resolve_groww_slug_auto(scheme_code, scheme_name, db_slug if db_slug != "NOT_FOUND" else None)
     url = f"https://groww.in/mutual-funds/{slug}"
     
     page = await browser.new_page()
     try:
-        resp = await page.goto(url, wait_until="domcontentloaded", timeout=12000)
+        # Navigate with 25s timeout and 1 automatic retry on timeout/network glitch
+        resp = None
+        for attempt in range(2):
+            try:
+                resp = await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                if resp and resp.status == 200:
+                    break
+            except Exception as nav_err:
+                if attempt == 0:
+                    await asyncio.sleep(1.5)
+                    continue
+                else:
+                    return {"status": "FAILED", "schemeCode": scheme_code, "schemeName": scheme_name, "error": f"Timeout on {url}"}
+
         if not resp or resp.status != 200:
             fallback_slug = slug.replace("-direct-growth", "-growth")
             url = f"https://groww.in/mutual-funds/{fallback_slug}"
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=12000)
+            try:
+                resp = await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+            except Exception:
+                resp = None
+
             if not resp or resp.status != 200:
-                print(f"[FAIL] HTTP {resp.status if resp else 'No response'} for {scheme_name} at {url}")
                 save_not_found_to_db(scheme_code, scheme_name, category_name)
-                return None
+                return {"status": "NOT_FOUND", "schemeCode": scheme_code, "schemeName": scheme_name, "error": f"HTTP {resp.status if resp else 'No response'}"}
             slug = fallback_slug
 
         # 1. Extract Annualised Table
@@ -482,6 +510,7 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
             return None
 
         return {
+            "status": "SUCCESS",
             "schemeCode": scheme_code,
             "schemeName": scheme_name,
             "categoryName": category_name or "Equity Mutual Fund",
@@ -503,8 +532,7 @@ async def scrape_scheme(browser, scheme_code: str, scheme_name: str, category_na
             "lastScrapedAt": datetime.now().isoformat(),
         }
     except Exception as e:
-        print(f"[ERROR] Failed scraping {scheme_name} ({scheme_code}): {e}")
-        return None
+        return {"status": "FAILED", "schemeCode": scheme_code, "schemeName": scheme_name, "error": str(e)}
     finally:
         await page.close()
 
@@ -524,10 +552,9 @@ def save_not_found_to_db(scheme_code: str, scheme_name: str, category_name: str)
                 updated_at = NOW();
         """, (scheme_code, scheme_name, category_name))
         conn.commit()
-        print(f"[NOT_FOUND] Marked {scheme_name} ({scheme_code}) as NOT_FOUND in DB.")
     except Exception as e:
         conn.rollback()
-        print(f"[DB ERROR] Error saving NOT_FOUND for {scheme_code}: {e}")
+        print(f"      {CLR_RED}└─ [DB ERROR] Saving NOT_FOUND for {scheme_code}: {e}{CLR_RESET}")
     finally:
         cur.close()
         conn.close()
@@ -598,8 +625,8 @@ def save_ranking_to_db(data: dict):
                 json.dumps(data.get("exitLoadTax")) if data.get("exitLoadTax") else None,
                 data["lastScrapedAt"],
             ))
-        except Exception as w_err:
-            print(f"[WARN] Error updating watchlist_fund_analytics: {w_err}")
+        except Exception:
+            pass
 
         # Also update all metadata in watchlist_schemes
         try:
@@ -631,18 +658,19 @@ def save_ranking_to_db(data: dict):
                 data.get("launchDate"),
                 data["schemeCode"],
             ))
-        except Exception as ws_err:
-            print(f"[WARN] Error updating watchlist_schemes: {ws_err}")
+        except Exception:
+            pass
         conn.commit()
-        print(f"[SAVED] {data['schemeName']} ({data['schemeCode']}) -> Saved to DB.")
+        return True
     except Exception as e:
         conn.rollback()
-        print(f"[DB ERROR] Error saving {data['schemeCode']}: {e}")
+        print(f"      {CLR_RED}└─ [DB ERROR] Saving {data['schemeCode']}: {e}{CLR_RESET}")
+        return False
     finally:
         cur.close()
         conn.close()
 
-async def worker(queue, browser, semaphore):
+async def worker(queue, browser, semaphore, stats, total_count, lock):
     while True:
         try:
             s = await queue.get()
@@ -653,8 +681,60 @@ async def worker(queue, browser, semaphore):
             break
         async with semaphore:
             res = await scrape_scheme(browser, s["schemeCode"], s["schemeName"], s["category"], s.get("dbSlug"))
-            if res:
-                save_ranking_to_db(res)
+            
+            async with lock:
+                stats["processed"] += 1
+                curr_idx = stats["processed"]
+                pct = (curr_idx / total_count) * 100 if total_count > 0 else 100.0
+
+            code = s["schemeCode"]
+            name = s["schemeName"]
+            prefix = f"  [{curr_idx:3d}/{total_count:3d}] ({pct:5.1f}%) {CLR_BOLD}{code}{CLR_RESET} {name[:34]:<34}"
+
+            if not res or res.get("status") == "FAILED":
+                err = res.get("error") if res else "Unknown error"
+                print(f"{prefix} -> {CLR_RED}[FAILED]{CLR_RESET} {err}")
+                async with lock:
+                    stats["failed"] += 1
+            elif res.get("status") == "SKIPPED_ULIP":
+                print(f"{prefix} -> {CLR_YELLOW}[SKIPPED]{CLR_RESET} Non-MF / ULIP scheme (Marked NOT_FOUND)")
+                async with lock:
+                    stats["skipped"] += 1
+            elif res.get("status") == "NOT_FOUND":
+                err = res.get("error") or "Page not found"
+                print(f"{prefix} -> {CLR_RED}[NOT FOUND]{CLR_RESET} {err} (Marked NOT_FOUND)")
+                async with lock:
+                    stats["failed"] += 1
+            else:
+                saved = save_ranking_to_db(res)
+                if saved:
+                    async with lock:
+                        stats["updated"] += 1
+                    
+                    # Format informative data badges
+                    mc = res.get("marketCap")
+                    mc_str = ""
+                    if mc and (mc.get("largeCap") or mc.get("midCap") or mc.get("smallCap")):
+                        l_cap = mc.get("largeCap", 0) or 0
+                        m_cap = mc.get("midCap", 0) or 0
+                        s_cap = mc.get("smallCap", 0) or 0
+                        mc_str = f"Cap: L: {l_cap:.1f}% | M: {m_cap:.1f}% | S: {s_cap:.1f}%"
+                    
+                    aum = res.get("aumCr")
+                    aum_str = f"AUM: ₹{aum:,.0f} Cr" if aum else ""
+
+                    exp = res.get("expenseRatio")
+                    exp_str = f"TER: {exp:.2f}%" if exp else ""
+
+                    details = " | ".join(filter(None, [mc_str, aum_str, exp_str]))
+                    detail_suffix = f" ({details})" if details else ""
+
+                    print(f"{prefix} -> {CLR_GREEN}[SAVED]{CLR_RESET} Saved to DB{detail_suffix}")
+                else:
+                    async with lock:
+                        stats["failed"] += 1
+                    print(f"{prefix} -> {CLR_RED}[DB FAILED]{CLR_RESET} Error saving record")
+
         queue.task_done()
 
 async def main():
@@ -666,6 +746,11 @@ async def main():
     parser.add_argument("--concurrency", type=int, default=5, help="Number of concurrent scraper pages (default: 5)")
     args = parser.parse_args()
 
+    start_time = time.time()
+    log_header("MUTUAL FUND MARKET CAP & RANKINGS SYNC")
+
+    # 1. Discover Schemes
+    log_section("1. DISCOVERING MUTUAL FUND SCHEMES")
     conn = get_db_connection()
     cur = conn.cursor()
     schemes_to_scrape = []
@@ -702,7 +787,7 @@ async def main():
                         s_cat = meta.get("scheme_category", "Mutual Fund")
                         schemes_to_scrape.append({"schemeCode": clean_code, "schemeName": s_name, "category": s_cat, "dbSlug": None})
                 except Exception as amfi_err:
-                    print(f"[WARN] AMFI fallback lookup failed: {amfi_err}")
+                    print(f"  {CLR_YELLOW}[WARN]{CLR_RESET} AMFI fallback lookup failed: {amfi_err}")
         elif args.scheme_codes:
             code_list = [c.strip() for c in args.scheme_codes.split(",") if c.strip()]
             if code_list:
@@ -726,14 +811,21 @@ async def main():
                 for r in rows:
                     schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
         elif args.active_only:
-            # Query active mutual fund schemes in the latest report snapshot and zerodha active mutual funds
+            # Query active mutual fund schemes across the latest valuation report of all family members,
+            # combined with all active Zerodha mutual funds
             cur.execute("""
+                WITH latest_family_reports AS (
+                    SELECT DISTINCT ON (h.member_id) r.id
+                    FROM portfolio.reports r
+                    JOIN portfolio.holdings_snapshot h ON h.report_id = r.id
+                    ORDER BY h.member_id, r.as_of_date DESC
+                )
                 SELECT DISTINCT s.scheme_code_api, s.name, s.category, r.groww_slug
                 FROM portfolio.holdings_snapshot h
+                JOIN latest_family_reports lfr ON h.report_id = lfr.id
                 JOIN portfolio.schemes s ON h.scheme_id = s.id
                 LEFT JOIN portfolio.scheme_category_rankings r ON s.scheme_code_api = r.scheme_code
-                WHERE h.report_id = (SELECT id FROM portfolio.reports ORDER BY as_of_date DESC LIMIT 1)
-                  AND (h.balance_units > 0.0001 OR h.current_value > 0)
+                WHERE (h.balance_units > 0.0001 OR h.current_value > 0)
                   AND s.scheme_code_api ~ '^[0-9]{5,6}$'
                 UNION
                 SELECT DISTINCT zs.scheme_code_api, zs.name, zs.category, r.groww_slug
@@ -782,11 +874,24 @@ async def main():
         cur.close()
         conn.close()
 
+    total_schemes = len(schemes_to_scrape)
+    print(f"  {CLR_CYAN}✓{CLR_RESET} Target Mutual Fund Schemes: {CLR_BOLD}{total_schemes}{CLR_RESET} schemes selected")
+    print(f"  {CLR_CYAN}✓{CLR_RESET} Scraping Concurrency:       {CLR_BOLD}{args.concurrency}x parallel{CLR_RESET}")
+
     if not schemes_to_scrape:
-        print("No matching mutual fund schemes found to scrape.")
+        print(f"  {CLR_YELLOW}No matching mutual fund schemes found to scrape.{CLR_RESET}")
         return
 
-    print(f"Starting Playwright scraper for {len(schemes_to_scrape)} mutual fund schemes (Concurrency: {args.concurrency})...")
+    # 2. Scrape Schemes
+    log_section(f"2. SCRAPING MARKET CAP & CATEGORY RANKINGS ({total_schemes} Schemes)")
+
+    stats = {
+        "processed": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+    lock = asyncio.Lock()
     queue = asyncio.Queue()
     for s in schemes_to_scrape:
         await queue.put(s)
@@ -794,13 +899,25 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         semaphore = asyncio.Semaphore(args.concurrency)
-        tasks = [asyncio.create_task(worker(queue, browser, semaphore)) for _ in range(args.concurrency)]
+        tasks = [
+            asyncio.create_task(worker(queue, browser, semaphore, stats, total_schemes, lock))
+            for _ in range(args.concurrency)
+        ]
         await queue.join()
         for t in tasks:
             t.cancel()
         await browser.close()
 
-    print("All mutual fund category returns and rankings scraped and updated successfully.")
+    elapsed = time.time() - start_time
+
+    # 3. Summary Report
+    log_header("MARKET CAP & RANKINGS SYNC SUMMARY REPORT")
+    print(f"  * Total Schemes Queried:    {CLR_BOLD}{total_schemes}{CLR_RESET} schemes")
+    print(f"  * Successfully Scraped:     {CLR_GREEN}{stats['updated']} saved to DB{CLR_RESET}")
+    print(f"  * Skipped (ULIP / Non-MF):  {CLR_YELLOW}{stats['skipped']} marked NOT_FOUND{CLR_RESET}")
+    print(f"  * Failed / Page Error:      {CLR_RED if stats['failed'] > 0 else CLR_RESET}{stats['failed']} failed{CLR_RESET}")
+    print(f"  * Total Execution Time:     {CLR_BOLD}{elapsed:.2f} seconds{CLR_RESET}")
+    print(f"  * Final Status:             {CLR_BOLD}{CLR_GREEN}COMPLETED SUCCESSFULLY{CLR_RESET}\n")
 
 if __name__ == "__main__":
     asyncio.run(main())

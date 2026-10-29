@@ -11,6 +11,7 @@
     "sync:funds": "python3 scripts/sync_inception_nav.py --live",
     "sync:inception": "python3 scripts/sync_inception_nav.py --live",
     "sync:nav": "python3 scripts/sync_latest_nav.py",
+    "sync:marketcap": "python3 scripts/scrape_fund_rankings.py --active-only --concurrency 5",
     "check:nav": "python3 scripts/check_all_nav_dates.py",
     "backfill:stocks": "python3 scripts/backfill_start_gap_stocks.py",
     "db:generate": "drizzle-kit generate",
