@@ -260,6 +260,13 @@
       "when": 1789549690022,
       "tag": "0036_exotic_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793270001168,
+      "tag": "0037_strange_tomas",
+      "breakpoints": true
     }
   ]
 }
