@@ -1,18 +1,33 @@
 # TypeScript Standards - typescript.md
 
-## Strict Type Safety
-*   Do not bypass the compiler with the `any` keyword. Use concrete interfaces or utility type parameters.
-*   Enforce type correctness for all custom hooks, database models, and Server Action payloads.
-*   Use safe casting and guard conditionals to handle optional parameters or unknown JSON shapes from external APIs.
-*   Exhaustive checking: Ensure interfaces matching external service configurations are fully mapped.
+## 1. Strict Type Safety & Zero `any`
+* **Zero `any` Policy**: Never use `any` keyword. Use explicit interfaces, type aliases, generics, or `unknown` with runtime type narrowing.
+* **Strict Compiler Options**:
+  * `"strict": true`
+  * `"noUnusedLocals": true`
+  * `"noUnusedParameters": true`
+  * `"noImplicitReturns": true`
+  * `"noFallthroughCasesInSwitch": true`
+* **Explicit Function Signatures**: All exported functions in services, API routes, server actions, and helpers must explicitly declare return types (e.g. `Promise<DashboardData>`, `boolean`, `string`).
+* **API DTOs (Data Transfer Objects)**: All API route request payloads and response bodies must have dedicated interfaces defined in `src/types/` (e.g. `ApiResponse<T>`, `WatchlistAddFundInput`, `CreateIpoTradeInput`).
 
-## Strict Compiler Rules
-*   Maintain `"noUnusedLocals": true` and `"noUnusedParameters": true` enabled in `tsconfig.json`.
-*   Unused variables, parameters, or imports are strictly prohibited and must be removed from the files.
+---
 
-## Import & Variable Organization
-*   **Top-Level Static Imports**: All static value and type imports must strictly reside at the very top level of the file before any code, variables, types, or functions.
-*   **No Inline Type Imports**: Never use inline dynamic type imports (e.g. `field?: import("./module").Type`). Always declare explicit top-level type imports (e.g. `import type { Type } from "./module";`).
-*   **No Function-Body Imports**: Do not use dynamic/conditional `import()` statements inside function bodies or loops unless explicitly required for client-side code-splitting or runtime dynamic modules.
-*   **Top-Level Constants**: Global variables, schemas, configuration maps, and module-level constants must be declared at the top of the file, not inline between functions or code blocks.
+## 2. Type Centralization & Architecture
+* **Centralized Location**: All shared types, interfaces, enums, and union definitions must reside in domain-specific files under `src/types/` (e.g., `src/types/portfolio.ts`, `src/types/watchlist.ts`, `src/types/insights.ts`, `src/types/api.ts`).
+* **Component Type Purity**: No `interface` or `type` definitions inside `src/components/` files. Components must import their props and internal state types directly from `src/types/`.
+* **Zero Inline Type Imports**: Prohibit inline namespace or dynamic type syntax such as `prop?: import("./module").TypeName`. Always declare explicit top-level type imports:
+  ```typescript
+  // CORRECT:
+  import type { PortfolioSummaryData } from "@/types/summary";
 
+  // PROHIBITED:
+  function render(data: import("@/types/summary").PortfolioSummaryData) { ... }
+  ```
+
+---
+
+## 3. Import & Code Organization
+* **Top-Level Static Imports Only**: All imports (both values and types) must reside strictly at the very top of every file before any constants, variables, or functions.
+* **Separation of Type & Value Imports**: Use explicit `import type { ... }` syntax for type-only imports to aid bundler tree-shaking.
+* **Top-Level Module Constants**: Declare constants, configurations, regexes, and maps at the top of the file, never inside functions or nested blocks.
