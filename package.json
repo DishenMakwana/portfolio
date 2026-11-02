@@ -11,6 +11,8 @@
     "sync:funds": "python3 scripts/sync_inception_nav.py --live",
     "sync:inception": "python3 scripts/sync_inception_nav.py --live",
     "sync:nav": "python3 scripts/sync_latest_nav.py",
+    "sync:groww": "python3 scripts/scrape_fund_rankings.py --active-only --concurrency 5",
+    "sync:vro": "python3 scripts/scrape_vro_fund.py --active-only --concurrency 3",
     "sync:marketcap": "python3 scripts/scrape_fund_rankings.py --active-only --concurrency 5",
     "sync:benchmarks": "python3 scripts/scrape_benchmark_index_funds.py",
     "check:nav": "python3 scripts/check_all_nav_dates.py",
@@ -47,5 +49,8 @@
     "prettier": "^3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "volta": {
+    "node": "22.23.1"
   }
 }
