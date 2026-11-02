@@ -15,8 +15,28 @@ import asyncio
 import json
 import re
 from datetime import datetime
+import time
 import psycopg2
 from playwright.async_api import async_playwright
+
+# ANSI Color Codes
+CLR_RESET = "\033[0m"
+CLR_BOLD = "\033[1m"
+CLR_DIM = "\033[2m"
+CLR_CYAN = "\033[36m"
+CLR_GREEN = "\033[32m"
+CLR_YELLOW = "\033[33m"
+CLR_RED = "\033[31m"
+CLR_MAGENTA = "\033[35m"
+CLR_BLUE = "\033[34m"
+
+def log_header(text):
+    print(f"\n{CLR_BOLD}{CLR_CYAN}======================================================================{CLR_RESET}")
+    print(f"{CLR_BOLD}{CLR_CYAN}  {text}{CLR_RESET}")
+    print(f"{CLR_BOLD}{CLR_CYAN}======================================================================{CLR_RESET}")
+
+def log_section(text):
+    print(f"\n{CLR_BOLD}{CLR_BLUE}--- {text} ---{CLR_RESET}")
 
 def get_db_connection():
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -183,9 +203,17 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (scheme_code) DO UPDATE SET
             vro_url = COALESCE(EXCLUDED.vro_url, watchlist_fund_analytics.vro_url),
-            vro_risk_data = EXCLUDED.vro_risk_data,
-            vro_returns_data = EXCLUDED.vro_returns_data,
-            vro_portfolio_data = EXCLUDED.vro_portfolio_data,
+            vro_risk_data = COALESCE(EXCLUDED.vro_risk_data, watchlist_fund_analytics.vro_risk_data),
+            vro_returns_data = COALESCE(EXCLUDED.vro_returns_data, watchlist_fund_analytics.vro_returns_data),
+            vro_portfolio_data = CASE 
+                WHEN EXCLUDED.vro_portfolio_data IS NOT NULL 
+                     AND jsonb_array_length(COALESCE(EXCLUDED.vro_portfolio_data::jsonb->'sectors', '[]'::jsonb)) > 0
+                THEN EXCLUDED.vro_portfolio_data
+                WHEN watchlist_fund_analytics.vro_portfolio_data IS NOT NULL
+                     AND jsonb_array_length(COALESCE(watchlist_fund_analytics.vro_portfolio_data::jsonb->'sectors', '[]'::jsonb)) > 0
+                THEN watchlist_fund_analytics.vro_portfolio_data
+                ELSE COALESCE(EXCLUDED.vro_portfolio_data, watchlist_fund_analytics.vro_portfolio_data)
+            END,
             market_cap_data = CASE 
                 WHEN EXCLUDED.market_cap_data IS NOT NULL AND (
                     watchlist_fund_analytics.market_cap_data IS NULL 
@@ -211,6 +239,18 @@ def save_vro_analytics(scheme_code: str, scheme_name: str, category_name: str, v
         vro_mkt_cap_json,
         now_iso
     ))
+    
+    cur.execute("""
+        UPDATE portfolio.schemes 
+        SET vro_url = COALESCE(%s, vro_url), updated_at = NOW() 
+        WHERE scheme_code_api = %s;
+    """, (vro_url, scheme_code))
+
+    cur.execute("""
+        UPDATE portfolio.zerodha_schemes 
+        SET vro_url = COALESCE(%s, vro_url), updated_at = NOW() 
+        WHERE scheme_code_api = %s;
+    """, (vro_url, scheme_code))
     
     conn.commit()
     cur.close()
@@ -358,12 +398,20 @@ async def scrape_portfolio(context, clean_base: str):
         lambda route: route.abort()
     )
     try:
-        await page.goto(clean_base + "#fund-portfolio", wait_until="domcontentloaded", timeout=25000)
+        await page.goto(clean_base + "#fund-portfolio", wait_until="domcontentloaded", timeout=30000)
         try:
-            await page.wait_for_selector("table", timeout=10000)
+            # Wait specifically for Sector or Company table to hydrate in DOM
+            await page.wait_for_function("""() => {
+                const tables = Array.from(document.querySelectorAll('table'));
+                return tables.some(t => {
+                    const txt = t.innerText;
+                    return (txt.includes('Sector') && txt.includes('Fund')) || 
+                           (txt.includes('Company Name') && (txt.includes('P/E') || txt.includes('% Assets') || txt.includes('Holding Trend')));
+                });
+            }""", timeout=15000)
         except Exception:
             pass
-        await page.wait_for_timeout(3500)
+        await page.wait_for_timeout(2000)
 
         port_as_of = await page.evaluate('''() => {
             const text = document.body.innerText;
@@ -378,7 +426,8 @@ async def scrape_portfolio(context, clean_base: str):
         })''')
 
         sectors = []
-        top_holdings = []
+        full_holdings = []
+        mini_holdings = []
 
         for t in tables:
             if not t or len(t) < 2:
@@ -393,35 +442,55 @@ async def scrape_portfolio(context, clean_base: str):
                             f_pct = float(r[1].replace("%", "").strip())
                             c_pct = float(r[2].replace("%", "").strip())
                             sectors.append({
-                                "sector": r[0],
+                                "sector": r[0].strip(),
                                 "fundPct": f_pct,
                                 "categoryPct": c_pct
                             })
                         except ValueError:
                             pass
             
-            # Top Holdings table: Company Name | Sector | P/E Ratio | % Assets
-            if "Company" in header_str and ("P/E" in header_str or "Assets" in header_str or "%" in header_str or "Portfolio" in header_str):
+            # Full Top Holdings table: Company Name | Sector | P/E Ratio | % Assets | Holding Trend
+            if "Company Name" in header_str and ("P/E" in header_str or "% Assets" in header_str or "Holding Trend" in header_str):
                 for r in t[1:]:
-                    if len(r) >= 2 and r[0] != "Company Name" and r[0] != "Company":
+                    if len(r) >= 4 and r[0] not in ("Company Name", "Company"):
                         try:
-                            if len(r) >= 4:
-                                pe_str = r[2].replace(",", "").strip()
-                                pe_val = float(pe_str) if pe_str and pe_str != "--" and pe_str != "-" else None
-                                asset_pct = float(r[3].replace("%", "").strip())
-                                sector_name = r[1]
-                            else:
-                                pe_val = None
-                                asset_pct = float(r[1].replace("%", "").strip())
-                                sector_name = None
-                            top_holdings.append({
-                                "companyName": r[0],
+                            pe_str = r[2].replace(",", "").strip()
+                            pe_val = float(pe_str) if pe_str and pe_str not in ("--", "-", "N/A") else None
+                            asset_pct = float(r[3].replace("%", "").strip())
+                            sector_name = r[1].strip() or None
+                            full_holdings.append({
+                                "companyName": r[0].strip(),
                                 "sector": sector_name,
                                 "peRatio": pe_val,
                                 "assetPct": asset_pct
                             })
                         except (ValueError, IndexError):
                             pass
+
+            # Mini Top Holdings widget on Overview: Company | Percentage of Portfolio
+            elif "Company" in header_str and ("Percentage of Portfolio" in header_str or "Portfolio" in header_str):
+                for r in t[1:]:
+                    if len(r) >= 2 and r[0] not in ("Company Name", "Company"):
+                        try:
+                            asset_pct = float(r[1].replace("%", "").strip())
+                            mini_holdings.append({
+                                "companyName": r[0].strip(),
+                                "sector": None,
+                                "peRatio": None,
+                                "assetPct": asset_pct
+                            })
+                        except (ValueError, IndexError):
+                            pass
+
+        # Use full holdings if available; only fallback to mini widget if full table absent
+        raw_holdings = full_holdings if full_holdings else mini_holdings
+        seen_companies = set()
+        top_holdings = []
+        for h in raw_holdings:
+            norm_name = re.sub(r'[^a-zA-Z0-9]', '', h["companyName"]).lower()
+            if norm_name and norm_name not in seen_companies:
+                seen_companies.add(norm_name)
+                top_holdings.append(h)
 
         # Extract Market Cap Split and Avg Market Cap from Portfolio Aggregates
         mkt_cap_data = None
@@ -617,193 +686,387 @@ async def scrape_vro_fund(vro_url: str, browser=None):
             await browser.close()
             await p.stop()
 
-async def main():
-    parser = argparse.ArgumentParser(description="Scrape Mutual Fund Analytics from Value Research Online")
-    parser.add_argument("--scheme-code", help="AMFI scheme code (e.g. 151751)")
-    parser.add_argument("--vro-url", help="Direct URL to Value Research fund page")
-    parser.add_argument("--sync-all", action="store_true", help="Sync VRO analytics for all funds with vro_url")
-    parser.add_argument("--force", action="store_true", help="Re-sync even if already synced")
-    parser.add_argument("--concurrency", type=int, default=2, help="Number of concurrent fund syncs")
-    args = parser.parse_args()
+async def vro_worker(queue, browser, semaphore, stats, total_count, lock, force=False):
+    while True:
+        try:
+            s = queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
 
-    if args.sync_all:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        code = s["schemeCode"]
+        name = s["schemeName"]
+        cat = s.get("category") or ""
+        vro_url = s.get("vroUrl")
+        last_synced = s.get("lastSyncedAt")
+
+        async with lock:
+            stats["processed"] += 1
+            curr_idx = stats["processed"]
+            pct = (curr_idx / total_count) * 100 if total_count > 0 else 100.0
+
+        prefix = f"  [{curr_idx:3d}/{total_count:3d}] ({pct:5.1f}%) {CLR_BOLD}{code}{CLR_RESET} {name[:34]:<34}"
+
+        # Check if already fresh (within 24 hours) unless force is requested
+        if not force and last_synced:
+            try:
+                sync_dt = datetime.fromisoformat(str(last_synced))
+                age_hours = (datetime.now() - sync_dt).total_seconds() / 3600.0
+                if age_hours < 24.0:
+                    print(f"{prefix} -> {CLR_GREEN}[FRESH]{CLR_RESET} Synced {age_hours:.1f}h ago (use --force to re-sync)")
+                    async with lock:
+                        stats["fresh"] += 1
+                    queue.task_done()
+                    continue
+            except Exception:
+                pass
+
+        async with semaphore:
+            # 1. URL Resolution / Auto-Discovery
+            if not vro_url:
+                vro_url = await auto_discover_vro_url(browser, name)
+                if vro_url:
+                    save_vro_url(code, vro_url, name, cat)
+                else:
+                    print(f"{prefix} -> {CLR_RED}[NO URL]{CLR_RESET} Could not auto-discover VRO URL")
+                    async with lock:
+                        stats["failed"] += 1
+                    queue.task_done()
+                    continue
+
+            # 2. Scrape VRO Fund Analytics
+            try:
+                res = await asyncio.wait_for(
+                    scrape_vro_fund(vro_url, browser=browser),
+                    timeout=55.0
+                )
+            except Exception as e:
+                print(f"{prefix} -> {CLR_RED}[TIMEOUT/ERROR]{CLR_RESET} {e}")
+                async with lock:
+                    stats["failed"] += 1
+                queue.task_done()
+                continue
+
+            has_data = bool(
+                res.get("risk") or 
+                res.get("returns") or 
+                (res.get("portfolio") and (
+                    res["portfolio"].get("topHoldings") or 
+                    res["portfolio"].get("sectors") or 
+                    res["portfolio"].get("marketCap")
+                ))
+            )
+
+            if has_data:
+                save_vro_analytics(
+                    scheme_code=code,
+                    scheme_name=name,
+                    category_name=cat,
+                    vro_url=vro_url,
+                    risk_data=res.get("risk"),
+                    returns_data=res.get("returns"),
+                    portfolio_data=res.get("portfolio")
+                )
+                async with lock:
+                    stats["updated"] += 1
+
+                # Format informative summary badges
+                details_parts = []
+                r_rows = len(res.get("risk", {}).get("rows", [])) if res.get("risk") else 0
+                if r_rows:
+                    details_parts.append(f"Risk: {r_rows} measures")
+
+                ret_rows = len(res.get("returns", {}).get("rows", [])) if res.get("returns") else 0
+                if ret_rows:
+                    details_parts.append(f"Returns: {ret_rows} horizons")
+
+                sec_cnt = len(res.get("portfolio", {}).get("sectors", [])) if res.get("portfolio") else 0
+                if sec_cnt:
+                    details_parts.append(f"Sectors: {sec_cnt}")
+
+                hold_cnt = len(res.get("portfolio", {}).get("topHoldings", [])) if res.get("portfolio") else 0
+                if hold_cnt:
+                    details_parts.append(f"Top Holdings: {hold_cnt}")
+
+                mc = res.get("portfolio", {}).get("marketCap") if res.get("portfolio") else None
+                if mc and (mc.get("largeCap") or mc.get("midCap") or mc.get("smallCap")):
+                    l_val = mc.get("largeCap", 0) or 0
+                    m_val = mc.get("midCap", 0) or 0
+                    s_val = mc.get("smallCap", 0) or 0
+                    details_parts.append(f"Cap: L:{l_val:.0f}% M:{m_val:.0f}% S:{s_val:.0f}%")
+
+                detail_str = " | ".join(details_parts) if details_parts else "Analytics Saved"
+                print(f"{prefix} -> {CLR_GREEN}[SAVED]{CLR_RESET} {detail_str}")
+            else:
+                print(f"{prefix} -> {CLR_YELLOW}[NO DATA]{CLR_RESET} Empty tables returned from VRO")
+                async with lock:
+                    stats["failed"] += 1
+
+        queue.task_done()
+
+def cleanup_duplicate_holdings(conn):
+    cur = conn.cursor()
+    try:
         cur.execute("""
-            SELECT scheme_code, scheme_name, category_name, vro_url,
-                   (vro_portfolio_data IS NOT NULL AND vro_portfolio_data != '{}' AND vro_risk_data IS NOT NULL) as is_synced
+            SELECT scheme_code, vro_portfolio_data
             FROM portfolio.watchlist_fund_analytics
-            WHERE vro_url IS NOT NULL AND vro_url != ''
-            ORDER BY scheme_name
+            WHERE vro_portfolio_data IS NOT NULL;
         """)
         rows = cur.fetchall()
+        cleaned_count = 0
+        for code, port_raw in rows:
+            port = port_raw if isinstance(port_raw, dict) else json.loads(port_raw)
+            holdings = port.get("topHoldings", [])
+            if not holdings or len(holdings) <= 1:
+                continue
+
+            seen = set()
+            deduped = []
+            has_dups = False
+            for h in holdings:
+                norm = re.sub(r'[^a-zA-Z0-9]', '', h.get("companyName", "")).lower()
+                if norm in seen:
+                    has_dups = True
+                else:
+                    seen.add(norm)
+                    deduped.append(h)
+
+            if has_dups or len(deduped) != len(holdings):
+                port["topHoldings"] = deduped
+                cur.execute("""
+                    UPDATE portfolio.watchlist_fund_analytics
+                    SET vro_portfolio_data = %s, updated_at = NOW()
+                    WHERE scheme_code = %s;
+                """, (json.dumps(port), code))
+                cleaned_count += 1
+        conn.commit()
+        if cleaned_count > 0:
+            print(f"  {CLR_GREEN}✓{CLR_RESET} Cleaned duplicate holdings in {CLR_BOLD}{cleaned_count}{CLR_RESET} database records")
+    except Exception as e:
+        print(f"  {CLR_YELLOW}[WARN]{CLR_RESET} Error during holdings cleanup: {e}", file=sys.stderr)
+    finally:
+        cur.close()
+
+async def main():
+    parser = argparse.ArgumentParser(description="Scrape Mutual Fund Analytics from Value Research Online")
+    parser.add_argument("--scheme-code", help="Specific AMFI scheme code (e.g. 118989)")
+    parser.add_argument("--vro-url", help="Direct URL to Value Research fund page")
+    parser.add_argument("--active-only", action="store_true", help="Scrape only active mutual funds from CAS & Zerodha (default)")
+    parser.add_argument("--sync-all", action="store_true", help="Sync all funds currently having a VRO URL")
+    parser.add_argument("--refetch-incomplete", action="store_true", help="Force refetch of schemes with missing/incomplete portfolio or sectors")
+    parser.add_argument("--force", action="store_true", help="Re-sync even if already synced within 24 hours")
+    parser.add_argument("--concurrency", type=int, default=3, help="Number of concurrent fund syncs (default: 3)")
+    args = parser.parse_args()
+
+    start_time = time.time()
+    log_header("VALUE RESEARCH ONLINE (VRO) MUTUAL FUND ANALYTICS SYNC ENGINE")
+
+    # 1. Discover Schemes
+    log_section("1. DISCOVERING MUTUAL FUND SCHEMES")
+    conn = get_db_connection()
+    cleanup_duplicate_holdings(conn)
+    cur = conn.cursor()
+    schemes_to_scrape = []
+
+    try:
+        if args.scheme_code:
+            clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
+            cur.execute("""
+                SELECT s.scheme_code_api, s.name, s.category,
+                       COALESCE(wfa.vro_url, s.vro_url) as vro_url,
+                       wfa.last_vro_synced_at
+                FROM portfolio.schemes s
+                LEFT JOIN portfolio.watchlist_fund_analytics wfa ON s.scheme_code_api = wfa.scheme_code
+                WHERE s.scheme_code_api = %s
+                UNION
+                SELECT zs.scheme_code_api, zs.name, zs.category,
+                       COALESCE(wfa.vro_url, zs.vro_url) as vro_url,
+                       wfa.last_vro_synced_at
+                FROM portfolio.zerodha_schemes zs
+                LEFT JOIN portfolio.watchlist_fund_analytics wfa ON zs.scheme_code_api = wfa.scheme_code
+                WHERE zs.scheme_code_api = %s
+                UNION
+                SELECT ws.scheme_code, ws.scheme_name, ws.category,
+                       COALESCE(wfa.vro_url, ws.vro_url) as vro_url,
+                       wfa.last_vro_synced_at
+                FROM portfolio.watchlist_schemes ws
+                LEFT JOIN portfolio.watchlist_fund_analytics wfa ON ws.scheme_code = wfa.scheme_code
+                WHERE ws.scheme_code = %s
+            """, (clean_code, clean_code, clean_code))
+            rows = cur.fetchall()
+            for r in rows:
+                schemes_to_scrape.append({
+                    "schemeCode": r[0],
+                    "schemeName": r[1],
+                    "category": r[2],
+                    "vroUrl": args.vro_url or r[3],
+                    "lastSyncedAt": r[4]
+                })
+            if not schemes_to_scrape:
+                # AMFI fallback lookup
+                try:
+                    import urllib.request
+                    req = urllib.request.Request(f"https://api.mfapi.in/mf/{clean_code}", headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        data = json.loads(resp.read().decode())
+                        if data and "meta" in data:
+                            schemes_to_scrape.append({
+                                "schemeCode": clean_code,
+                                "schemeName": data["meta"].get("scheme_name"),
+                                "category": data["meta"].get("scheme_category"),
+                                "vroUrl": args.vro_url or None,
+                                "lastSyncedAt": None
+                            })
+                except Exception as amfi_err:
+                    print(f"  {CLR_YELLOW}[WARN]{CLR_RESET} AMFI fallback lookup failed: {amfi_err}")
+        elif args.sync_all:
+            cur.execute("""
+                SELECT scheme_code, scheme_name, category_name, vro_url, last_vro_synced_at
+                FROM portfolio.watchlist_fund_analytics
+                WHERE vro_url IS NOT NULL AND vro_url != ''
+                ORDER BY scheme_name;
+            """)
+            rows = cur.fetchall()
+            for r in rows:
+                schemes_to_scrape.append({
+                    "schemeCode": r[0],
+                    "schemeName": r[1],
+                    "category": r[2],
+                    "vroUrl": r[3],
+                    "lastSyncedAt": r[4]
+                })
+        elif args.refetch_incomplete:
+            args.force = True
+            cur.execute("""
+                SELECT scheme_code, scheme_name, category_name, vro_url, last_vro_synced_at
+                FROM portfolio.watchlist_fund_analytics
+                WHERE vro_url IS NOT NULL AND vro_url != ''
+                  AND (
+                    vro_portfolio_data IS NULL 
+                    OR jsonb_array_length(COALESCE(vro_portfolio_data::jsonb->'sectors', '[]'::jsonb)) = 0
+                    OR jsonb_array_length(COALESCE(vro_portfolio_data::jsonb->'topHoldings', '[]'::jsonb)) < 10
+                  )
+                  AND category_name NOT ILIKE '%Liquid%' 
+                  AND category_name NOT ILIKE '%Overnight%' 
+                  AND category_name NOT ILIKE '%Money Market%' 
+                  AND category_name NOT ILIKE '%Ultra Short%' 
+                  AND category_name NOT ILIKE '%Low Duration%' 
+                  AND category_name NOT ILIKE '%Short Duration%' 
+                  AND category_name NOT ILIKE '%Medium Duration%' 
+                  AND category_name NOT ILIKE '%Credit Risk%' 
+                  AND category_name NOT ILIKE '%Banking and PSU%' 
+                  AND category_name NOT ILIKE '%Gilt%' 
+                  AND category_name NOT ILIKE '%Floater%'
+                ORDER BY scheme_name;
+            """)
+            rows = cur.fetchall()
+            for r in rows:
+                schemes_to_scrape.append({
+                    "schemeCode": r[0],
+                    "schemeName": r[1],
+                    "category": r[2],
+                    "vroUrl": r[3],
+                    "lastSyncedAt": r[4]
+                })
+        else:
+            # Default or --active-only:
+            # Discover active mutual fund schemes across CAS & Zerodha
+            cur.execute("""
+                WITH latest_family_reports AS (
+                    SELECT DISTINCT ON (h.member_id) r.id
+                    FROM portfolio.reports r
+                    JOIN portfolio.holdings_snapshot h ON h.report_id = r.id
+                    ORDER BY h.member_id, r.as_of_date DESC
+                ),
+                latest_zerodha_reports AS (
+                    SELECT DISTINCT ON (client_id) id
+                    FROM portfolio.zerodha_reports
+                    ORDER BY client_id, as_of_date DESC
+                )
+                SELECT DISTINCT s.scheme_code_api, s.name, s.category,
+                       COALESCE(wfa.vro_url, s.vro_url) as vro_url,
+                       wfa.last_vro_synced_at
+                FROM portfolio.holdings_snapshot h
+                JOIN latest_family_reports lfr ON h.report_id = lfr.id
+                JOIN portfolio.schemes s ON h.scheme_id = s.id
+                LEFT JOIN portfolio.watchlist_fund_analytics wfa ON s.scheme_code_api = wfa.scheme_code
+                WHERE (h.balance_units > 0.0001 OR h.current_value > 0)
+                  AND s.scheme_code_api ~ '^[0-9]{5,6}$'
+                UNION
+                SELECT DISTINCT zs.scheme_code_api, zs.name, zs.category,
+                       COALESCE(wfa.vro_url, zs.vro_url) as vro_url,
+                       wfa.last_vro_synced_at
+                FROM portfolio.zerodha_holdings zh
+                JOIN latest_zerodha_reports lzr ON zh.report_id = lzr.id
+                JOIN portfolio.zerodha_schemes zs ON zh.scheme_id = zs.id
+                LEFT JOIN portfolio.watchlist_fund_analytics wfa ON zs.scheme_code_api = wfa.scheme_code
+                WHERE zh.quantity > 0.0001
+                  AND (zs.holding_type = 'mutual_fund' OR zs.scheme_code_api ~ '^[0-9]{5,6}$')
+                ORDER BY category, name;
+            """)
+            rows = cur.fetchall()
+            for r in rows:
+                schemes_to_scrape.append({
+                    "schemeCode": r[0],
+                    "schemeName": r[1],
+                    "category": r[2],
+                    "vroUrl": r[3],
+                    "lastSyncedAt": r[4]
+                })
+    finally:
         cur.close()
         conn.close()
 
-        to_sync = []
-        already_synced = 0
-        for r in rows:
-            code, name, cat, url, is_synced = r
-            if is_synced and not args.force:
-                already_synced += 1
-            else:
-                to_sync.append((code, name, cat, url))
+    total_schemes = len(schemes_to_scrape)
+    with_urls = sum(1 for s in schemes_to_scrape if s.get("vroUrl"))
+    print(f"  {CLR_CYAN}✓{CLR_RESET} Target Mutual Fund Schemes: {CLR_BOLD}{total_schemes}{CLR_RESET} schemes selected")
+    print(f"  {CLR_CYAN}✓{CLR_RESET} Known VRO URLs Available:   {CLR_BOLD}{with_urls}/{total_schemes}{CLR_RESET} schemes")
+    print(f"  {CLR_CYAN}✓{CLR_RESET} Scraping Concurrency:       {CLR_BOLD}{args.concurrency}x parallel{CLR_RESET}")
 
-        print(f"Total funds with VRO URL: {len(rows)}")
-        print(f"Already fully synced: {already_synced}")
-        print(f"To sync: {len(to_sync)}")
-
-        if not to_sync:
-            print("All funds already synced! Nothing to do. Use --force to re-sync.")
-            return
-
-        semaphore = asyncio.Semaphore(args.concurrency)
-        success_count = 0
-        fail_count = 0
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--disable-blink-features=AutomationControlled"]
-            )
-
-            async def sync_one(idx, total, code, name, cat, url):
-                nonlocal success_count, fail_count
-                async with semaphore:
-                    print(f"[{idx}/{total}] Syncing {code}: {name} from {url}...", flush=True)
-                    try:
-                        res = await asyncio.wait_for(
-                            scrape_vro_fund(url, browser=browser),
-                            timeout=50.0
-                        )
-                        has_data = bool(
-                            res.get("risk") or 
-                            res.get("returns") or 
-                            (res.get("portfolio") and (
-                                res["portfolio"].get("topHoldings") or 
-                                res["portfolio"].get("sectors") or 
-                                res["portfolio"].get("marketCap")
-                            ))
-                        )
-                        if has_data:
-                            save_vro_analytics(
-                                scheme_code=code,
-                                scheme_name=name,
-                                category_name=cat,
-                                vro_url=url,
-                                risk_data=res.get("risk"),
-                                returns_data=res.get("returns"),
-                                portfolio_data=res.get("portfolio")
-                            )
-                            sectors_n = len(res.get("portfolio", {}).get("sectors", []))
-                            holdings_n = len(res.get("portfolio", {}).get("topHoldings", []))
-                            print(f"  [✓] SUCCESS {code}: Sectors={sectors_n}, TopHoldings={holdings_n}", flush=True)
-                            success_count += 1
-                        else:
-                            print(f"  [!] NO DATA for {code}", flush=True)
-                            fail_count += 1
-                    except Exception as e:
-                        print(f"  [✗] ERROR syncing {code}: {e}", flush=True)
-                        fail_count += 1
-
-            tasks = [sync_one(i+1, len(to_sync), c, n, cat, u) for i, (c, n, cat, u) in enumerate(to_sync)]
-            await asyncio.gather(*tasks)
-            await browser.close()
-
-        print("\n" + "="*60)
-        print("VRO Batch Sync Completed!")
-        print(f"Successfully Synced & Saved: {success_count}")
-        print(f"Failed: {fail_count}")
-        print(f"Already had data: {already_synced}")
-        print(f"Total: {len(rows)}")
-        print("="*60)
+    if not schemes_to_scrape:
+        print(f"  {CLR_YELLOW}No matching mutual fund schemes found to sync.{CLR_RESET}")
         return
 
-    if not args.scheme_code:
-        parser.error("Either --scheme-code or --sync-all must be provided")
+    # 2. Scrape Schemes
+    log_section(f"2. SYNCING VRO ANALYTICS & PORTFOLIO BREAKDOWN ({total_schemes} Schemes)")
 
-    clean_code = args.scheme_code.replace("w_", "").replace("sold_", "").strip()
-    scheme_meta = get_watchlist_scheme_meta(clean_code)
-    
-    # Fallback to MFAPI if scheme_meta is missing
-    if not scheme_meta or not scheme_meta.get("schemeName"):
-        try:
-            import urllib.request
-            req = urllib.request.Request(f"https://api.mfapi.in/mf/{clean_code}", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = json.loads(resp.read().decode())
-                if data and "meta" in data:
-                    scheme_meta = {
-                        "schemeCode": clean_code,
-                        "schemeName": data["meta"].get("scheme_name"),
-                        "category": data["meta"].get("scheme_category"),
-                        "vroUrl": None,
-                    }
-        except Exception:
-            pass
-
-    scheme_name = scheme_meta["schemeName"] if scheme_meta else f"Scheme {clean_code}"
-    category_name = scheme_meta.get("category") if scheme_meta else ""
-    vro_url = args.vro_url or (scheme_meta.get("vroUrl") if scheme_meta else None)
+    stats = {
+        "processed": 0,
+        "updated": 0,
+        "fresh": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+    lock = asyncio.Lock()
+    queue = asyncio.Queue()
+    for s in schemes_to_scrape:
+        await queue.put(s)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
             args=["--disable-blink-features=AutomationControlled"]
         )
-
-        if not vro_url:
-            print(f"No VRO URL provided for {clean_code} ('{scheme_name}'). Attempting auto-discovery...", file=sys.stderr)
-            vro_url = await auto_discover_vro_url(browser, scheme_name)
-            if not vro_url:
-                await browser.close()
-                print(json.dumps({
-                    "success": False,
-                    "error": f"Could not auto-discover Value Research Online URL for '{scheme_name}'."
-                }))
-                sys.exit(1)
-            
-            # Immediately persist discovered VRO URL
-            print(f"Auto-discovered VRO URL for {clean_code}: {vro_url}. Saving to database...", file=sys.stderr)
-            save_vro_url(clean_code, vro_url)
-
-        print(f"Scraping Value Research Online for {clean_code} from {vro_url}...", file=sys.stderr)
-        result = await scrape_vro_fund(vro_url, browser=browser)
+        semaphore = asyncio.Semaphore(args.concurrency)
+        tasks = [
+            asyncio.create_task(vro_worker(queue, browser, semaphore, stats, total_schemes, lock, force=args.force))
+            for _ in range(args.concurrency)
+        ]
+        await queue.join()
+        for t in tasks:
+            t.cancel()
         await browser.close()
 
-    has_data = bool(
-        result.get("risk") or 
-        result.get("returns") or 
-        (result.get("portfolio") and (
-            result["portfolio"].get("topHoldings") or 
-            result["portfolio"].get("sectors") or 
-            result["portfolio"].get("marketCap")
-        ))
-    )
+    elapsed = time.time() - start_time
 
-    if has_data:
-        # Save to PostgreSQL
-        save_vro_analytics(
-            scheme_code=clean_code,
-            scheme_name=scheme_name,
-            category_name=category_name,
-            vro_url=vro_url,
-            risk_data=result.get("risk"),
-            returns_data=result.get("returns"),
-            portfolio_data=result.get("portfolio")
-        )
-    elif vro_url:
-        save_vro_url(clean_code, vro_url)
-
-    output = {
-        "success": True,
-        "schemeCode": clean_code,
-        "vroUrl": vro_url,
-        "vroRisk": result.get("risk"),
-        "vroReturns": result.get("returns"),
-        "vroPortfolio": result.get("portfolio") or {"sectors": [], "topHoldings": [], "asOfDate": None}
-    }
-    print(json.dumps(output))
+    # 3. Summary Report
+    log_header("VALUE RESEARCH ONLINE (VRO) SYNC SUMMARY REPORT")
+    print(f"  * Total Schemes Queried:    {CLR_BOLD}{total_schemes}{CLR_RESET} schemes")
+    print(f"  * Successfully Scraped:     {CLR_GREEN}{stats['updated']} saved to DB{CLR_RESET}")
+    print(f"  * Already Fresh (<24h):     {CLR_CYAN}{stats['fresh']} unchanged (use --force to re-sync){CLR_RESET}")
+    print(f"  * Skipped (ULIP / Non-MF):  {CLR_YELLOW}{stats['skipped']} skipped{CLR_RESET}")
+    print(f"  * Failed / Page Error:      {CLR_RED if stats['failed'] > 0 else CLR_RESET}{stats['failed']} failed{CLR_RESET}")
+    print(f"  * Total Execution Time:     {CLR_BOLD}{elapsed:.2f} seconds{CLR_RESET}")
+    print(f"  * Final Status:             {CLR_BOLD}{CLR_GREEN}COMPLETED SUCCESSFULLY{CLR_RESET}\n")
 
 if __name__ == "__main__":
     asyncio.run(main())

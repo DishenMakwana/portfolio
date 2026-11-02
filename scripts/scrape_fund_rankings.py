@@ -747,7 +747,7 @@ async def main():
     args = parser.parse_args()
 
     start_time = time.time()
-    log_header("MUTUAL FUND MARKET CAP & RANKINGS SYNC")
+    log_header("MUTUAL FUND RETURNS & RANKINGS SYNC ENGINE (GROWW)")
 
     # 1. Discover Schemes
     log_section("1. DISCOVERING MUTUAL FUND SCHEMES")
@@ -810,36 +810,6 @@ async def main():
                 rows = cur.fetchall()
                 for r in rows:
                     schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
-        elif args.active_only:
-            # Query active mutual fund schemes across the latest valuation report of all family members,
-            # combined with all active Zerodha mutual funds
-            cur.execute("""
-                WITH latest_family_reports AS (
-                    SELECT DISTINCT ON (h.member_id) r.id
-                    FROM portfolio.reports r
-                    JOIN portfolio.holdings_snapshot h ON h.report_id = r.id
-                    ORDER BY h.member_id, r.as_of_date DESC
-                )
-                SELECT DISTINCT s.scheme_code_api, s.name, s.category, r.groww_slug
-                FROM portfolio.holdings_snapshot h
-                JOIN latest_family_reports lfr ON h.report_id = lfr.id
-                JOIN portfolio.schemes s ON h.scheme_id = s.id
-                LEFT JOIN portfolio.scheme_category_rankings r ON s.scheme_code_api = r.scheme_code
-                WHERE (h.balance_units > 0.0001 OR h.current_value > 0)
-                  AND s.scheme_code_api ~ '^[0-9]{5,6}$'
-                UNION
-                SELECT DISTINCT zs.scheme_code_api, zs.name, zs.category, r.groww_slug
-                FROM portfolio.zerodha_holdings zh
-                JOIN portfolio.zerodha_schemes zs ON zh.scheme_id = zs.id
-                LEFT JOIN portfolio.scheme_category_rankings r ON zs.scheme_code_api = r.scheme_code
-                WHERE zh.quantity > 0.0001
-                  AND zs.holding_type = 'mutual_fund'
-                  AND zs.scheme_code_api ~ '^[0-9]{5,6}$'
-                ORDER BY category, name;
-            """)
-            rows = cur.fetchall()
-            for r in rows:
-                schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
         elif args.category:
             category_filter = f"%{args.category}%"
             cur.execute("""
@@ -854,17 +824,36 @@ async def main():
                 if r[0]:
                     schemes_to_scrape.append({"schemeCode": r[0], "schemeName": r[1], "category": r[2], "dbSlug": r[3]})
         else:
-            # Fetch ALL numeric mutual fund schemes across all folios
+            # Default or --active-only:
+            # Query active mutual fund schemes across the latest valuation report of all family members,
+            # combined with all active Zerodha mutual funds from the latest client reports
             cur.execute("""
+                WITH latest_family_reports AS (
+                    SELECT DISTINCT ON (h.member_id) r.id
+                    FROM portfolio.reports r
+                    JOIN portfolio.holdings_snapshot h ON h.report_id = r.id
+                    ORDER BY h.member_id, r.as_of_date DESC
+                ),
+                latest_zerodha_reports AS (
+                    SELECT DISTINCT ON (client_id) id
+                    FROM portfolio.zerodha_reports
+                    ORDER BY client_id, as_of_date DESC
+                )
                 SELECT DISTINCT s.scheme_code_api, s.name, s.category, r.groww_slug
-                FROM portfolio.schemes s
+                FROM portfolio.holdings_snapshot h
+                JOIN latest_family_reports lfr ON h.report_id = lfr.id
+                JOIN portfolio.schemes s ON h.scheme_id = s.id
                 LEFT JOIN portfolio.scheme_category_rankings r ON s.scheme_code_api = r.scheme_code
-                WHERE s.scheme_code_api ~ '^[0-9]{5,6}$'
+                WHERE (h.balance_units > 0.0001 OR h.current_value > 0)
+                  AND s.scheme_code_api ~ '^[0-9]{5,6}$'
                 UNION
                 SELECT DISTINCT zs.scheme_code_api, zs.name, zs.category, r.groww_slug
-                FROM portfolio.zerodha_schemes zs
+                FROM portfolio.zerodha_holdings zh
+                JOIN latest_zerodha_reports lzr ON zh.report_id = lzr.id
+                JOIN portfolio.zerodha_schemes zs ON zh.scheme_id = zs.id
                 LEFT JOIN portfolio.scheme_category_rankings r ON zs.scheme_code_api = r.scheme_code
-                WHERE zs.scheme_code_api ~ '^[0-9]{5,6}$'
+                WHERE zh.quantity > 0.0001
+                  AND (zs.holding_type = 'mutual_fund' OR zs.scheme_code_api ~ '^[0-9]{5,6}$')
                 ORDER BY category, name;
             """)
             rows = cur.fetchall()

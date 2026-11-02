@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Python script to backfill full historical daily prices from inception for all START_GAP stocks.
+Python script to backfill full historical daily prices from inception for all stocks & ETFs.
+Discovers instruments dynamically across Zerodha, MSFL, and Watchlist tables.
 """
 
 import os
@@ -13,36 +14,6 @@ from psycopg2.extras import execute_values
 
 BATCH_CHUNK_SIZE = 500
 INTER_REQUEST_DELAY_SEC = 0.2
-
-START_GAP_STOCKS = [
-    # Zerodha
-    {"source": "zerodha", "ticker": "IDFCFIRSTB.NS", "name": "IDFCFIRSTB"},
-    {"source": "zerodha", "ticker": "PNB.NS", "name": "PNB"},
-    {"source": "zerodha", "ticker": "RELIANCE.NS", "name": "RELIANCE"},
-    {"source": "zerodha", "ticker": "NHPC.NS", "name": "NHPC"},
-    {"source": "zerodha", "ticker": "NTPC.NS", "name": "NTPC"},
-    {"source": "zerodha", "ticker": "TMPV.NS", "name": "TMPV"},
-    {"source": "zerodha", "ticker": "ONGC.NS", "name": "ONGC"},
-
-    # MSFL
-    {"source": "msfl", "ticker": "ASHOKLEY.NS", "name": "ASHOKLEY"},
-    {"source": "msfl", "ticker": "GUJENERGY.NS", "name": "GUJENERGY"},
-    {"source": "msfl", "ticker": "HOCL.BO", "name": "HOCL"},
-    {"source": "msfl", "ticker": "JSWSTEEL.NS", "name": "JSWSTEEL"},
-    {"source": "msfl", "ticker": "NHPC.NS", "name": "NHPC"},
-    {"source": "msfl", "ticker": "NTPC.NS", "name": "NTPC"},
-    {"source": "msfl", "ticker": "RELIANCE.NS", "name": "RELIANCE"},
-    {"source": "msfl", "ticker": "RPOWER.NS", "name": "RPOWER"},
-    {"source": "msfl", "ticker": "TTML.NS", "name": "TTML"},
-    {"source": "msfl", "ticker": "BIBCL.BO", "name": "BIBCL"},
-    {"source": "msfl", "ticker": "GVFILM.BO", "name": "GVFILM"},
-    {"source": "msfl", "ticker": "KOHINOOR.NS", "name": "KOHINOOR"},
-
-    # Watchlist
-    {"source": "watchlist", "ticker": "WELCORP.NS", "name": "WELSPUN CORP LIMITED"},
-    {"source": "watchlist", "ticker": "KIRLOSENG.NS", "name": "KIRLOSKAR OIL ENG LTD"},
-    {"source": "watchlist", "ticker": "WELSPUNLIV.NS", "name": "WELSPUN LIVING LIMITED"},
-]
 
 def get_db_connection():
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -62,13 +33,52 @@ def get_db_connection():
     base_url = db_url.split("?")[0]
     return psycopg2.connect(base_url)
 
+def get_all_stocks(conn):
+    items = []
+    seen = set()
+    with conn.cursor() as cur:
+        # Zerodha
+        cur.execute("""
+            SELECT name, scheme_code_api 
+            FROM portfolio.zerodha_schemes 
+            WHERE scheme_code_api ~ '^[A-Za-z]' OR (isin IS NOT NULL AND isin NOT LIKE 'INF%');
+        """)
+        for name, ticker in cur.fetchall():
+            if ticker and ("zerodha", ticker) not in seen:
+                seen.add(("zerodha", ticker))
+                items.append({"source": "zerodha", "ticker": ticker, "name": name or ticker})
+
+        # MSFL
+        cur.execute("""
+            SELECT name, scheme_code_api 
+            FROM portfolio.msfl_schemes 
+            WHERE scheme_code_api ~ '^[A-Za-z]' OR (isin IS NOT NULL AND isin NOT LIKE 'INF%');
+        """)
+        for name, ticker in cur.fetchall():
+            if ticker and ("msfl", ticker) not in seen:
+                seen.add(("msfl", ticker))
+                items.append({"source": "msfl", "ticker": ticker, "name": name or ticker})
+
+        # Watchlist
+        cur.execute("""
+            SELECT scheme_name, scheme_code 
+            FROM portfolio.watchlist_schemes 
+            WHERE instrument_type IN ('STOCK', 'ETF') OR scheme_code ~ '^[A-Za-z]';
+        """)
+        for name, ticker in cur.fetchall():
+            if ticker and ("watchlist", ticker) not in seen:
+                seen.add(("watchlist", ticker))
+                items.append({"source": "watchlist", "ticker": ticker, "name": name or ticker})
+
+    return items
+
 def format_ist_date(ts_sec):
     dt = datetime.fromtimestamp(ts_sec, tz=timezone.utc)
     return dt.strftime("%d-%m-%Y")
 
-def fetch_yahoo_stock_history(ticker):
+def fetch_yahoo_stock_history_for_ticker(target_ticker):
     now_sec = int(time.time())
-    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?period1=0&period2={now_sec}&interval=1d"
+    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{target_ticker}?period1=0&period2={now_sec}&interval=1d"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json",
@@ -107,6 +117,17 @@ def fetch_yahoo_stock_history(ticker):
             time.sleep(1.0)
     return None
 
+def fetch_yahoo_stock_history(ticker):
+    tickers_to_try = [ticker]
+    if "." not in ticker and not ticker.startswith("^"):
+        tickers_to_try = [f"{ticker}.NS", f"{ticker}.BO"]
+
+    for t in tickers_to_try:
+        rows = fetch_yahoo_stock_history_for_ticker(t)
+        if rows and len(rows) > 0:
+            return rows
+    return None
+
 def backfill_stock(conn, item):
     source = item["source"]
     ticker = item["ticker"]
@@ -116,7 +137,7 @@ def backfill_stock(conn, item):
     history_rows = fetch_yahoo_stock_history(ticker)
 
     if not history_rows:
-        return {"success": False, "points": 0, "error": "No data from Yahoo Finance"}
+        return {"success": False, "points": 0, "error": "No data from Yahoo Finance (possibly unlisted or inactive)"}
 
     # Sort ascending for earliest date
     sorted_asc = sorted(history_rows, key=lambda x: datetime.strptime(x["date"], "%d-%m-%Y"))
@@ -198,7 +219,7 @@ def backfill_stock(conn, item):
 
 def main():
     print("=========================================================================")
-    print("       BACKFILLING START GAP HISTORICAL NAVS FOR 22 STOCKS (PYTHON)      ")
+    print("       BACKFILLING FULL HISTORICAL NAVS FROM INCEPTION (PYTHON)          ")
     print("=========================================================================")
 
     conn = get_db_connection()
@@ -207,7 +228,10 @@ def main():
     total_rows = 0
 
     try:
-        for idx, item in enumerate(START_GAP_STOCKS):
+        stocks = get_all_stocks(conn)
+        print(f"Discovered {len(stocks)} stocks/ETFs across Zerodha, MSFL & Watchlist.\n")
+
+        for idx, item in enumerate(stocks):
             if idx > 0:
                 time.sleep(INTER_REQUEST_DELAY_SEC)
 
@@ -217,12 +241,12 @@ def main():
                     success_count += 1
                     total_rows += res["points"]
                     print(
-                        f"  \033[32m✔ [{idx + 1}/{len(START_GAP_STOCKS)}] Success: {item['ticker']} -> {res['points']} points [{res['earliest_date']} .. {res['latest_date']}]\033[0m"
+                        f"  \033[32m✔ [{idx + 1}/{len(stocks)}] Success: {item['ticker']} -> {res['points']} points [{res['earliest_date']} .. {res['latest_date']}]\033[0m"
                     )
                 else:
                     fail_count += 1
                     print(
-                        f"  \033[31m✖ [{idx + 1}/{len(START_GAP_STOCKS)}] Failed: {item['ticker']} ({res.get('error')})\033[0m"
+                        f"  \033[33m⚠ [{idx + 1}/{len(stocks)}] Skipped: {item['ticker']} ({res.get('error')})\033[0m"
                     )
             except Exception as e:
                 fail_count += 1
@@ -232,8 +256,8 @@ def main():
         print("\n=========================================================================")
         print("                          BACKFILL COMPLETE                              ")
         print("=========================================================================")
-        print(f" Successfully Backfilled: {success_count}/{len(START_GAP_STOCKS)}")
-        print(f" Failed:                  {fail_count}")
+        print(f" Successfully Backfilled: {success_count}/{len(stocks)}")
+        print(f" Skipped / Failed:        {fail_count}")
         print(f" Total NAV Rows Upserted: {total_rows:,}")
         print("=========================================================================\n")
 
