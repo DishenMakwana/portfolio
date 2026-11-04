@@ -267,6 +267,34 @@
       "when": 1793270001168,
       "tag": "0037_strange_tomas",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793602716805,
+      "tag": "0038_tired_leopardon",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793607701075,
+      "tag": "0039_parched_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793618620146,
+      "tag": "0040_gray_charles_xavier",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793632778234,
+      "tag": "0041_real_captain_britain",
+      "breakpoints": true
     }
   ]
 }

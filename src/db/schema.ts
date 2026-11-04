@@ -4,6 +4,7 @@ import {
   text,
   integer,
   doublePrecision,
+  boolean,
   unique,
   index,
   timestamp,
@@ -157,6 +158,19 @@ export const holdingsSnapshot = mySchema.table(
       table.schemeId
     ),
     index("holdings_snapshot_folio_no_idx").on(table.folioNo),
+    index("holdings_snapshot_report_val_idx").on(
+      table.reportId,
+      table.currentValue
+    ),
+    index("holdings_snapshot_report_scheme_idx").on(
+      table.reportId,
+      table.schemeId
+    ),
+    index("holdings_snapshot_folio_report_id_idx").on(
+      table.folioNo,
+      table.reportId,
+      table.id
+    ),
   ]
 );
 
@@ -192,6 +206,11 @@ export const transactions = mySchema.table(
     index("transactions_txn_type_idx").on(table.transactionType),
     index("transactions_folio_no_idx").on(table.folioNo),
     index("transactions_scheme_date_idx").on(table.schemeId, table.date),
+    index("transactions_scheme_date_id_idx").on(
+      table.schemeId,
+      table.date,
+      table.id
+    ),
     index("transactions_member_date_idx").on(table.memberId, table.date),
     index("transactions_holding_lookup_idx").on(
       table.memberId,
@@ -199,6 +218,12 @@ export const transactions = mySchema.table(
       table.folioNo,
       table.type
     ),
+    index("transactions_folio_date_id_idx").on(
+      table.folioNo,
+      table.date,
+      table.id
+    ),
+    index("transactions_date_id_idx").on(table.date, table.id),
   ]
 );
 
@@ -287,6 +312,11 @@ export const schemeNavHistory = mySchema.table(
   (table) => [
     unique("scheme_nav_history_code_date_uq").on(table.schemeCode, table.date),
     index("scheme_nav_history_scheme_code_idx").on(table.schemeCode),
+    index("scheme_nav_history_code_date_nav_idx").on(
+      table.schemeCode,
+      table.date,
+      table.nav
+    ),
   ]
 );
 
@@ -470,6 +500,11 @@ export const zerodhaSchemeNavHistory = mySchema.table(
       table.date
     ),
     index("zerodha_scheme_nav_history_scheme_code_idx").on(table.schemeCode),
+    index("zerodha_nav_history_code_date_nav_idx").on(
+      table.schemeCode,
+      table.date,
+      table.nav
+    ),
   ]
 );
 
@@ -555,6 +590,11 @@ export const benchmarkNavHistory = mySchema.table(
       table.date
     ),
     index("benchmark_nav_history_benchmark_code_idx").on(table.benchmarkCode),
+    index("benchmark_nav_history_code_date_nav_idx").on(
+      table.benchmarkCode,
+      table.date,
+      table.nav
+    ),
   ]
 );
 
@@ -603,6 +643,10 @@ export const msflHoldings = mySchema.table(
     index("msfl_holdings_report_id_idx").on(table.reportId),
     index("msfl_holdings_scheme_id_idx").on(table.schemeId),
     index("msfl_holdings_report_scheme_idx").on(table.reportId, table.schemeId),
+    index("msfl_holdings_trading_status_idx").on(
+      table.tradingStatus,
+      table.schemeId
+    ),
   ]
 );
 
@@ -675,6 +719,11 @@ export const msflSchemeNavHistory = mySchema.table(
       table.date
     ),
     index("msfl_scheme_nav_history_scheme_code_idx").on(table.schemeCode),
+    index("msfl_nav_history_code_date_nav_idx").on(
+      table.schemeCode,
+      table.date,
+      table.nav
+    ),
   ]
 );
 
@@ -855,6 +904,7 @@ export const watchlistSchemes = mySchema.table(
     targetNav: doublePrecision("target_nav"),
     notes: text("notes"),
     tags: text("tags"),
+    isPinned: integer("is_pinned").default(0).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -916,6 +966,11 @@ export const watchlistSchemeNavHistory = mySchema.table(
     ),
     index("watchlist_scheme_nav_history_code_idx").on(table.schemeCode),
     index("watchlist_scheme_nav_history_date_idx").on(table.date),
+    index("watchlist_nav_history_code_date_nav_idx").on(
+      table.schemeCode,
+      table.date,
+      table.nav
+    ),
   ]
 );
 
@@ -946,4 +1001,210 @@ export const watchlistFundAnalytics = mySchema.table(
       .notNull(),
   },
   (table) => [index("watchlist_fund_analytics_code_idx").on(table.schemeCode)]
+);
+
+export const ipoRecords = mySchema.table(
+  "ipo_records",
+  {
+    id: serial("id").primaryKey(),
+    broker: text("broker").notNull(), // 'Zerodha' | 'MSFL'
+    memberName: text("member_name").notNull(), // 'Dishen' | 'Rupalben'
+    memberId: integer("member_id"),
+    ipoName: text("ipo_name").notNull(),
+    symbol: text("symbol"),
+    applicationDate: text("application_date"),
+    allotmentDate: text("allotment_date"),
+    listingDate: text("listing_date"),
+    issuePrice: doublePrecision("issue_price").notNull(),
+    allottedQty: integer("allotted_qty").notNull(),
+    totalInvested: doublePrecision("total_invested").notNull(),
+    totalSoldQty: integer("total_sold_qty").notNull(),
+    grossSellAmount: doublePrecision("gross_sell_amount").notNull(),
+    avgSellPrice: doublePrecision("avg_sell_price").notNull(),
+    brokerCharges: doublePrecision("broker_charges").default(0).notNull(),
+    netBankCredit: doublePrecision("net_bank_credit").notNull(),
+    netProfit: doublePrecision("net_profit").notNull(),
+    returnPct: doublePrecision("return_pct").notNull(),
+    status: text("status").default("SOLD").notNull(), // 'SOLD' | 'PARTIAL' | 'HOLDING'
+    notes: text("notes"),
+    sourceFile: text("source_file"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("ipo_records_broker_idx").on(table.broker),
+    index("ipo_records_member_idx").on(table.memberName),
+    index("ipo_records_name_idx").on(table.ipoName),
+    index("ipo_records_profit_id_idx").on(table.netProfit, table.id),
+    index("ipo_records_status_profit_idx").on(table.status, table.netProfit),
+    index("ipo_records_member_id_idx").on(table.memberId),
+  ]
+);
+
+export const ipoSellTrades = mySchema.table(
+  "ipo_sell_trades",
+  {
+    id: serial("id").primaryKey(),
+    ipoRecordId: integer("ipo_record_id")
+      .references(() => ipoRecords.id, { onDelete: "cascade" })
+      .notNull(),
+    sellPrice: doublePrecision("sell_price").notNull(),
+    sellQty: integer("sell_qty").notNull(),
+    sellAmount: doublePrecision("sell_amount").notNull(),
+    tradeDate: text("trade_date"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("ipo_sell_trades_record_idx").on(table.ipoRecordId),
+    index("ipo_sell_trades_record_id_idx").on(table.ipoRecordId, table.id),
+  ]
+);
+
+export const depositPersons = mySchema.table("deposit_persons", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const depositBanks = mySchema.table("deposit_banks", {
+  id: serial("id").primaryKey(),
+  bankName: text("bank_name").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const depositPersonBankAccounts = mySchema.table(
+  "deposit_person_bank_accounts",
+  {
+    id: serial("id").primaryKey(),
+    personId: integer("person_id")
+      .references(() => depositPersons.id, { onDelete: "cascade" })
+      .notNull(),
+    bankId: integer("bank_id")
+      .references(() => depositBanks.id, { onDelete: "restrict" })
+      .notNull(),
+    accountIdentifier: text("account_identifier").default("Default").notNull(),
+    accountNumber: text("account_number"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("person_bank_account_unique").on(
+      table.personId,
+      table.bankId,
+      table.accountIdentifier
+    ),
+    index("deposit_account_person_idx").on(table.personId),
+    index("deposit_account_bank_idx").on(table.bankId),
+    index("deposit_account_active_person_idx").on(
+      table.isActive,
+      table.personId,
+      table.bankId
+    ),
+  ]
+);
+
+export const depositPersonAnnualLimits = mySchema.table(
+  "deposit_person_annual_limits",
+  {
+    id: serial("id").primaryKey(),
+    personId: integer("person_id")
+      .references(() => depositPersons.id, { onDelete: "cascade" })
+      .notNull(),
+    financialYear: text("financial_year").notNull(), // e.g. "2026-27", "2027-28"
+    annualTargetLimit: doublePrecision("annual_target_limit")
+      .default(0)
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("person_fy_annual_limit_unique").on(
+      table.personId,
+      table.financialYear
+    ),
+    index("deposit_annual_person_idx").on(table.personId),
+    index("deposit_annual_fy_idx").on(table.financialYear),
+  ]
+);
+
+export const depositMonthlyLimits = mySchema.table(
+  "deposit_monthly_limits",
+  {
+    id: serial("id").primaryKey(),
+    personBankAccountId: integer("person_bank_account_id")
+      .references(() => depositPersonBankAccounts.id, { onDelete: "cascade" })
+      .notNull(),
+    financialYear: text("financial_year").notNull(), // e.g. "2026-27", "2027-28"
+    month: integer("month").notNull(), // 1 to 12
+    monthlyLimit: doublePrecision("monthly_limit").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("person_account_fy_month_unique").on(
+      table.personBankAccountId,
+      table.financialYear,
+      table.month
+    ),
+    index("deposit_limit_account_idx").on(table.personBankAccountId),
+    index("deposit_limit_fy_month_idx").on(table.financialYear, table.month),
+  ]
+);
+
+export const bankDeposits = mySchema.table(
+  "bank_deposits",
+  {
+    id: serial("id").primaryKey(),
+    personBankAccountId: integer("person_bank_account_id")
+      .references(() => depositPersonBankAccounts.id, { onDelete: "restrict" })
+      .notNull(),
+    depositDate: text("deposit_date").notNull(), // "YYYY-MM-DD"
+    financialYear: text("financial_year").notNull(), // e.g. "2026-27"
+    month: integer("month").notNull(), // 1 to 12
+    amount: doublePrecision("amount").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("bank_deposits_account_idx").on(table.personBankAccountId),
+    index("bank_deposits_date_idx").on(table.depositDate),
+    index("bank_deposits_fy_month_idx").on(table.financialYear, table.month),
+    index("bank_deposits_fy_date_id_idx").on(
+      table.financialYear,
+      table.depositDate,
+      table.id
+    ),
+    index("bank_deposits_fy_account_month_idx").on(
+      table.financialYear,
+      table.personBankAccountId,
+      table.month
+    ),
+  ]
 );
