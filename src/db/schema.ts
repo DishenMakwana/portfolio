@@ -1208,3 +1208,25 @@ export const bankDeposits = mySchema.table(
     ),
   ]
 );
+
+export const unlistedInstruments = mySchema.table(
+  "unlisted_instruments",
+  {
+    id: serial("id").primaryKey(),
+    symbol: text("symbol").notNull().unique(),
+    isin: text("isin"),
+    companyName: text("company_name"),
+    reason: text("reason").notNull().default("DELISTED"),
+    lastKnownPrice: doublePrecision("last_known_price").default(0),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("unlisted_instruments_symbol_idx").on(table.symbol),
+    index("unlisted_instruments_isin_idx").on(table.isin),
+  ]
+);
