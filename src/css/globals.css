@@ -1,0 +1,502 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   1. TAILWIND CSS IMPORTS & CONFIGURATION
+   ========================================================================== */
+
+/* ==========================================================================
+   2. THEME VARIABLES & DESIGN TOKENS
+   ========================================================================== */
+:root {
+  --background: #121212; /* Soft Dark Charcoal Gray */
+  --foreground: #f8fafc; /* slate-50 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+
+  /* Redefine slate palette to soft neutral charcoal grays */
+  --color-slate-50: #f9f9f9;
+  --color-slate-100: #f0f0f0;
+  --color-slate-200: #e5e5e5;
+  --color-slate-300: #d0d0d0;
+  --color-slate-400: #a8a8a8;
+  --color-slate-500: #787878;
+  --color-slate-600: #505050;
+  --color-slate-700: #383838;
+  --color-slate-800: #282828; /* Soft charcoal border */
+  --color-slate-850: #222222;
+  --color-slate-900: #1c1c1c; /* Soft Charcoal Card surface */
+  --color-slate-950: #121212; /* Soft Charcoal Background */
+
+  /* Redefine teal palette to high-vibrancy Neon Emerald/Mint Green */
+  --color-teal-50: #e6fcf5;
+  --color-teal-100: #c3fae8;
+  --color-teal-200: #96f2d7;
+  --color-teal-300: #63e6be;
+  --color-teal-400: #34d399; /* Mint highlight */
+  --color-teal-500: #10b981; /* Neon Emerald brand accent */
+  --color-teal-600: #059669; /* Hover Emerald */
+  --color-teal-700: #047857;
+  --color-teal-800: #065f46;
+  --color-teal-900: #064e3b;
+  --color-teal-950: #022c22;
+}
+
+/* ==========================================================================
+   3. CSS RESET & GLOBAL DEFAULTS
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Remove default outline/focus-ring on Recharts components and SVGs when clicked */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-wrapper:focus,
+svg:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   4. TYPOGRAPHY & FONT DEFINITIONS
+   ========================================================================== */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   5. GLOBAL HTML & BODY STYLES
+   ========================================================================== */
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans), var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   6. BASE ELEMENT STYLES
+   ========================================================================== */
+::selection {
+  background-color: rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
+/* ==========================================================================
+   7. REUSABLE LAYOUT CLASSES
+   ========================================================================== */
+.dashboard-page-container {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.5rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .dashboard-page-container {
+    padding: 2rem 1.5rem;
+  }
+}
+
+/* ==========================================================================
+   8. REUSABLE COMPONENT CLASSES
+   ========================================================================== */
+.card-glass {
+  background-color: rgba(28, 28, 28, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(40, 40, 40, 0.85);
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+.card-glass-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-glass-hover:hover {
+  border-color: rgba(60, 60, 60, 0.85);
+  transform: translateY(-1px);
+}
+
+/* Category Hero Ambient Glows */
+.glow-large {
+  background-color: #0284c7; /* sky-600 */
+}
+
+.glow-mid {
+  background-color: #10b981; /* emerald-500 */
+}
+
+.glow-small {
+  background-color: #f59e0b; /* amber-500 */
+}
+
+/* ==========================================================================
+   9. FORM & INPUT STYLES
+   ========================================================================== */
+.app-select {
+  appearance: none;
+  background-color: rgba(18, 18, 18, 0.8);
+  border: 1px solid rgba(40, 40, 40, 0.9);
+  color: #f0f0f0;
+  border-radius: 0.75rem;
+  padding: 0.5rem 2.25rem 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.app-select:focus {
+  border-color: #10b981;
+}
+
+/* ==========================================================================
+   10. BUTTON & INTERACTIVE STYLES
+   ========================================================================== */
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.375rem 0.875rem;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+/* ==========================================================================
+   11. NAVIGATION & MENU STYLES
+   ========================================================================== */
+.nav-tab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+/* ==========================================================================
+   12. CARD, MODAL, DROPDOWN & DIALOG STYLES
+   ========================================================================== */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ==========================================================================
+   13. UTILITY & HELPER CLASSES
+   ========================================================================== */
+/* SVG Text Anchor Alignment */
+.text-anchor-middle {
+  text-anchor: middle;
+}
+
+.text-anchor-start {
+  text-anchor: start;
+}
+
+.text-anchor-end {
+  text-anchor: end;
+}
+
+/* SVG Transform Origin */
+.svg-origin-center {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Chart SVG Badge Drop Shadows */
+.chart-badge-shadow {
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.chart-badge-shadow-sm {
+  filter: drop-shadow(0px 1.5px 3px rgba(0, 0, 0, 0.45));
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(18, 18, 18, 0.6);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 60, 0.8);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(90, 90, 90, 0.9);
+}
+
+/* Sector Color Dots (0 to 9) */
+.sector-dot-0 { background-color: #10b981; }
+.sector-dot-1 { background-color: #3b82f6; }
+.sector-dot-2 { background-color: #8b5cf6; }
+.sector-dot-3 { background-color: #f59e0b; }
+.sector-dot-4 { background-color: #ec4899; }
+.sector-dot-5 { background-color: #06b6d4; }
+.sector-dot-6 { background-color: #6366f1; }
+.sector-dot-7 { background-color: #14b8a6; }
+.sector-dot-8 { background-color: #f97316; }
+.sector-dot-9 { background-color: #64748b; }
+
+/* ==========================================================================
+   14. DYNAMIC DATA-ATTRIBUTE UTILITIES (data-progress, data-position)
+   ========================================================================== */
+[data-progress="0"] { width: 0%; }
+[data-progress="1"] { width: 1%; }
+[data-progress="2"] { width: 2%; }
+[data-progress="3"] { width: 3%; }
+[data-progress="4"] { width: 4%; }
+[data-progress="5"] { width: 5%; }
+[data-progress="6"] { width: 6%; }
+[data-progress="7"] { width: 7%; }
+[data-progress="8"] { width: 8%; }
+[data-progress="9"] { width: 9%; }
+[data-progress="10"] { width: 10%; }
+[data-progress="11"] { width: 11%; }
+[data-progress="12"] { width: 12%; }
+[data-progress="13"] { width: 13%; }
+[data-progress="14"] { width: 14%; }
+[data-progress="15"] { width: 15%; }
+[data-progress="16"] { width: 16%; }
+[data-progress="17"] { width: 17%; }
+[data-progress="18"] { width: 18%; }
+[data-progress="19"] { width: 19%; }
+[data-progress="20"] { width: 20%; }
+[data-progress="21"] { width: 21%; }
+[data-progress="22"] { width: 22%; }
+[data-progress="23"] { width: 23%; }
+[data-progress="24"] { width: 24%; }
+[data-progress="25"] { width: 25%; }
+[data-progress="26"] { width: 26%; }
+[data-progress="27"] { width: 27%; }
+[data-progress="28"] { width: 28%; }
+[data-progress="29"] { width: 29%; }
+[data-progress="30"] { width: 30%; }
+[data-progress="31"] { width: 31%; }
+[data-progress="32"] { width: 32%; }
+[data-progress="33"] { width: 33%; }
+[data-progress="34"] { width: 34%; }
+[data-progress="35"] { width: 35%; }
+[data-progress="36"] { width: 36%; }
+[data-progress="37"] { width: 37%; }
+[data-progress="38"] { width: 38%; }
+[data-progress="39"] { width: 39%; }
+[data-progress="40"] { width: 40%; }
+[data-progress="41"] { width: 41%; }
+[data-progress="42"] { width: 42%; }
+[data-progress="43"] { width: 43%; }
+[data-progress="44"] { width: 44%; }
+[data-progress="45"] { width: 45%; }
+[data-progress="46"] { width: 46%; }
+[data-progress="47"] { width: 47%; }
+[data-progress="48"] { width: 48%; }
+[data-progress="49"] { width: 49%; }
+[data-progress="50"] { width: 50%; }
+[data-progress="51"] { width: 51%; }
+[data-progress="52"] { width: 52%; }
+[data-progress="53"] { width: 53%; }
+[data-progress="54"] { width: 54%; }
+[data-progress="55"] { width: 55%; }
+[data-progress="56"] { width: 56%; }
+[data-progress="57"] { width: 57%; }
+[data-progress="58"] { width: 58%; }
+[data-progress="59"] { width: 59%; }
+[data-progress="60"] { width: 60%; }
+[data-progress="61"] { width: 61%; }
+[data-progress="62"] { width: 62%; }
+[data-progress="63"] { width: 63%; }
+[data-progress="64"] { width: 64%; }
+[data-progress="65"] { width: 65%; }
+[data-progress="66"] { width: 66%; }
+[data-progress="67"] { width: 67%; }
+[data-progress="68"] { width: 68%; }
+[data-progress="69"] { width: 69%; }
+[data-progress="70"] { width: 70%; }
+[data-progress="71"] { width: 71%; }
+[data-progress="72"] { width: 72%; }
+[data-progress="73"] { width: 73%; }
+[data-progress="74"] { width: 74%; }
+[data-progress="75"] { width: 75%; }
+[data-progress="76"] { width: 76%; }
+[data-progress="77"] { width: 77%; }
+[data-progress="78"] { width: 78%; }
+[data-progress="79"] { width: 79%; }
+[data-progress="80"] { width: 80%; }
+[data-progress="81"] { width: 81%; }
+[data-progress="82"] { width: 82%; }
+[data-progress="83"] { width: 83%; }
+[data-progress="84"] { width: 84%; }
+[data-progress="85"] { width: 85%; }
+[data-progress="86"] { width: 86%; }
+[data-progress="87"] { width: 87%; }
+[data-progress="88"] { width: 88%; }
+[data-progress="89"] { width: 89%; }
+[data-progress="90"] { width: 90%; }
+[data-progress="91"] { width: 91%; }
+[data-progress="92"] { width: 92%; }
+[data-progress="93"] { width: 93%; }
+[data-progress="94"] { width: 94%; }
+[data-progress="95"] { width: 95%; }
+[data-progress="96"] { width: 96%; }
+[data-progress="97"] { width: 97%; }
+[data-progress="98"] { width: 98%; }
+[data-progress="99"] { width: 99%; }
+[data-progress="100"] { width: 100%; }
+[data-position="0"] { left: 0%; }
+[data-position="1"] { left: 1%; }
+[data-position="2"] { left: 2%; }
+[data-position="3"] { left: 3%; }
+[data-position="4"] { left: 4%; }
+[data-position="5"] { left: 5%; }
+[data-position="6"] { left: 6%; }
+[data-position="7"] { left: 7%; }
+[data-position="8"] { left: 8%; }
+[data-position="9"] { left: 9%; }
+[data-position="10"] { left: 10%; }
+[data-position="11"] { left: 11%; }
+[data-position="12"] { left: 12%; }
+[data-position="13"] { left: 13%; }
+[data-position="14"] { left: 14%; }
+[data-position="15"] { left: 15%; }
+[data-position="16"] { left: 16%; }
+[data-position="17"] { left: 17%; }
+[data-position="18"] { left: 18%; }
+[data-position="19"] { left: 19%; }
+[data-position="20"] { left: 20%; }
+[data-position="21"] { left: 21%; }
+[data-position="22"] { left: 22%; }
+[data-position="23"] { left: 23%; }
+[data-position="24"] { left: 24%; }
+[data-position="25"] { left: 25%; }
+[data-position="26"] { left: 26%; }
+[data-position="27"] { left: 27%; }
+[data-position="28"] { left: 28%; }
+[data-position="29"] { left: 29%; }
+[data-position="30"] { left: 30%; }
+[data-position="31"] { left: 31%; }
+[data-position="32"] { left: 32%; }
+[data-position="33"] { left: 33%; }
+[data-position="34"] { left: 34%; }
+[data-position="35"] { left: 35%; }
+[data-position="36"] { left: 36%; }
+[data-position="37"] { left: 37%; }
+[data-position="38"] { left: 38%; }
+[data-position="39"] { left: 39%; }
+[data-position="40"] { left: 40%; }
+[data-position="41"] { left: 41%; }
+[data-position="42"] { left: 42%; }
+[data-position="43"] { left: 43%; }
+[data-position="44"] { left: 44%; }
+[data-position="45"] { left: 45%; }
+[data-position="46"] { left: 46%; }
+[data-position="47"] { left: 47%; }
+[data-position="48"] { left: 48%; }
+[data-position="49"] { left: 49%; }
+[data-position="50"] { left: 50%; }
+[data-position="51"] { left: 51%; }
+[data-position="52"] { left: 52%; }
+[data-position="53"] { left: 53%; }
+[data-position="54"] { left: 54%; }
+[data-position="55"] { left: 55%; }
+[data-position="56"] { left: 56%; }
+[data-position="57"] { left: 57%; }
+[data-position="58"] { left: 58%; }
+[data-position="59"] { left: 59%; }
+[data-position="60"] { left: 60%; }
+[data-position="61"] { left: 61%; }
+[data-position="62"] { left: 62%; }
+[data-position="63"] { left: 63%; }
+[data-position="64"] { left: 64%; }
+[data-position="65"] { left: 65%; }
+[data-position="66"] { left: 66%; }
+[data-position="67"] { left: 67%; }
+[data-position="68"] { left: 68%; }
+[data-position="69"] { left: 69%; }
+[data-position="70"] { left: 70%; }
+[data-position="71"] { left: 71%; }
+[data-position="72"] { left: 72%; }
+[data-position="73"] { left: 73%; }
+[data-position="74"] { left: 74%; }
+[data-position="75"] { left: 75%; }
+[data-position="76"] { left: 76%; }
+[data-position="77"] { left: 77%; }
+[data-position="78"] { left: 78%; }
+[data-position="79"] { left: 79%; }
+[data-position="80"] { left: 80%; }
+[data-position="81"] { left: 81%; }
+[data-position="82"] { left: 82%; }
+[data-position="83"] { left: 83%; }
+[data-position="84"] { left: 84%; }
+[data-position="85"] { left: 85%; }
+[data-position="86"] { left: 86%; }
+[data-position="87"] { left: 87%; }
+[data-position="88"] { left: 88%; }
+[data-position="89"] { left: 89%; }
+[data-position="90"] { left: 90%; }
+[data-position="91"] { left: 91%; }
+[data-position="92"] { left: 92%; }
+[data-position="93"] { left: 93%; }
+[data-position="94"] { left: 94%; }
+[data-position="95"] { left: 95%; }
+[data-position="96"] { left: 96%; }
+[data-position="97"] { left: 97%; }
+[data-position="98"] { left: 98%; }
+[data-position="99"] { left: 99%; }
+[data-position="100"] { left: 100%; }
+
+/* ==========================================================================
+   15. ANIMATION & TRANSITION STYLES
+   ========================================================================== */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ==========================================================================
+   16. ACCESSIBILITY & REDUCED MOTION SUPPORT
+   ========================================================================== */
+:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
