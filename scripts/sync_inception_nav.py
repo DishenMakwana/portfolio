@@ -79,6 +79,18 @@ def get_db_connection():
     base_url = db_url.split("?")[0]
     return psycopg2.connect(base_url)
 
+def load_unlisted_stocks(conn):
+    global UNLISTED_STOCKS
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT symbol FROM portfolio.unlisted_instruments;")
+            rows = cur.fetchall()
+            if rows:
+                db_symbols = {r[0].upper().strip() for r in rows if r[0]}
+                UNLISTED_STOCKS.update(db_symbols)
+    except Exception:
+        pass
+
 def is_unlisted_stock(ticker, name=""):
     clean_ticker = (ticker or "").upper().split(".")[0].strip()
     clean_name = (name or "").upper().strip()
@@ -1010,6 +1022,7 @@ def main():
     print(f"Filter: source={args.source}, code={args.code or 'ALL'}, delay={args.delay_ms}ms")
 
     conn = get_db_connection()
+    load_unlisted_stocks(conn)
 
     # 1. Discover all active instruments in portfolio
     log_section("1. Discovering Active Portfolio Instruments")

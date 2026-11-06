@@ -60,7 +60,11 @@ async def scrape_sif_page(page, url: str) -> dict:
         const result = {
             returns: null,
             assetAllocation: null,
-            asOfDate: null
+            asOfDate: null,
+            topHoldings: [],
+            sectorHoldings: [],
+            investmentDetails: {},
+            basicDetails: {}
         };
         
         // Find as of date on page
@@ -75,7 +79,7 @@ async def scrape_sif_page(page, url: str) -> dict:
         for (const t of tables) {
             const headers = Array.from(t.querySelectorAll("th")).map(th => th.innerText.trim());
             const hasHorizon = headers.some(h => /1\s*Day|1\s*Month|3\s*Month|Since\s*Launch/i.test(h));
-            if (hasHorizon) {
+            if (hasHorizon && !result.returns) {
                 const rows = [];
                 const trList = Array.from(t.querySelectorAll("tbody tr, tr")).filter(tr => tr.querySelector("td"));
                 for (const tr of trList) {
@@ -96,7 +100,36 @@ async def scrape_sif_page(page, url: str) -> dict:
                     headers: headers.filter(h => !h.toLowerCase().includes("fund's name") && !h.toLowerCase().includes("fund name")),
                     rows: rows
                 };
-                break;
+            }
+
+            // Top Equity Holdings Table
+            if (headers.includes("Company Name") && headers.includes("% Assets")) {
+                const rows = Array.from(t.querySelectorAll("tbody tr, tr")).filter(r => r.querySelector("td"));
+                result.topHoldings = rows.map(r => {
+                    const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
+                    const pe = parseFloat(cells[2]);
+                    const asset = parseFloat(cells[3]);
+                    return {
+                        companyName: cells[0] || "",
+                        sector: cells[1] || "",
+                        peRatio: isNaN(pe) ? null : pe,
+                        assetPct: isNaN(asset) ? 0 : asset
+                    };
+                }).filter(h => h.companyName.length > 0);
+            }
+
+            // Sector-wise Holdings Table
+            if (headers.includes("Sector") && headers.some(h => h.includes("Fund"))) {
+                const rows = Array.from(t.querySelectorAll("tbody tr, tr")).filter(r => r.querySelector("td"));
+                result.sectorHoldings = rows.map(r => {
+                    const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
+                    const pct = parseFloat(cells[1]);
+                    return {
+                        sector: cells[0] || "",
+                        fundPct: isNaN(pct) ? 0 : pct,
+                        categoryPct: 0
+                    };
+                }).filter(s => s.sector.length > 0);
             }
         }
         
@@ -134,6 +167,27 @@ async def scrape_sif_page(page, url: str) -> dict:
             alloc.rawBreakdown = rawBreakdown;
             result.assetAllocation = alloc;
         }
+
+        // 3. Investment Details & Basic Details sections
+        function extractPairs(headingText) {
+            const h2s = Array.from(document.querySelectorAll("h2, h3, h4"));
+            const h2 = h2s.find(h => h.innerText && h.innerText.includes(headingText));
+            if (!h2 || !h2.parentElement) return {};
+            const container = h2.parentElement;
+            const items = Array.from(container.querySelectorAll(".grid > div"));
+            const res = {};
+            for (const item of items) {
+                const text = item.innerText.trim();
+                const parts = text.split("\n").map(p => p.trim()).filter(Boolean);
+                if (parts.length >= 2) {
+                    res[parts[0]] = parts[1];
+                }
+            }
+            return res;
+        }
+
+        result.investmentDetails = extractPairs("Investment Details");
+        result.basicDetails = extractPairs("Basic Details");
         
         return result;
     }''')
@@ -147,15 +201,23 @@ def save_sif_data(scheme_code: str, scheme_name: str, category_name: str, vro_ur
     
     returns_data = data.get("returns")
     asset_alloc = data.get("assetAllocation")
+    top_holdings = data.get("topHoldings") or []
+    sector_holdings = data.get("sectorHoldings") or []
+    investment_details = data.get("investmentDetails") or {}
+    basic_details = data.get("basicDetails") or {}
     
     returns_json = json.dumps(returns_data) if returns_data else None
     alloc_json = json.dumps(asset_alloc) if asset_alloc else None
-    portfolio_json = json.dumps({
-        "sectors": [],
-        "topHoldings": [],
+    
+    portfolio_payload = {
+        "sectors": sector_holdings,
+        "topHoldings": top_holdings,
+        "investmentDetails": investment_details,
+        "basicDetails": basic_details,
         "assetAllocation": asset_alloc,
         "asOfDate": data.get("asOfDate")
-    }) if asset_alloc else None
+    }
+    portfolio_json = json.dumps(portfolio_payload)
     
     # 1. Upsert watchlist_fund_analytics
     cur.execute("""

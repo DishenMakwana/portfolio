@@ -99,6 +99,18 @@ def get_db_connection():
     base_url = db_url.split("?")[0]
     return psycopg2.connect(base_url)
 
+def load_unlisted_stocks(conn):
+    global UNLISTED_STOCKS
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT symbol FROM portfolio.unlisted_instruments;")
+            rows = cur.fetchall()
+            if rows:
+                db_symbols = {r[0].upper().strip() for r in rows if r[0]}
+                UNLISTED_STOCKS.update(db_symbols)
+    except Exception:
+        pass
+
 def parse_date_to_iso(date_str):
     if not date_str:
         return None
@@ -800,6 +812,7 @@ def main():
 
     start_time = time.time()
     conn = get_db_connection()
+    load_unlisted_stocks(conn)
 
     # 1. Discover Instruments
     log_section("1. DISCOVERING INSTRUMENTS")
