@@ -13,15 +13,17 @@ import AnalysisLinksTableView from "./AnalysisLinksTableView";
 import AnalysisLinksBentoGrid from "./AnalysisLinksBentoGrid";
 import AnalysisLinksEditModal from "./AnalysisLinksEditModal";
 import {
-  createAnalysisLinkAction,
-  updateAnalysisLinkAction,
-  deleteAnalysisLinkAction,
-  togglePinAnalysisLinkAction,
-  scrapeLinkPreviewAction,
-} from "@/actions/analysisLinks";
+  createAnalysisLinkApi,
+  updateAnalysisLinkApi,
+  deleteAnalysisLinkApi,
+  togglePinAnalysisLinkApi,
+  scrapeLinkPreviewApi,
+} from "@/service/analysisLinksService";
 import type {
   AnalysisLink,
   AnalysisLinksClientProps,
+  AnalysisLinksSortOrder,
+  AnalysisLinksViewMode,
   CreateAnalysisLinkInput,
   UpdateAnalysisLinkInput,
 } from "@/types/analysisLinks";
@@ -48,12 +50,11 @@ export default function AnalysisLinksClient({
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(
     () => searchParams.get("category") || "ALL"
   );
-  const [viewMode, setViewMode] = useState<"table" | "bento">(
-    () => (searchParams.get("view") as "table" | "bento") || "table"
+  const [viewMode, setViewMode] = useState<AnalysisLinksViewMode>(
+    () => (searchParams.get("view") as AnalysisLinksViewMode) || "table"
   );
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "title">(
-    () =>
-      (searchParams.get("sort") as "newest" | "oldest" | "title") || "newest"
+  const [sortOrder, setSortOrder] = useState<AnalysisLinksSortOrder>(
+    () => (searchParams.get("sort") as AnalysisLinksSortOrder) || "newest"
   );
 
   const initialPageSize = (() => {
@@ -104,9 +105,9 @@ export default function AnalysisLinksClient({
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "");
     setSelectedCategoryFilter(searchParams.get("category") || "ALL");
-    setViewMode((searchParams.get("view") as "table" | "bento") || "table");
+    setViewMode((searchParams.get("view") as AnalysisLinksViewMode) || "table");
     setSortOrder(
-      (searchParams.get("sort") as "newest" | "oldest" | "title") || "newest"
+      (searchParams.get("sort") as AnalysisLinksSortOrder) || "newest"
     );
     const rawP = parseInt(searchParams.get("page") || "1", 10);
     if (!isNaN(rawP) && rawP > 0) setPage(rawP);
@@ -144,7 +145,7 @@ export default function AnalysisLinksClient({
 
     setIsScrapingPreview(true);
     try {
-      const res = await scrapeLinkPreviewAction(trimmed);
+      const res = await scrapeLinkPreviewApi(trimmed);
       if (res.success && res.data) {
         setCustomTitle(res.data.title);
         if (!customDescription && res.data.description) {
@@ -174,7 +175,7 @@ export default function AnalysisLinksClient({
         category: customCategory.trim() || "General",
       };
 
-      const res = await createAnalysisLinkAction(payload);
+      const res = await createAnalysisLinkApi(payload);
       if (res.success && res.data) {
         setLinks((prev) => [res.data!, ...prev]);
         setUrlInput("");
@@ -193,7 +194,7 @@ export default function AnalysisLinksClient({
   const handleConfirmDelete = async () => {
     if (!deletingLinkId) return;
     startTransition(async () => {
-      const res = await deleteAnalysisLinkAction(deletingLinkId);
+      const res = await deleteAnalysisLinkApi(deletingLinkId);
       if (res.success) {
         setLinks((prev) => prev.filter((l) => l.id !== deletingLinkId));
         setDeletingLinkId(null);
@@ -218,7 +219,7 @@ export default function AnalysisLinksClient({
         category: editingLink.category,
       };
 
-      const res = await updateAnalysisLinkAction(payload);
+      const res = await updateAnalysisLinkApi(payload);
       if (res.success && res.data) {
         setLinks((prev) =>
           prev.map((l) => (l.id === editingLink.id ? res.data! : l))
@@ -234,7 +235,7 @@ export default function AnalysisLinksClient({
   // Pin / Unpin
   const handleTogglePin = async (link: AnalysisLink) => {
     startTransition(async () => {
-      const res = await togglePinAnalysisLinkAction(link.id, link.pinned);
+      const res = await togglePinAnalysisLinkApi(link.id, Boolean(link.pinned));
       if (res.success && res.data) {
         setLinks((prev) =>
           prev

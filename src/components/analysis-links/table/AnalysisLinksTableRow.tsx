@@ -1,14 +1,6 @@
 import Image from "next/image";
-import {
-  Pin,
-  Globe,
-  ExternalLink,
-  Copy,
-  Check,
-  Edit3,
-  Trash2,
-} from "lucide-react";
-import { CATEGORY_COLORS } from "@/constants/analysisLinks";
+import { Pin, Globe, Copy, Check, Edit3, Trash2 } from "lucide-react";
+import { CATEGORY_COLORS } from "@/data/analysisLinks";
 import type { AnalysisLinksTableRowProps } from "@/types/analysisLinks";
 
 export default function AnalysisLinksTableRow({
@@ -75,10 +67,6 @@ export default function AnalysisLinksTableRow({
               className="font-semibold text-slate-100 hover:text-sky-300 transition-colors inline-flex items-center gap-1 line-clamp-1 group-hover:underline text-xs sm:text-sm"
             >
               <span>{link.title}</span>
-              <ExternalLink
-                size={11}
-                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-sky-300"
-              />
             </a>
             <a
               href={link.url}
@@ -128,15 +116,6 @@ export default function AnalysisLinksTableRow({
       {/* Actions */}
       <td className="py-3 px-4 text-right">
         <div className="flex items-center justify-end gap-1">
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 rounded-lg transition-colors"
-            title="Open in new tab"
-          >
-            <ExternalLink size={14} />
-          </a>
           <button
             type="button"
             onClick={() => onEdit(link)}

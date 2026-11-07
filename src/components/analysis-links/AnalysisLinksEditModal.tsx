@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Edit3 } from "lucide-react";
-import { POPULAR_CATEGORIES } from "@/constants/analysisLinks";
+import { ChevronDown, Edit3, X } from "lucide-react";
+import { POPULAR_CATEGORIES } from "@/data/analysisLinks";
 import type { AnalysisLinksEditModalProps } from "@/types/analysisLinks";
 
 export default function AnalysisLinksEditModal({
@@ -40,9 +40,10 @@ export default function AnalysisLinksEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 text-sm cursor-pointer"
+            className="text-slate-400 hover:text-slate-200 transition cursor-pointer"
+            aria-label="Close modal"
           >
-            ✕
+            <X size={16} />
           </button>
         </div>
 
@@ -75,22 +76,32 @@ export default function AnalysisLinksEditModal({
             <label className="block text-xs font-semibold text-slate-400 mb-1">
               Category Tag
             </label>
-            <select
-              value={link.category}
-              onChange={(e) =>
-                onLinkChange({
-                  ...link,
-                  category: e.target.value,
-                })
-              }
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-sky-500/50 cursor-pointer"
-            >
-              {POPULAR_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={link.category}
+                onChange={(e) =>
+                  onLinkChange({
+                    ...link,
+                    category: e.target.value,
+                  })
+                }
+                className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-3 pr-8.5 py-2 text-xs text-slate-100 outline-none focus:border-sky-500/50 cursor-pointer shadow-inner"
+              >
+                {POPULAR_CATEGORIES.map((cat) => (
+                  <option
+                    key={cat}
+                    value={cat}
+                    className="bg-slate-900 text-slate-200"
+                  >
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+            </div>
           </div>
 
           <div>

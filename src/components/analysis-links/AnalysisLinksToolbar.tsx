@@ -3,9 +3,13 @@ import {
   ArrowUpDown,
   Table as TableIcon,
   LayoutGrid,
+  ChevronDown,
 } from "lucide-react";
 import SearchFilterBar from "@/components/shared/SearchFilterBar";
-import type { AnalysisLinksToolbarProps } from "@/types/analysisLinks";
+import type {
+  AnalysisLinksToolbarProps,
+  AnalysisLinksSortOrder,
+} from "@/types/analysisLinks";
 
 export default function AnalysisLinksToolbar({
   searchQuery,
@@ -31,36 +35,52 @@ export default function AnalysisLinksToolbar({
 
       <div className="flex items-center gap-2 flex-wrap">
         {/* Category Filter */}
-        <div className="flex items-center gap-1.5 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-          <Filter size={13} className="text-slate-400" />
+        <div className="relative flex items-center bg-slate-950/70 border border-slate-800 rounded-lg pl-2.5 pr-6.5 py-1 text-xs">
+          <Filter size={13} className="text-slate-400 shrink-0 mr-1.5" />
           <select
             value={selectedCategoryFilter}
             onChange={(e) => onCategoryFilterChange(e.target.value)}
-            className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer"
+            className="appearance-none bg-transparent text-xs text-slate-200 outline-none cursor-pointer"
           >
-            <option value="ALL">All Categories</option>
+            <option value="ALL" className="bg-slate-900 text-slate-200">
+              All Categories
+            </option>
             {allCategories.map((c) => (
-              <option key={c} value={c}>
+              <option key={c} value={c} className="bg-slate-900 text-slate-200">
                 {c}
               </option>
             ))}
           </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+          />
         </div>
 
         {/* Sort Selector */}
-        <div className="flex items-center gap-1.5 bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-          <ArrowUpDown size={13} className="text-slate-400" />
+        <div className="relative flex items-center bg-slate-950/70 border border-slate-800 rounded-lg pl-2.5 pr-6.5 py-1 text-xs">
+          <ArrowUpDown size={13} className="text-slate-400 shrink-0 mr-1.5" />
           <select
             value={sortOrder}
             onChange={(e) =>
-              onSortOrderChange(e.target.value as "newest" | "oldest" | "title")
+              onSortOrderChange(e.target.value as AnalysisLinksSortOrder)
             }
-            className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer"
+            className="appearance-none bg-transparent text-xs text-slate-200 outline-none cursor-pointer"
           >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="title">Alphabetical (A-Z)</option>
+            <option value="newest" className="bg-slate-900 text-slate-200">
+              Newest First
+            </option>
+            <option value="oldest" className="bg-slate-900 text-slate-200">
+              Oldest First
+            </option>
+            <option value="title" className="bg-slate-900 text-slate-200">
+              Alphabetical (A-Z)
+            </option>
           </select>
+          <ChevronDown
+            size={12}
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+          />
         </div>
 
         {/* View Mode Toggle */}

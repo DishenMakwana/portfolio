@@ -8,7 +8,7 @@ import {
   Trash2,
   ExternalLink,
 } from "lucide-react";
-import { CATEGORY_COLORS } from "@/constants/analysisLinks";
+import { CATEGORY_COLORS } from "@/data/analysisLinks";
 import type { AnalysisLinksBentoCardProps } from "@/types/analysisLinks";
 
 export default function AnalysisLinksBentoCard({
