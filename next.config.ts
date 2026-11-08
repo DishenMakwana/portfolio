@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
 
   experimental: {
-    optimizePackageImports: ["lucide-react", "framer-motion"],
+    optimizePackageImports: ["lucide-react", "framer-motion", "recharts"],
   },
 };
 
