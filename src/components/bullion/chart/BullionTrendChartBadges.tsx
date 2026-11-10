@@ -2,7 +2,7 @@ import type {
   BullionChartLabelBadgeProps,
   CustomChartTooltipProps,
 } from "@/types/bullion";
-import { formatInr } from "@/helpers/formatters";
+import { formatInr } from "@/utils/formatters";
 
 export function CustomChartTooltip({
   active,
@@ -49,7 +49,7 @@ export function HighLabelBadge(
         fill="#047857"
         stroke="#34d399"
         strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+        className="chart-badge-shadow"
       />
       <text
         x={textX}
@@ -89,7 +89,7 @@ export function LowLabelBadge(
         fill="#be123c"
         stroke="#f43f5e"
         strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+        className="chart-badge-shadow"
       />
       <text
         x={textX}

@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { refreshBullionDataAction } from "@/actions/portfolio";
+import { refreshBullionApi } from "@/service/bullionService";
 import { toast } from "react-hot-toast";
+import { Info } from "lucide-react";
 import {
   getAdjustedBullionPrice,
   calculateBullionAthData,
+  calculateBullion52WeekData,
   CITIES,
 } from "@/helpers/bullion";
 import BullionHeaderToolbar from "@/components/bullion/BullionHeaderToolbar";
@@ -16,21 +18,24 @@ import BullionPriceCards from "@/components/bullion/BullionPriceCards";
 import BullionCalculator from "@/components/bullion/BullionCalculator";
 import BullionBudgetEstimator from "@/components/bullion/BullionBudgetEstimator";
 import BullionTrendChart from "@/components/bullion/BullionTrendChart";
-import {
+import BullionRange52WeekCard from "@/components/bullion/BullionRange52WeekCard";
+import type {
   BullionClientProps,
   BullionRates,
   ChartDataPoint,
+  BullionMetal,
+  GstType,
+  Timeframe,
+  BullionCity,
+} from "@/types/bullion";
+import {
   BULLION_METALS,
   BULLION_PRICE_TRENDS,
-  BullionMetal,
   GOLD_PURITIES,
   SILVER_PURITIES,
   PLATINUM_PURITIES,
   GST_TYPES,
-  GstType,
   TIMEFRAMES,
-  Timeframe,
-  BullionCity,
 } from "@/types/bullion";
 
 export default function BullionClient({
@@ -140,6 +145,13 @@ export default function BullionClient({
   const athData = useMemo(
     () => calculateBullionAthData(rates, chartDataState, selectedCity.offset),
     [rates, chartDataState, selectedCity.offset]
+  );
+
+  // 52-Week Price Range corridor data for Gold, Silver, and Platinum
+  const range52WeekData = useMemo(
+    () =>
+      calculateBullion52WeekData(chartDataState, rates, selectedCity.offset),
+    [chartDataState, rates, selectedCity.offset]
   );
 
   const handleSelectMetalFromAth = (metal: BullionMetal, p: string) => {
@@ -324,16 +336,18 @@ export default function BullionClient({
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    const res = await refreshBullionDataAction();
+    const res = await refreshBullionApi();
     setIsRefreshing(false);
     if (res.success && res.data) {
       setRates(res.data.rates);
       setChartDataState(res.data.chartData);
       if (res.data.isStale) {
-        toast("Live prices unavailable; showing saved prices", { icon: "ℹ️" });
+        toast("Live prices unavailable; showing saved prices", {
+          icon: <Info className="w-5 h-5 text-amber-400 shrink-0" />,
+        });
       } else if (res.data.isThrottled) {
         toast("Prices are already up to date (refreshed recently)", {
-          icon: "ℹ️",
+          icon: <Info className="w-5 h-5 text-sky-400 shrink-0" />,
         });
       } else {
         toast.success("Prices refreshed successfully!");
@@ -432,6 +446,13 @@ export default function BullionClient({
           setCustomEndDate("");
           setTimeframe(TIMEFRAMES.TF_1Y);
         }}
+      />
+
+      {/* 52-Week Price Range Corridor Analysis */}
+      <BullionRange52WeekCard
+        rangeData={range52WeekData}
+        activeMetal={selectedTab}
+        selectedCity={selectedCity}
       />
     </div>
   );

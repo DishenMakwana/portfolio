@@ -1,8 +1,15 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
-import { Coins, Crown, Sparkles, Layers, TrendingUp } from "lucide-react";
-import { formatInr } from "@/helpers/formatters";
+import {
+  Coins,
+  Crown,
+  Sparkles,
+  Layers,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react";
+import { formatInr } from "@/utils/formatters";
 import {
   BULLION_METALS,
   GOLD_PURITIES,
@@ -73,13 +80,13 @@ export default function BullionAthCorrectionCards({
           const isCorrection = m.diff < -0.01;
           const isAboveAth = m.diff > 0.01;
 
-          const formatVal = (v: number) => `${formatInr(v)}`;
+          const formatVal = (v: number) => `${formatInr(v, 2)}`;
 
           const formatDiffAmount = (v: number) => {
             if (Math.abs(v) < 0.01) return `₹0.00`;
             const sign = v > 0 ? "+" : "-";
             const absVal = Math.abs(v);
-            return `${sign}${formatInr(absVal)}`;
+            return `${sign}${formatInr(absVal, 2)}`;
           };
 
           return (
@@ -184,7 +191,13 @@ export default function BullionAthCorrectionCards({
                         ? "0.00%"
                         : `${m.diffPercent >= 0 ? "+" : ""}${m.diffPercent.toFixed(2)}%`}
                     </span>
-                    <span>{isCorrection ? "▼" : isAboveAth ? "▲" : "—"}</span>
+                    {isCorrection ? (
+                      <TrendingDown size={12} className="shrink-0" />
+                    ) : isAboveAth ? (
+                      <TrendingUp size={12} className="shrink-0" />
+                    ) : (
+                      <span>—</span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatInr } from "@/helpers/formatters";
+import { TrendingDown, TrendingUp } from "lucide-react";
+import { formatInr } from "@/utils/formatters";
 import { getAdjustedBullionPrice, decimalsForChange } from "@/helpers/bullion";
 import {
   BULLION_METALS,
@@ -14,6 +15,7 @@ function PriceCardItem({
   value,
   change,
   decimals,
+  valueDecimals = 2,
 }: PriceCardItemProps): React.JSX.Element {
   const isUp = change >= 0;
   return (
@@ -27,7 +29,7 @@ function PriceCardItem({
       </div>
       <div className="flex justify-between items-baseline gap-4 mt-2">
         <div className="text-xl font-black text-slate-100 tracking-tight">
-          {formatInr(value)}
+          {formatInr(value, valueDecimals)}
         </div>
         <div
           className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg border ${
@@ -40,7 +42,11 @@ function PriceCardItem({
             {isUp ? "+" : ""}
             {change.toFixed(decimals)}
           </span>
-          <span>{isUp ? "▲" : "▼"}</span>
+          {isUp ? (
+            <TrendingUp size={12} className="shrink-0" />
+          ) : (
+            <TrendingDown size={12} className="shrink-0" />
+          )}
         </div>
       </div>
     </motion.div>
@@ -98,6 +104,7 @@ export default function BullionPriceCards({
             )}
             change={rates.silver.change}
             decimals={priceChangeDecimals}
+            valueDecimals={2}
           />
           <PriceCardItem
             title="925 Sterling Silver /g"
@@ -107,6 +114,7 @@ export default function BullionPriceCards({
             )}
             change={rates.silver.change * 0.925}
             decimals={priceChangeDecimals}
+            valueDecimals={2}
           />
           <PriceCardItem
             title="800 Alloy Silver /g"
@@ -116,6 +124,7 @@ export default function BullionPriceCards({
             )}
             change={rates.silver.change * 0.8}
             decimals={priceChangeDecimals}
+            valueDecimals={2}
           />
         </>
       )}

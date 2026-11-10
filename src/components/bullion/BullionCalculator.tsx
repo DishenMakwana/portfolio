@@ -1,7 +1,7 @@
 "use client";
 
 import { Calculator, ChevronDown } from "lucide-react";
-import { formatInr } from "@/helpers/formatters";
+import { formatInr } from "@/utils/formatters";
 import { getPurityOptions } from "@/helpers/bullion";
 import type { BullionCalculatorProps, GstType } from "@/types/bullion";
 
@@ -100,14 +100,18 @@ export default function BullionCalculator({
             <select
               value={gstType}
               onChange={(e) => onGstTypeChange(e.target.value as GstType)}
-              className="appearance-none w-full bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-2 text-sm font-semibold text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer"
+              className="appearance-none w-full bg-slate-900/60 border border-slate-800 rounded-xl pl-4 pr-8.5 py-2 text-sm font-semibold text-slate-200 focus:outline-none focus:border-teal-500 cursor-pointer shadow-inner"
             >
-              <option value="Incl">Incl. 3%</option>
-              <option value="Excl">Excl. 3%</option>
+              <option value="Incl" className="bg-slate-900 text-slate-200">
+                Incl. 3%
+              </option>
+              <option value="Excl" className="bg-slate-900 text-slate-200">
+                Excl. 3%
+              </option>
             </select>
             <ChevronDown
               size={14}
-              className="absolute right-3 top-3 text-slate-400 pointer-events-none"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
           </div>
         </div>

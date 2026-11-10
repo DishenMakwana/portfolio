@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Coins, RefreshCw, Calendar, ChevronDown } from "lucide-react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { CITIES } from "@/helpers/bullion";
 import type { BullionHeaderToolbarProps } from "@/types/bullion";
 
@@ -13,6 +14,13 @@ export default function BullionHeaderToolbar({
   onSelectCity,
 }: BullionHeaderToolbarProps): React.JSX.Element {
   const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(
+    cityDropdownRef,
+    () => setIsCityDropdownOpen(false),
+    isCityDropdownOpen
+  );
 
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/30 border border-slate-800/40 p-4 rounded-2xl">
@@ -53,29 +61,31 @@ export default function BullionHeaderToolbar({
         </div>
 
         {/* City Selector Dropdown */}
-        <div className="relative">
+        <div ref={cityDropdownRef} className="relative">
           <button
+            type="button"
             onClick={() => setIsCityDropdownOpen(!isCityDropdownOpen)}
-            className="flex items-center justify-between gap-2 min-w-32 px-4 py-2 bg-slate-900/60 border border-slate-800 rounded-xl text-sm font-semibold text-slate-200 hover:border-slate-700 hover:text-white transition"
+            className="flex items-center justify-between gap-2 min-w-36 px-4 py-2 bg-slate-900/60 border border-slate-800 rounded-xl text-sm font-semibold text-slate-200 hover:border-slate-700 hover:text-white transition cursor-pointer shadow-inner"
           >
             <span>{selectedCity.name}</span>
             <ChevronDown
               size={14}
-              className={`text-slate-400 transition-transform ${isCityDropdownOpen ? "rotate-180" : ""}`}
+              className={`text-slate-400 transition-transform duration-200 ${isCityDropdownOpen ? "rotate-180 text-teal-400" : ""}`}
             />
           </button>
           {isCityDropdownOpen && (
-            <div className="absolute right-0 mt-2 z-20 w-40 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 overflow-hidden">
+            <div className="absolute right-0 top-full mt-1.5 z-20 w-full min-w-[160px] bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl py-1 overflow-hidden backdrop-blur-xl">
               {CITIES.map((city) => (
                 <button
                   key={city.id}
+                  type="button"
                   onClick={() => {
                     onSelectCity(city);
                     setIsCityDropdownOpen(false);
                   }}
-                  className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-slate-800/80 transition ${
+                  className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-slate-800/80 transition cursor-pointer ${
                     selectedCity.id === city.id
-                      ? "text-teal-400 bg-teal-500/5"
+                      ? "text-teal-400 bg-teal-500/10 font-bold"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >

@@ -14,7 +14,7 @@ import {
   ReferenceLine,
   ReferenceDot,
 } from "recharts";
-import { formatInr } from "@/helpers/formatters";
+import { formatInr } from "@/utils/formatters";
 import { TIMEFRAMES, type BullionTrendChartProps } from "@/types/bullion";
 import {
   CustomChartTooltip,
@@ -238,7 +238,8 @@ export default function BullionTrendChart({
                 fill="#94a3b8"
                 fontSize={10}
                 fontWeight={600}
-                style={{ textAnchor: "middle" }}
+                textAnchor="middle"
+                className="text-anchor-middle"
               />
             </YAxis>
             <Tooltip content={<CustomChartTooltip />} />
