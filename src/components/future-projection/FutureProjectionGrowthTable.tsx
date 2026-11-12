@@ -2,6 +2,7 @@
 
 import { DollarSign, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCroreOrLakh } from "@/helpers/futureProjection";
+import { clampPct } from "@/utils/styleHelpers";
 import type { FutureProjectionGrowthTableProps } from "@/types/futureProjection";
 
 export function FutureProjectionGrowthTable({
@@ -77,9 +78,7 @@ export function FutureProjectionGrowthTable({
                       <div className="w-16 bg-slate-950 rounded-full h-1.5 overflow-hidden">
                         <div
                           className="bg-emerald-400 h-full rounded-full"
-                          style={{
-                            width: `${Math.min(100, row.targetProgressPct)}%`,
-                          }}
+                          data-progress={clampPct(row.targetProgressPct)}
                         />
                       </div>
                       <span className="text-[11px] font-bold text-emerald-400">

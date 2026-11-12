@@ -1,7 +1,7 @@
 "use client";
 
 import { Sliders } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency } from "@/utils/formatters";
 import { formatCroreOrLakh } from "@/helpers/futureProjection";
 import type { FutureProjectionParametersProps } from "@/types/futureProjection";
 

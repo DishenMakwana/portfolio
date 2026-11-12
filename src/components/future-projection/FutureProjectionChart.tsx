@@ -12,7 +12,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency } from "@/utils/formatters";
 import {
   formatCroreOrLakh,
   formatProjectionChartData,
@@ -123,10 +123,11 @@ export function FutureProjectionChart({
                       >
                         <div className="flex items-center gap-1.5">
                           <span
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
-                            style={{
-                              backgroundColor: item.color || item.stroke,
-                            }}
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                              item.dataKey === "invested"
+                                ? "bg-blue-500"
+                                : "bg-emerald-500"
+                            }`}
                           />
                           <span className="text-slate-300 font-medium">
                             {item.name}:
