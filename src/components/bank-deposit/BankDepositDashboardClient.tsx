@@ -15,6 +15,7 @@ import type {
   BankDepositFilter,
   BankDepositDashboardClientProps,
   BankDepositUrlFilterUpdates,
+  EditingPersonTargetState,
 } from "@/types/bankDeposit";
 import {
   createDepositAction,
@@ -109,11 +110,8 @@ export default function BankDepositDashboardClient({
 
   const [isLimitsModalOpen, setIsLimitsModalOpen] = useState<boolean>(false);
   const [isCloneModalOpen, setIsCloneModalOpen] = useState<boolean>(false);
-  const [editingPersonTarget, setEditingPersonTarget] = useState<{
-    personId: number;
-    personName: string;
-    annualTargetLimit: number;
-  } | null>(null);
+  const [editingPersonTarget, setEditingPersonTarget] =
+    useState<EditingPersonTargetState | null>(null);
 
   const [deletingTransaction, setDeletingTransaction] =
     useState<DepositTransactionWithRelations | null>(null);
