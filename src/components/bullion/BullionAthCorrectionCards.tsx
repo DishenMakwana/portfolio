@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { motion } from "framer-motion";
+import type { Variants } from "framer-motion";
 import {
   Coins,
   Crown,
@@ -15,8 +16,10 @@ import {
   GOLD_PURITIES,
   SILVER_PURITIES,
   PLATINUM_PURITIES,
-  type BullionAthCorrectionCardsProps,
-  type BullionCardConfig,
+} from "@/types/bullion";
+import type {
+  BullionAthCorrectionCardsProps,
+  BullionCardConfig,
 } from "@/types/bullion";
 
 const cardVariants: Variants = {

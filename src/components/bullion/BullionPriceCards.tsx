@@ -4,10 +4,10 @@ import { motion } from "framer-motion";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { formatInr } from "@/utils/formatters";
 import { getAdjustedBullionPrice, decimalsForChange } from "@/helpers/bullion";
-import {
-  BULLION_METALS,
-  type BullionPriceCardsProps,
-  type PriceCardItemProps,
+import { BULLION_METALS } from "@/types/bullion";
+import type {
+  BullionPriceCardsProps,
+  PriceCardItemProps,
 } from "@/types/bullion";
 
 function PriceCardItem({

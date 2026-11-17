@@ -14,10 +14,8 @@ import {
 } from "lucide-react";
 import { clampPct } from "@/utils/styleHelpers";
 import { formatInr } from "@/utils/formatters";
-import {
-  BULLION_METALS,
-  type BullionRange52WeekCardProps,
-} from "@/types/bullion";
+import { BULLION_METALS } from "@/types/bullion";
+import type { BullionRange52WeekCardProps } from "@/types/bullion";
 
 export default function BullionRange52WeekCard({
   rangeData,

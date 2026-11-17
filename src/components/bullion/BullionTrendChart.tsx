@@ -15,7 +15,8 @@ import {
   ReferenceDot,
 } from "recharts";
 import { formatInr } from "@/utils/formatters";
-import { TIMEFRAMES, type BullionTrendChartProps } from "@/types/bullion";
+import { TIMEFRAMES } from "@/types/bullion";
+import type { BullionTrendChartProps } from "@/types/bullion";
 import {
   CustomChartTooltip,
   HighLabelBadge,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { refreshBullionApi } from "@/service/bullionService";
 import { toast } from "react-hot-toast";
@@ -17,7 +18,6 @@ import BullionAthCorrectionCards from "@/components/bullion/BullionAthCorrection
 import BullionPriceCards from "@/components/bullion/BullionPriceCards";
 import BullionCalculator from "@/components/bullion/BullionCalculator";
 import BullionBudgetEstimator from "@/components/bullion/BullionBudgetEstimator";
-import BullionTrendChart from "@/components/bullion/BullionTrendChart";
 import BullionRange52WeekCard from "@/components/bullion/BullionRange52WeekCard";
 import type {
   BullionClientProps,
@@ -37,6 +37,18 @@ import {
   GST_TYPES,
   TIMEFRAMES,
 } from "@/types/bullion";
+
+const BullionTrendChart = dynamic(
+  () => import("@/components/bullion/BullionTrendChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-80 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+        Loading bullion trend chart...
+      </div>
+    ),
+  }
+);
 
 export default function BullionClient({
   initialRates,

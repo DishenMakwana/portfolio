@@ -1,6 +1,7 @@
 "use client";
 
-import { BULLION_METALS, type BullionMetalTabsProps } from "@/types/bullion";
+import { BULLION_METALS } from "@/types/bullion";
+import type { BullionMetalTabsProps } from "@/types/bullion";
 
 export default function BullionMetalTabs({
   selectedTab,
