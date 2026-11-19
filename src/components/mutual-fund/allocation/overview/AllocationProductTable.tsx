@@ -1,4 +1,4 @@
-import { formatIndianNumber } from "@/helpers/formatters";
+import { formatIndianNumber } from "@/utils/formatters";
 import AllocationTotalRow from "../common/AllocationTotalRow";
 import type { AllocationProductTableProps } from "@/types/allocation";
 

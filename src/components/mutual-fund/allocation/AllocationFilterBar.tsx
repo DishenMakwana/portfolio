@@ -39,14 +39,15 @@ export default function AllocationFilterBar({
             Investor :
           </label>
           <button
+            type="button"
             onClick={onToggleDropdown}
-            className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-950/60 border border-slate-700 rounded-xl text-sm font-medium text-slate-200 hover:border-slate-600 transition-all cursor-pointer"
+            className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-950/60 border border-slate-700 rounded-xl text-sm font-medium text-slate-200 hover:border-slate-600 transition-all cursor-pointer shadow-inner"
           >
             <span className="truncate">{investorLabel}</span>
             <ChevronDown
               size={15}
-              className={`shrink-0 text-slate-400 transition-transform ${
-                investorOpen ? "rotate-180" : ""
+              className={`shrink-0 text-slate-400 transition-transform duration-200 ${
+                investorOpen ? "rotate-180 text-teal-400" : ""
               }`}
             />
           </button>
@@ -60,6 +61,7 @@ export default function AllocationFilterBar({
                 className="absolute z-50 top-full left-0 mt-1 w-full bg-slate-900/90 backdrop-blur-xl border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto"
               >
                 <button
+                  type="button"
                   onClick={() => onToggleInvestor("all")}
                   className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-slate-800 transition cursor-pointer"
                 >
@@ -82,6 +84,7 @@ export default function AllocationFilterBar({
                 {allMembers.map((name) => (
                   <button
                     key={name}
+                    type="button"
                     onClick={() => onToggleInvestor(name)}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-slate-800 transition cursor-pointer border-t border-slate-800/60"
                   >

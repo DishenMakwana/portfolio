@@ -8,6 +8,8 @@ import AllocationSubCategoryAndFundSection from "./AllocationSubCategoryAndFundS
 import AllocationCategoryAssetTableCard from "./AllocationCategoryAssetTableCard";
 import AllocationEquityCapTableCard from "./AllocationEquityCapTableCard";
 import AllocationSchemeGroupedTableCard from "./AllocationSchemeGroupedTableCard";
+import AllocationTopHoldingsScripCard from "./AllocationTopHoldingsScripCard";
+import AllocationTopSectorsCard from "./AllocationTopSectorsCard";
 import {
   getAmcName,
   getAssetRatios,
@@ -15,12 +17,15 @@ import {
   getSubCategory,
   sortAllocationArray,
   mapToAllocationPercentageArray,
+  calculateTopHoldingsScrips,
+  calculateTopSectors,
 } from "@/helpers/allocation";
 import type {
   AllocationClientProps,
   SortState,
   SchemeGroupItem,
   AllocationFlattenedSchemeRow,
+  TopItemLimit,
 } from "@/types/allocation";
 import type {
   GrowwMarketCapData,
@@ -115,6 +120,11 @@ export default function AllocationClient({
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [equityCapOpen, setEquityCapOpen] = useState(false);
   const [schemeScripOpen, setSchemeScripOpen] = useState(false);
+  const [topTenOpen, setTopTenOpen] = useState(false);
+
+  /* ── Top Scrip & Sector limit state (10 default, 20, 50) ── */
+  const [scripLimit, setScripLimit] = useState<TopItemLimit>(10);
+  const [sectorLimit, setSectorLimit] = useState<TopItemLimit>(10);
 
   /* ── Sort state ── */
   const [investorSort, setInvestorSort] = useState<SortState>({
@@ -135,6 +145,14 @@ export default function AllocationClient({
   });
   const [capSort, setCapSort] = useState<SortState>({
     col: "total",
+    dir: "desc",
+  });
+  const [scripSort, setScripSort] = useState<SortState>({
+    col: "amount",
+    dir: "desc",
+  });
+  const [sectorSort, setSectorSort] = useState<SortState>({
+    col: "amount",
     dir: "desc",
   });
 
@@ -451,6 +469,22 @@ export default function AllocationClient({
     capSort.dir
   );
 
+  const rawTopScrips = useMemo(() => {
+    return calculateTopHoldingsScrips(filteredHoldings, grandTotal, scripLimit);
+  }, [filteredHoldings, grandTotal, scripLimit]);
+
+  const sortedTopScrips = useMemo(() => {
+    return sortAllocationArray(rawTopScrips, scripSort.col, scripSort.dir);
+  }, [rawTopScrips, scripSort]);
+
+  const rawTopSectors = useMemo(() => {
+    return calculateTopSectors(filteredHoldings, grandTotal, sectorLimit);
+  }, [filteredHoldings, grandTotal, sectorLimit]);
+
+  const sortedTopSectors = useMemo(() => {
+    return sortAllocationArray(rawTopSectors, sectorSort.col, sectorSort.dir);
+  }, [rawTopSectors, sectorSort]);
+
   const asOfDate = selectedReport
     ? new Date(selectedReport.asOfDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -553,6 +587,33 @@ export default function AllocationClient({
             grandTotal={grandTotal}
             schemeGrouped={schemeGrouped}
           />
+
+          {/* ══ CARDS 5 & 6: Top Holdings (Scrip & Sector side-by-side) ══ */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <AllocationTopHoldingsScripCard
+              isOpen={topTenOpen}
+              onToggle={() => setTopTenOpen((v) => !v)}
+              scrips={sortedTopScrips}
+              grandTotal={grandTotal}
+              sortCol={scripSort.col}
+              sortDir={scripSort.dir}
+              onSort={makeSorter(setScripSort)}
+              limit={scripLimit}
+              onLimitChange={setScripLimit}
+            />
+
+            <AllocationTopSectorsCard
+              isOpen={topTenOpen}
+              onToggle={() => setTopTenOpen((v) => !v)}
+              sectors={sortedTopSectors}
+              grandTotal={grandTotal}
+              sortCol={sectorSort.col}
+              sortDir={sectorSort.dir}
+              onSort={makeSorter(setSectorSort)}
+              limit={sectorLimit}
+              onLimitChange={setSectorLimit}
+            />
+          </div>
         </>
       )}
     </div>

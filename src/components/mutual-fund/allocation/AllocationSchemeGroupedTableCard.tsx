@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatIndianNumber, formatPct } from "@/helpers/formatters";
+import { formatIndianNumber, formatPct } from "@/utils/formatters";
 import AllocationCardHeader from "./common/AllocationCardHeader";
 import AllocationTotalRow from "./common/AllocationTotalRow";
 import type { AllocationSchemeGroupedTableCardProps } from "@/types/allocation";

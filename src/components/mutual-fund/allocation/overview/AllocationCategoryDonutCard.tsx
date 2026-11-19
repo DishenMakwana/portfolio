@@ -1,24 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import {
-  PieChart,
-  Pie,
-  Sector,
-  Tooltip,
-  ResponsiveContainer,
-  type PieSectorDataItem,
-} from "recharts";
+import { PieChart, Pie, Sector, Tooltip, ResponsiveContainer } from "recharts";
+import type { PieSectorDataItem } from "recharts";
 import {
   formatCurrency,
   formatIndianNumber,
   formatPct,
-} from "@/helpers/formatters";
-import {
-  ALLOCATION_BG_CLASSES,
-  ALLOCATION_PALETTE,
-  type AllocationCategoryDonutCardProps,
-  type ChartTooltipProps,
+} from "@/utils/formatters";
+import { ALLOCATION_BG_CLASSES, ALLOCATION_PALETTE } from "@/types/allocation";
+import type {
+  AllocationCategoryDonutCardProps,
+  ChartTooltipProps,
 } from "@/types/allocation";
 import type { PieActiveShapePayload } from "@/types/constants";
 
@@ -88,7 +81,7 @@ export default function AllocationCategoryDonutCard({
         {/* Donut Chart */}
         <div className="flex-1 w-full min-h-[300px]">
           <ResponsiveContainer width="100%" height={320}>
-            <PieChart>
+            <PieChart key={`alloc-donut-${totalValue}-${categoryData.length}`}>
               <Pie
                 data={categoryData}
                 cx="50%"

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatIndianNumber, formatPct } from "@/helpers/formatters";
+import { formatIndianNumber, formatPct } from "@/utils/formatters";
 import AllocationCardHeader from "./common/AllocationCardHeader";
 import AllocationSortTh from "./common/AllocationSortTh";
 import AllocationTotalRow from "./common/AllocationTotalRow";

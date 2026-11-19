@@ -1,4 +1,4 @@
-import { formatIndianNumber, formatPct } from "@/helpers/formatters";
+import { formatIndianNumber, formatPct } from "@/utils/formatters";
 import AllocationSortTh from "../common/AllocationSortTh";
 import AllocationTotalRow from "../common/AllocationTotalRow";
 import type { AllocationInvestorTableProps } from "@/types/allocation";
@@ -52,10 +52,10 @@ export default function AllocationInvestorTable({
                 i % 2 === 1 ? "bg-slate-950/20" : ""
               }`}
             >
-              <td className="px-5 py-3 text-slate-200 font-medium text-xs uppercase tracking-wide">
+              <td className="px-4 py-3 text-slate-200 font-medium text-xs uppercase tracking-wide">
                 {m.name}
               </td>
-              <td className="px-5 py-3 text-right text-slate-200 tabular-nums font-medium">
+              <td className="px-4 py-3 text-right text-slate-200 tabular-nums font-medium">
                 {formatIndianNumber(m.value)}
               </td>
               <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-300 bg-teal-500/5 border-l border-teal-500/10">
