@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import {
   calculateFutureProjection,
@@ -10,7 +11,6 @@ import type {
   FutureProjectionClientProps,
   ProjectionInput,
 } from "@/types/futureProjection";
-import { FutureProjectionChart } from "./FutureProjectionChart";
 import { FutureProjectionGoalSlider } from "./FutureProjectionGoalSlider";
 import { FutureProjectionGrowthTable } from "./FutureProjectionGrowthTable";
 import { FutureProjectionHeader } from "./FutureProjectionHeader";
@@ -18,6 +18,18 @@ import { FutureProjectionMilestones } from "./FutureProjectionMilestones";
 import { FutureProjectionParameters } from "./FutureProjectionParameters";
 import { FutureProjectionResultsCard } from "./FutureProjectionResultsCard";
 import { FutureProjectionScenarios } from "./FutureProjectionScenarios";
+
+const FutureProjectionChart = dynamic(
+  () => import("./FutureProjectionChart").then((m) => m.FutureProjectionChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-80 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+        Loading projection chart...
+      </div>
+    ),
+  }
+);
 
 export default function FutureProjectionClient({
   initialPortfolioValue,
