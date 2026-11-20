@@ -1,9 +1,8 @@
 import { motion } from "framer-motion";
-import { ExternalLink } from "lucide-react";
 import FolioBadge from "@/components/shared/FolioBadge";
 import { getOverlapSubCategory } from "@/helpers/allocation";
 import { formatAuditStatusBadge } from "@/helpers/audit";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency } from "@/utils/formatters";
 import type { AuditTableRowProps } from "@/types/audit";
 
 export default function AuditTableRow({
@@ -47,7 +46,6 @@ export default function AuditTableRow({
       <td className="px-3 py-3 align-top">
         <div className="font-bold text-slate-100 group-hover:text-emerald-400 text-xs leading-snug transition-colors flex items-center gap-1">
           <span>{item.schemeName}</span>
-          <ExternalLink className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         </div>
         <div className="text-[10px] text-slate-400 mt-1">
           {getOverlapSubCategory(item.schemeName, item.schemeCategory)}

@@ -1,25 +1,33 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import * as XLSX from "xlsx";
-import TransactionUploadModal from "@/components/mutual-fund/transactions/TransactionUploadModal";
 import { getOverlapSubCategory } from "@/helpers/allocation";
 import { getAuditItemKey } from "@/helpers/audit";
 import { parseAuditUrlState, updateAuditUrlParams } from "@/helpers/auditUrl";
-import { getFundDetailsUrl } from "@/helpers/formatters";
+import { exportJsonToExcel } from "@/helpers/excelExport";
+import { getFundDetailsUrl } from "@/utils/formatters";
 import AuditHeaderBanner from "./AuditHeaderBanner";
 import AuditHeroCards from "./AuditHeroCards";
-import AuditFilterModal from "./modal/AuditFilterModal";
 import AuditTable from "./table/AuditTable";
 import AuditToolbar from "./AuditToolbar";
+
+const TransactionUploadModal = dynamic(
+  () => import("@/components/mutual-fund/transactions/TransactionUploadModal"),
+  { ssr: false }
+);
+const AuditFilterModal = dynamic(() => import("./modal/AuditFilterModal"), {
+  ssr: false,
+});
 import type {
   AuditClientProps,
   AuditHoldingItem,
   AuditSortField,
-  AuditSortOrder,
   AuditStatusType,
+  AuditHoldingFilter,
 } from "@/types/audit";
+import type { SortOrder } from "@/types/tableSort";
 
 export default function AuditClient({ initialAuditData }: AuditClientProps) {
   const router = useRouter();
@@ -33,9 +41,9 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
   const [statusFilters, setStatusFilters] = useState<AuditStatusType[]>(
     initialUrlState.statusFilters
   );
-  const [activityFilter, setActivityFilter] = useState<
-    "ALL" | "ACTIVE" | "INACTIVE"
-  >(initialUrlState.activityFilter);
+  const [activityFilter, setActivityFilter] = useState<AuditHoldingFilter>(
+    initialUrlState.activityFilter
+  );
   const [memberFilter, setMemberFilter] = useState(
     initialUrlState.memberFilter
   );
@@ -55,7 +63,7 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
   const [sortField, setSortField] = useState<AuditSortField>(
     initialUrlState.sortField
   );
-  const [sortOrder, setSortOrder] = useState<AuditSortOrder>(
+  const [sortOrder, setSortOrder] = useState<SortOrder>(
     initialUrlState.sortOrder
   );
 
@@ -303,7 +311,7 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
   };
 
   const handleSort = (field: AuditSortField) => {
-    let nextOrder: AuditSortOrder = "desc";
+    let nextOrder: SortOrder = "desc";
     if (sortField === field) {
       nextOrder = sortOrder === "asc" ? "desc" : "asc";
     }
@@ -337,63 +345,66 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
     );
   };
 
-  // XLSX Export Handler matching exact report format
-  const handleExportXlsx = () => {
+  // XLSX Export Handler matching exact report format using ExcelJS
+  const handleExportXlsx = async () => {
     const data = filteredItems.map((item, idx) => ({
-      "#": rankMap.get(getAuditItemKey(item)) ?? idx + 1,
-      "Member Name": item.memberName,
-      "Scheme Name": item.schemeName,
-      "Folio No": item.folioNo,
-      "Holding Status": item.isActive ? "Active" : "Inactive / Redeemed",
-      "CAS Balance Units": Number(item.casBalanceUnits.toFixed(3)),
-      "Transaction Net Units": Number(item.txNetUnits.toFixed(3)),
-      "Unit Difference": Number(item.unitDifference.toFixed(3)),
-      "Unit Status": item.unitStatus,
-      "CAS Purchase Value (₹)": Number(item.casPurchaseValue.toFixed(2)),
-      "Transaction Net Amount (₹)": Number(item.txNetAmount.toFixed(2)),
-      "Total Buy Amount (₹)": Number(item.totalBuyAmount.toFixed(2)),
-      "Total Sell Amount (₹)": Number(item.totalSellAmount.toFixed(2)),
-      "Total STT (₹)": Number(item.totalStt.toFixed(2)),
-      "Total Stamp Duty (₹)": Number(item.totalStampDuty.toFixed(2)),
-      "Net+Charges Amount (₹)": Number(item.txNetAmountWithCharges.toFixed(2)),
-      "Amount Difference (₹)": Number(item.amountDifference.toFixed(2)),
-      "CAS Current Value (₹)": Number(item.casCurrentValue.toFixed(2)),
-      "Audit Status": item.auditStatus.replace(/_/g, " "),
-      "Root Cause & Analysis": item.rootCauseAnalysis,
+      index: rankMap.get(getAuditItemKey(item)) ?? idx + 1,
+      memberName: item.memberName,
+      schemeName: item.schemeName,
+      folioNo: item.folioNo,
+      holdingStatus: item.isActive ? "Active" : "Inactive / Redeemed",
+      casBalanceUnits: Number(item.casBalanceUnits.toFixed(3)),
+      txNetUnits: Number(item.txNetUnits.toFixed(3)),
+      unitDifference: Number(item.unitDifference.toFixed(3)),
+      unitStatus: item.unitStatus,
+      casPurchaseValue: Number(item.casPurchaseValue.toFixed(2)),
+      txNetAmount: Number(item.txNetAmount.toFixed(2)),
+      totalBuyAmount: Number(item.totalBuyAmount.toFixed(2)),
+      totalSellAmount: Number(item.totalSellAmount.toFixed(2)),
+      totalStt: Number(item.totalStt.toFixed(2)),
+      totalStampDuty: Number(item.totalStampDuty.toFixed(2)),
+      txNetAmountWithCharges: Number(item.txNetAmountWithCharges.toFixed(2)),
+      amountDifference: Number(item.amountDifference.toFixed(2)),
+      casCurrentValue: Number(item.casCurrentValue.toFixed(2)),
+      auditStatus: item.auditStatus.replace(/_/g, " "),
+      rootCauseAnalysis: item.rootCauseAnalysis,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    // Set nice column widths
-    const colWidths = [
-      { wch: 6 }, // #
-      { wch: 25 }, // Member Name
-      { wch: 40 }, // Scheme Name
-      { wch: 18 }, // Folio No
-      { wch: 20 }, // Holding Status
-      { wch: 18 }, // CAS Balance Units
-      { wch: 20 }, // Transaction Net Units
-      { wch: 16 }, // Unit Difference
-      { wch: 16 }, // Unit Status
-      { wch: 22 }, // CAS Purchase Value (₹)
-      { wch: 24 }, // Transaction Net Amount (₹)
-      { wch: 20 }, // Total Buy Amount (₹)
-      { wch: 20 }, // Total Sell Amount (₹)
-      { wch: 14 }, // Total STT (₹)
-      { wch: 18 }, // Total Stamp Duty (₹)
-      { wch: 22 }, // Net+Charges Amount (₹)
-      { wch: 20 }, // Amount Difference (₹)
-      { wch: 20 }, // CAS Current Value (₹)
-      { wch: 20 }, // Audit Status
-      { wch: 60 }, // Root Cause & Analysis
+    const columns = [
+      { header: "#", key: "index", width: 6 },
+      { header: "Member Name", key: "memberName", width: 25 },
+      { header: "Scheme Name", key: "schemeName", width: 40 },
+      { header: "Folio No", key: "folioNo", width: 18 },
+      { header: "Holding Status", key: "holdingStatus", width: 20 },
+      { header: "CAS Balance Units", key: "casBalanceUnits", width: 18 },
+      { header: "Transaction Net Units", key: "txNetUnits", width: 20 },
+      { header: "Unit Difference", key: "unitDifference", width: 16 },
+      { header: "Unit Status", key: "unitStatus", width: 16 },
+      { header: "CAS Purchase Value (₹)", key: "casPurchaseValue", width: 22 },
+      { header: "Transaction Net Amount (₹)", key: "txNetAmount", width: 24 },
+      { header: "Total Buy Amount (₹)", key: "totalBuyAmount", width: 20 },
+      { header: "Total Sell Amount (₹)", key: "totalSellAmount", width: 20 },
+      { header: "Total STT (₹)", key: "totalStt", width: 14 },
+      { header: "Total Stamp Duty (₹)", key: "totalStampDuty", width: 18 },
+      {
+        header: "Net+Charges Amount (₹)",
+        key: "txNetAmountWithCharges",
+        width: 22,
+      },
+      { header: "Amount Difference (₹)", key: "amountDifference", width: 20 },
+      { header: "CAS Current Value (₹)", key: "casCurrentValue", width: 20 },
+      { header: "Audit Status", key: "auditStatus", width: 20 },
+      { header: "Root Cause & Analysis", key: "rootCauseAnalysis", width: 60 },
     ];
-    worksheet["!cols"] = colWidths;
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "CAS Reconciliation");
 
     const fileName = `CAS_Reconciliation_Audit_${new Date().toISOString().split("T")[0]}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
+
+    await exportJsonToExcel({
+      sheetName: "CAS Reconciliation",
+      columns,
+      data,
+      fileName,
+    });
   };
 
   return (
@@ -414,22 +425,24 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
       />
 
       {/* Filter Modal */}
-      <AuditFilterModal
-        isOpen={mounted && filterPanelOpen}
-        onClose={() => setFilterPanelOpen(false)}
-        statusFilters={statusFilters}
-        setStatusFilters={setStatusFilters}
-        activityFilter={activityFilter}
-        setActivityFilter={setActivityFilter}
-        memberFilter={memberFilter}
-        setMemberFilter={setMemberFilter}
-        categoryFilter={categoryFilter}
-        setCategoryFilter={setCategoryFilter}
-        membersList={membersList}
-        categoriesList={categoriesList}
-        onClearAll={handleClearAll}
-        resultCount={filteredItems.length}
-      />
+      {mounted && filterPanelOpen && (
+        <AuditFilterModal
+          isOpen={filterPanelOpen}
+          onClose={() => setFilterPanelOpen(false)}
+          statusFilters={statusFilters}
+          setStatusFilters={setStatusFilters}
+          activityFilter={activityFilter}
+          setActivityFilter={setActivityFilter}
+          memberFilter={memberFilter}
+          setMemberFilter={setMemberFilter}
+          categoryFilter={categoryFilter}
+          setCategoryFilter={setCategoryFilter}
+          membersList={membersList}
+          categoriesList={categoriesList}
+          onClearAll={handleClearAll}
+          resultCount={filteredItems.length}
+        />
+      )}
 
       {/* Search + Filters card */}
       <AuditToolbar
@@ -468,10 +481,12 @@ export default function AuditClient({ initialAuditData }: AuditClientProps) {
         onItemClick={handleItemClick}
       />
 
-      <TransactionUploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-      />
+      {mounted && isUploadModalOpen && (
+        <TransactionUploadModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

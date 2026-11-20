@@ -1,12 +1,12 @@
 import { createPortal } from "react-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import {
   SingleSelectFilter,
   MultiSelectFilter,
   FilterSectionDivider,
 } from "@/components/shared/filters/CommonFilterComponents";
 import { AUDIT_STATUS_OPTIONS } from "@/helpers/audit";
-import type { AuditFilterModalProps } from "@/types/audit";
+import type { AuditFilterModalProps, AuditHoldingFilter } from "@/types/audit";
 
 export default function AuditFilterModal({
   isOpen,
@@ -46,10 +46,10 @@ export default function AuditFilterModal({
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition text-xs"
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition cursor-pointer"
             aria-label="Close filters"
           >
-            ✕
+            <X size={15} />
           </button>
         </div>
 
@@ -74,9 +74,7 @@ export default function AuditFilterModal({
           <SingleSelectFilter
             label="Folio Activity"
             value={activityFilter}
-            onChange={(val) =>
-              setActivityFilter(val as "ALL" | "ACTIVE" | "INACTIVE")
-            }
+            onChange={(val) => setActivityFilter(val as AuditHoldingFilter)}
             options={[
               { id: "ACTIVE", label: "Active" },
               { id: "INACTIVE", label: "Inactive / Zero Balance" },

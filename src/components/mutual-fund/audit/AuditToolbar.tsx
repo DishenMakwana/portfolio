@@ -1,4 +1,4 @@
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, User, Tag, X } from "lucide-react";
 import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import { formatAuditStatusBadge } from "@/helpers/audit";
 import type { AuditStatusType, AuditToolbarProps } from "@/types/audit";
@@ -98,15 +98,17 @@ export default function AuditToolbar({
                   : "bg-amber-500/15 text-amber-300 border-amber-500/30"
               }`}
             >
-              {activityFilter === "ACTIVE"
-                ? "Active Only"
-                : "Inactive / Redeemed Only"}
+              <span>
+                {activityFilter === "ACTIVE"
+                  ? "Active Only"
+                  : "Inactive / Redeemed Only"}
+              </span>
               <button
                 onClick={() => setActivityFilter("ALL")}
-                className="hover:opacity-70 transition ml-0.5"
+                className="hover:opacity-70 transition ml-0.5 cursor-pointer"
                 aria-label="Remove activity filter"
               >
-                ✕
+                <X size={11} className="shrink-0" />
               </button>
             </span>
           )}
@@ -115,42 +117,44 @@ export default function AuditToolbar({
             return (
               <span
                 key={s}
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.badgeClass}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badge.badgeClass}`}
               >
-                {badge.label}
+                <span>{badge.label}</span>
                 <button
                   onClick={() =>
                     setStatusFilters((prev) => prev.filter((x) => x !== s))
                   }
-                  className="hover:opacity-70 transition ml-0.5"
+                  className="hover:opacity-70 transition ml-0.5 cursor-pointer"
                   aria-label={`Remove ${badge.label} filter`}
                 >
-                  ✕
+                  <X size={11} className="shrink-0" />
                 </button>
               </span>
             );
           })}
           {memberFilter !== "ALL" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              👤 {memberFilter}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <User size={11} className="shrink-0 text-emerald-400" />
+              <span>{memberFilter}</span>
               <button
                 onClick={() => setMemberFilter("ALL")}
-                className="hover:opacity-70 transition ml-0.5"
+                className="hover:opacity-70 transition ml-0.5 cursor-pointer"
                 aria-label="Remove member filter"
               >
-                ✕
+                <X size={11} className="shrink-0" />
               </button>
             </span>
           )}
           {categoryFilter !== "ALL" && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-              🏷 {categoryFilter}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+              <Tag size={11} className="shrink-0 text-sky-400" />
+              <span>{categoryFilter}</span>
               <button
                 onClick={() => setCategoryFilter("ALL")}
-                className="hover:opacity-70 transition ml-0.5"
+                className="hover:opacity-70 transition ml-0.5 cursor-pointer"
                 aria-label="Remove category filter"
               >
-                ✕
+                <X size={11} className="shrink-0" />
               </button>
             </span>
           )}
