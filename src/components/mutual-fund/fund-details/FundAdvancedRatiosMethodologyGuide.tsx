@@ -7,6 +7,7 @@ import {
   Shield,
   Waves,
   PieChart,
+  CheckCircle2,
 } from "lucide-react";
 import type { FundAdvancedRatiosMethodologyGuideProps } from "@/types/fund-details";
 
@@ -42,8 +43,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <TrendingUp size={14} className="text-purple-400" />
                   Alpha (α)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  🟢 Higher is Better (&gt; 0)
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  Higher is Better (&gt; 0)
                 </span>
               </div>
               <div className="text-[11px]  text-purple-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -64,8 +66,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Activity size={14} className="text-indigo-400" />
                   Beta (β)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                  🛡️ &lt; 1.0 = Defensive | &gt; 1.0 = Aggressive
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 inline-flex items-center gap-1">
+                  <Shield size={10} className="shrink-0" />
+                  &lt; 1.0 = Defensive | &gt; 1.0 = Aggressive
                 </span>
               </div>
               <div className="text-[11px]  text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -87,8 +90,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Activity size={14} className="text-teal-400" />
                   Sharpe Ratio
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                  🟢 Higher is Better
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-400 border border-teal-500/20 inline-flex items-center gap-1">
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  Higher is Better
                 </span>
               </div>
               <div className="text-[11px]  text-teal-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -109,8 +113,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Shield size={14} className="text-emerald-400" />
                   Sortino Ratio
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  🟢 Higher is Better
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  Higher is Better
                 </span>
               </div>
               <div className="text-[11px]  text-emerald-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -130,8 +135,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Waves size={14} className="text-sky-400" />
                   Standard Deviation (σ)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                  🛡️ Lower is Calmer
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-flex items-center gap-1">
+                  <Shield size={10} className="shrink-0" />
+                  Lower is Calmer
                 </span>
               </div>
               <div className="text-[11px]  text-sky-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -152,8 +158,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Activity size={14} className="text-indigo-400" />
                   R-Squared (R²)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                  🟢 &gt; 80% Reliable Benchmark
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 inline-flex items-center gap-1">
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  &gt; 80% Reliable Benchmark
                 </span>
               </div>
               <div className="text-[11px]  text-indigo-300 bg-slate-950/60 p-2 rounded-lg border border-slate-855">
@@ -174,8 +181,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <PieChart size={14} className="text-sky-400" />
                   Valuation Multiples (P/E &amp; P/B)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                  🟢 Lower = Value / Discount | Higher = Growth
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-flex items-center gap-1">
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  Lower = Value / Discount | Higher = Growth
                 </span>
               </div>
               <p className="text-slate-400 leading-relaxed text-[11px]">
@@ -193,8 +201,9 @@ export default function FundAdvancedRatiosMethodologyGuide({
                   <Shield size={14} className="text-amber-400" />
                   Portfolio Concentration (Top 5 &amp; 20)
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  🛡️ Lower = Better Diversification
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 inline-flex items-center gap-1">
+                  <Shield size={10} className="shrink-0" />
+                  Lower = Better Diversification
                 </span>
               </div>
               <p className="text-slate-400 leading-relaxed text-[11px]">

@@ -15,14 +15,14 @@ import {
   Label,
 } from "recharts";
 import { TrendingUp, AlertTriangle } from "lucide-react";
-import { parseToLocalMidnight } from "@/helpers/dates";
+import { parseToLocalMidnight } from "@/utils/dates";
 import type {
   EntryPointMarker,
-  FundTimeframe,
   HistoricalReturnsChartCardProps,
 } from "@/types/fund-details";
-import type { FactsheetChartPoint } from "@/types/portfolio";
-import { fetchChartData } from "@/actions/chartActions";
+import type { FactsheetChartPoint, FundTimeframe } from "@/types/portfolio";
+import type { TransactionType } from "@/types/transactions";
+import { fetchChartDataApi } from "@/service/chartService";
 
 import HistoricalReturnsChartHeader from "./HistoricalReturnsChartHeader";
 import HistoricalReturnsChartTooltip from "./HistoricalReturnsChartTooltip";
@@ -94,6 +94,7 @@ export default function HistoricalReturnsChartCard({
         "1y": 12,
         "3y": 36,
         "5y": 60,
+        "10y": 120,
       };
       const monthsToSubtract = tfMonths[tf] ?? 0;
       if (monthsToSubtract === 0) return parentData;
@@ -142,7 +143,7 @@ export default function HistoricalReturnsChartCard({
     () =>
       transactions.map((tx) => ({
         date: tx.date,
-        type: tx.type as "BUY" | "SELL",
+        type: tx.type as TransactionType,
         amount: tx.amount,
       })),
     [transactions]
@@ -157,7 +158,7 @@ export default function HistoricalReturnsChartCard({
 
     setIsLoadingChart(true);
     try {
-      const result = await fetchChartData(
+      const res = await fetchChartDataApi(
         schemeCodeApi,
         benchmarkCode,
         holding.asOfDate || new Date().toISOString().split("T")[0],
@@ -166,8 +167,11 @@ export default function HistoricalReturnsChartCard({
         holdingType,
         source
       );
-      chartCache.current.set("all", result.chartData);
-      return result.chartData;
+      if (res.success && res.data) {
+        chartCache.current.set("all", res.data.chartData);
+        return res.data.chartData;
+      }
+      return activeChartData;
     } catch (err) {
       console.error("Failed to fetch full chart data:", err);
       return activeChartData;
@@ -259,7 +263,7 @@ export default function HistoricalReturnsChartCard({
       // 3. Cache miss: fetch from server
       setIsLoadingChart(true);
       try {
-        const result = await fetchChartData(
+        const res = await fetchChartDataApi(
           schemeCodeApi,
           benchmarkCode,
           holding.asOfDate || new Date().toISOString().split("T")[0],
@@ -269,10 +273,11 @@ export default function HistoricalReturnsChartCard({
           source
         );
 
-        // Store in cache
-        chartCache.current.set(tf, result.chartData);
-
-        setActiveChartData(result.chartData);
+        if (res.success && res.data) {
+          // Store in cache
+          chartCache.current.set(tf, res.data.chartData);
+          setActiveChartData(res.data.chartData);
+        }
       } catch (err) {
         console.error("Failed to fetch chart data:", err);
       } finally {
@@ -422,7 +427,7 @@ export default function HistoricalReturnsChartCard({
       return ticks.length >= 2 ? ticks : undefined;
     }
 
-    if (timeframe === "all") {
+    if (timeframe === "10y" || timeframe === "all") {
       const ticks: number[] = [];
       const current = new Date(firstTime);
       current.setDate(1);
@@ -456,7 +461,7 @@ export default function HistoricalReturnsChartCard({
         const txD = parseToLocalMidnight(tx.date);
         if (!txD) continue;
         const txTime = txD.getTime();
-        const txType = tx.type as "BUY" | "SELL";
+        const txType = tx.type as TransactionType;
 
         const isVisible = filteredChartData.some(
           (pt) => Math.abs(pt.timestamp - txTime) < MATCH_THRESHOLD_MS
@@ -584,6 +589,7 @@ export default function HistoricalReturnsChartCard({
 
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
+              key={`fund-history-chart-${timeframe}-${customFromDate}-${customToDate}-${filteredChartData.length}`}
               data={filteredChartData}
               margin={{ top: 28, right: 30, left: 0, bottom: 0 }}
             >
@@ -639,7 +645,8 @@ export default function HistoricalReturnsChartCard({
                   fill="#94a3b8"
                   fontSize={10}
                   fontWeight={600}
-                  style={{ textAnchor: "middle" }}
+                  textAnchor="middle"
+                  className="text-anchor-middle font-semibold text-[10px] fill-slate-400"
                 />
               </YAxis>
               <Tooltip
@@ -730,9 +737,7 @@ export default function HistoricalReturnsChartCard({
                     fill="#10b981"
                     stroke="#ffffff"
                     strokeWidth={2}
-                    style={{
-                      filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.4))",
-                    }}
+                    className="chart-badge-shadow"
                   >
                     <Label
                       content={
@@ -756,9 +761,7 @@ export default function HistoricalReturnsChartCard({
                     fill="#f43f5e"
                     stroke="#ffffff"
                     strokeWidth={2}
-                    style={{
-                      filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.4))",
-                    }}
+                    className="chart-badge-shadow"
                   >
                     <Label
                       content={
@@ -800,16 +803,28 @@ export default function HistoricalReturnsChartCard({
       <div className="mt-4 pt-3.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 font-medium">
         <div className="flex items-center gap-4 flex-wrap">
           <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            Green line: Fund Return
+            <span className="w-4 h-0.5 bg-emerald-400 rounded-full inline-block" />
+            Fund Return
           </span>
           <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
-            <span className="w-2 h-2 rotate-45 rounded-[0.5px] bg-indigo-400"></span>
-            Dashed blue: Benchmark Return
+            <span className="w-4 h-0 border-t-2 border-dashed border-indigo-400 inline-block" />
+            Benchmark Return
           </span>
+          {/* <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white inline-block shadow-sm" />
+            Fund Point
+          </span>
+          <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
+            <span className="w-2.5 h-2.5 bg-indigo-500 border border-white rotate-45 rounded-[0.5px] inline-block shadow-sm" />
+            Benchmark Point
+          </span> */}
           <span className="flex items-center gap-1.5 text-teal-300 font-semibold">
-            <span className="w-2 h-2 rounded-full bg-teal-400"></span>
-            Dots: Buy / Sell Transactions
+            <span className="w-2 h-2 rounded-full bg-teal-400 inline-block" />
+            Buy Transaction
+          </span>
+          <span className="flex items-center gap-1.5 text-rose-300 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+            Sell Transaction
           </span>
         </div>
 

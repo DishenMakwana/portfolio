@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowLeft, Calendar, RefreshCw } from "lucide-react";
-import { formatNullableDate } from "@/helpers/formatters";
+import { ArrowLeft, Calendar, RefreshCw, Trophy, Star } from "lucide-react";
+import { formatNullableDate } from "@/utils/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import NotificationBellDropdown from "@/components/shared/NotificationBellDropdown";
 import FolioBadge from "@/components/shared/FolioBadge";
-import { FundDetailsHeaderProps } from "@/types/fund-details";
+import type { FundDetailsHeaderProps } from "@/types/fund-details";
 
 export default function FundDetailsHeader({
   holding,
@@ -52,12 +52,24 @@ export default function FundDetailsHeader({
             ? "bg-sky-950/70 text-sky-300 border-sky-500/30"
             : "bg-slate-850/90 text-slate-300 border-slate-700/60";
 
-    const rankText =
-      primary.rank === 1
-        ? `🏆 #1 in Cat (${primary.horizon})`
-        : primary.rank <= 5
-          ? `⭐ #${primary.rank} (${primary.horizon})`
-          : `Rank #${primary.rank} (${primary.horizon})`;
+    const rankContent =
+      primary.rank === 1 ? (
+        <>
+          <Trophy size={11} className="shrink-0 text-amber-400" />
+          <span>#1 in Cat ({primary.horizon})</span>
+        </>
+      ) : primary.rank <= 5 ? (
+        <>
+          <Star size={11} className="shrink-0 text-amber-400" />
+          <span>
+            #{primary.rank} ({primary.horizon})
+          </span>
+        </>
+      ) : (
+        <span>
+          Rank #{primary.rank} ({primary.horizon})
+        </span>
+      );
 
     const titleText = `Category: ${categoryRankingsData.categoryName || cleanCategory}\n${Object.entries(
       ranks
@@ -66,7 +78,7 @@ export default function FundDetailsHeader({
       .map(([hz, r]) => `${hz}: #${r}`)
       .join(" • ")}`;
 
-    return { primary, rankPillClass, rankText, titleText };
+    return { primary, rankPillClass, rankContent, titleText };
   })();
 
   return (
@@ -92,7 +104,7 @@ export default function FundDetailsHeader({
                 title={rankSummary.titleText}
                 className={`inline-flex items-center gap-1 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border transition-colors ${rankSummary.rankPillClass}`}
               >
-                {rankSummary.rankText}
+                {rankSummary.rankContent}
               </span>
             )}
             {isUnlistedStock(holding.schemeName) && (

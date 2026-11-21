@@ -18,10 +18,11 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { calculateYoyReturns } from "@/helpers/yoyReturns";
-import { formatPercent } from "@/helpers/formatters";
+import { formatPercent } from "@/utils/formatters";
 import type {
   FundYoyReturnsCardProps,
   CustomYoyTooltipProps,
+  YoyReturnsMode,
 } from "@/types/fund-details";
 
 function CustomYoyTooltip({
@@ -92,7 +93,7 @@ export default function FundYoyReturnsCard({
   benchmarkName = "Benchmark Index",
   isStock = false,
 }: FundYoyReturnsCardProps) {
-  const [mode, setMode] = useState<"CY" | "FY">("CY");
+  const [mode, setMode] = useState<YoyReturnsMode>("CY");
 
   const yoyData = useMemo(() => {
     return calculateYoyReturns(navHistory, benchmarkNavHistory, mode);
@@ -317,6 +318,7 @@ export default function FundYoyReturnsCard({
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              key={`fund-yoy-chart-${chartData.length}-${chartData[0]?.periodLabel || ""}`}
               data={chartData}
               margin={{ top: 10, right: 10, left: -10, bottom: 10 }}
             >
@@ -351,6 +353,9 @@ export default function FundYoyReturnsCard({
                 fill="#2dd4bf"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={32}
+                isAnimationActive={true}
+                animationDuration={1000}
+                animationEasing="ease-out"
               />
               <Bar
                 dataKey="benchmarkReturn"
@@ -358,6 +363,9 @@ export default function FundYoyReturnsCard({
                 fill="#6366f1"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={32}
+                isAnimationActive={true}
+                animationDuration={1000}
+                animationEasing="ease-out"
               />
             </BarChart>
           </ResponsiveContainer>

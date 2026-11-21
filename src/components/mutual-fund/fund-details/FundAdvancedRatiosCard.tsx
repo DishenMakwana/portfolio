@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { CheckCircle2, TrendingUp } from "lucide-react";
-import { refreshSchemeCategoryRankingAction } from "@/actions/fundRankings";
-import { syncBenchmarkCategoryRatiosAction } from "@/actions/categoryRatios";
-import { isCacheFresh } from "@/helpers/dates";
-import { formatDateSlashDDMMYYYY } from "@/helpers/formatters";
+import {
+  refreshSchemeCategoryRankingApi,
+  syncBenchmarkCategoryRatiosApi,
+} from "@/service/rankingService";
+import { isCacheFresh } from "@/utils/dates";
+import { formatDateSlashDDMMYYYY } from "@/utils/formatters";
 import type {
   CategoryBenchmarkRatios,
   FundAdvancedRatiosCardProps,
@@ -50,9 +52,9 @@ export default function FundAdvancedRatiosCard({
     );
     try {
       const [fundRes, catRes] = await Promise.all([
-        refreshSchemeCategoryRankingAction(schemeCode),
+        refreshSchemeCategoryRankingApi(schemeCode),
         categoryName
-          ? syncBenchmarkCategoryRatiosAction(categoryName, schemeCode)
+          ? syncBenchmarkCategoryRatiosApi(categoryName, schemeCode)
           : Promise.resolve({ success: true, data: null }),
       ]);
 

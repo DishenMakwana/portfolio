@@ -2,11 +2,12 @@
 
 import { useState, useMemo } from "react";
 import { RotateCw, Info, Award, CheckCircle2 } from "lucide-react";
-import { refreshSchemeCategoryRankingAction } from "@/actions/fundRankings";
-import { isCacheFresh } from "@/helpers/dates";
-import { formatDateSlashDDMMYYYY } from "@/helpers/formatters";
+import { refreshSchemeCategoryRankingApi } from "@/service/rankingService";
+import { isCacheFresh } from "@/utils/dates";
+import { formatDateSlashDDMMYYYY } from "@/utils/formatters";
 import type {
   FundReturnsAndRankingsCardProps,
+  FundReturnsTabMode,
   SchemeCategoryRankingsData,
 } from "@/types/fund-details";
 import toast from "react-hot-toast";
@@ -18,9 +19,7 @@ export default function FundReturnsAndRankingsCard({
   initialRankingsData,
   onDataUpdated,
 }: FundReturnsAndRankingsCardProps) {
-  const [activeTab, setActiveTab] = useState<"annualised" | "absolute">(
-    "annualised"
-  );
+  const [activeTab, setActiveTab] = useState<FundReturnsTabMode>("annualised");
   const [data, setData] = useState<SchemeCategoryRankingsData | null>(
     initialRankingsData
   );
@@ -35,7 +34,7 @@ export default function FundReturnsAndRankingsCard({
       "Scraping latest Groww returns, ratios & holdings..."
     );
     try {
-      const res = await refreshSchemeCategoryRankingAction(schemeCode);
+      const res = await refreshSchemeCategoryRankingApi(schemeCode);
       if (res.success && res.data) {
         setData(res.data);
         if (onDataUpdated) {

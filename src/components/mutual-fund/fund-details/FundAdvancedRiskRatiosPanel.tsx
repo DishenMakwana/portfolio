@@ -1,3 +1,4 @@
+import { CheckCircle2, Shield } from "lucide-react";
 import type { FundAdvancedRiskRatiosPanelProps } from "@/types/fund-details";
 
 export default function FundAdvancedRiskRatiosPanel({
@@ -45,8 +46,9 @@ export default function FundAdvancedRiskRatiosPanel({
                   : `${alpha.toFixed(2)}%`
                 : "--"}
             </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
-              🟢 Higher is Better
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 inline-flex items-center gap-1">
+              <CheckCircle2 size={10} className="shrink-0" />
+              Higher is Better
             </span>
           </div>
         </div>
@@ -89,8 +91,9 @@ export default function FundAdvancedRiskRatiosPanel({
             <div className="text-xl sm:text-2xl font-black text-indigo-400 tracking-tight tabular-nums">
               {beta != null ? beta.toFixed(2) : "--"}
             </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-semibold border border-indigo-500/20">
-              🛡️ &lt; 1.0 Defensive
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 font-semibold border border-indigo-500/20 inline-flex items-center gap-1">
+              <Shield size={10} className="shrink-0" />
+              &lt; 1.0 Defensive
             </span>
           </div>
         </div>
@@ -128,8 +131,9 @@ export default function FundAdvancedRiskRatiosPanel({
             <div className="text-xl sm:text-2xl font-black text-teal-400 tracking-tight tabular-nums">
               {sharpe != null ? sharpe.toFixed(2) : "--"}
             </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 font-semibold border border-teal-500/20">
-              🟢 Higher is Better
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 font-semibold border border-teal-500/20 inline-flex items-center gap-1">
+              <CheckCircle2 size={10} className="shrink-0" />
+              Higher is Better
             </span>
           </div>
         </div>
@@ -169,8 +173,9 @@ export default function FundAdvancedRiskRatiosPanel({
             <div className="text-xl sm:text-2xl font-black text-emerald-400 tracking-tight tabular-nums">
               {sortino != null ? sortino.toFixed(2) : "--"}
             </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
-              🟢 Higher is Better
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 inline-flex items-center gap-1">
+              <CheckCircle2 size={10} className="shrink-0" />
+              Higher is Better
             </span>
           </div>
         </div>

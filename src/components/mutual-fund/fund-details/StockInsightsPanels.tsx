@@ -15,14 +15,13 @@ import {
 } from "lucide-react";
 import type { StockFundamentalsData } from "@/types/stock-fundamentals";
 import type { StockInsightsPanelsProps } from "@/types/fund-details";
-import { refreshStockFundamentalsAction } from "@/actions/stockFundamentals";
-import { formatDateSlashDDMMYYYY } from "@/helpers/formatters";
+import { refreshStockFundamentalsApi } from "@/service/rankingService";
+import { formatDateSlashDDMMYYYY } from "@/utils/formatters";
 import { motion } from "framer-motion";
 
 export function StockInsightsPanels({
   stockData: initialData,
   symbol,
-  currentPrice,
   listingDate,
   indexBenchmark,
   sector,
@@ -35,7 +34,7 @@ export function StockInsightsPanels({
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      const res = await refreshStockFundamentalsAction(symbol);
+      const res = await refreshStockFundamentalsApi(symbol);
       if (res.success && res.data) {
         setData(res.data);
       }
@@ -50,17 +49,6 @@ export function StockInsightsPanels({
   const cleanMarketCapCategory =
     marketCapCategory || data?.marketCapCategory || "—";
   const benchmarkName = indexBenchmark || "Nifty 50 Index";
-
-  // Calculate 52W position percentage
-  const low52 = data?.yearLow ?? null;
-  const high52 = data?.yearHigh ?? null;
-  let pricePct = 50;
-  if (currentPrice && low52 !== null && high52 !== null && high52 > low52) {
-    pricePct = Math.min(
-      100,
-      Math.max(0, ((currentPrice - low52) / (high52 - low52)) * 100)
-    );
-  }
 
   // Format Helper for Growth
   const renderGrowthBadge = (valStr: string | null | undefined) => {
@@ -218,54 +206,6 @@ export function StockInsightsPanels({
             </div>
           </div>
         </div>
-
-        {/* 52-Week Range Bar */}
-        {low52 !== null && high52 !== null && (
-          <div className="border-t border-slate-800/80 pt-4 mt-2">
-            <div className="flex justify-between items-center text-xs font-bold mb-2">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">
-                  52-Week Low
-                </span>
-                <span className="text-rose-400 font-black text-sm">
-                  ₹{low52.toFixed(2)}
-                </span>
-              </div>
-
-              {currentPrice && (
-                <div className="flex flex-col items-center">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-extrabold">
-                    Current Price
-                  </span>
-                  <span className="text-teal-300 font-black text-sm">
-                    ₹{currentPrice.toFixed(2)}
-                  </span>
-                </div>
-              )}
-
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">
-                  52-Week High
-                </span>
-                <span className="text-emerald-400 font-black text-sm">
-                  ₹{high52.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* Slider track */}
-            <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800/80 relative">
-              <div
-                className="h-full bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 rounded-full opacity-75"
-                style={{ width: "100%" }}
-              />
-              <div
-                className="absolute top-0 bottom-0 w-2 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.9)] -ml-1 transition-all duration-500"
-                style={{ left: `${pricePct}%` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* SECOND ROW: FINANCIAL GROWTH (EXACT SPLIT FROM SCREENSHOT 2) */}

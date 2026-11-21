@@ -1,7 +1,5 @@
-import type {
-  CustomTooltipProps,
-  FundHistoricalTxMarker,
-} from "@/types/fund-details";
+import type { CustomTooltipProps } from "@/types/fund-details";
+import type { FundHistoricalTxMarker } from "@/types/portfolio";
 
 export default function HistoricalReturnsChartTooltip({
   active,

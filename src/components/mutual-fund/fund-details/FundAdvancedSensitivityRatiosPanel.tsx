@@ -1,3 +1,4 @@
+import { Shield, CheckCircle2, AlertCircle } from "lucide-react";
 import type { FundAdvancedSensitivityRatiosPanelProps } from "@/types/fund-details";
 
 export default function FundAdvancedSensitivityRatiosPanel({
@@ -23,8 +24,9 @@ export default function FundAdvancedSensitivityRatiosPanel({
             <div className="text-xl sm:text-2xl font-black text-sky-400 tracking-tight tabular-nums">
               {stdDev != null ? `${stdDev.toFixed(2)}%` : "--"}
             </div>
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 font-semibold border border-sky-500/20">
-              🛡️ Lower is Calmer
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 font-semibold border border-sky-500/20 inline-flex items-center gap-1">
+              <Shield size={10} className="shrink-0" />
+              Lower is Calmer
             </span>
           </div>
         </div>
@@ -69,15 +71,23 @@ export default function FundAdvancedSensitivityRatiosPanel({
                 : "--"}
             </div>
             <span
-              className={`text-[9px] px-2 py-0.5 rounded-full font-semibold border ${
+              className={`text-[9px] px-2 py-0.5 rounded-full font-semibold border inline-flex items-center gap-1 ${
                 rSquared != null && (rSquared >= 80 || rSquared >= 0.8)
                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                   : "bg-amber-500/10 text-amber-300 border-amber-500/20"
               }`}
             >
-              {rSquared != null && (rSquared >= 80 || rSquared >= 0.8)
-                ? "🟢 High Fit (>80%)"
-                : "🟡 Active Divergence"}
+              {rSquared != null && (rSquared >= 80 || rSquared >= 0.8) ? (
+                <>
+                  <CheckCircle2 size={10} className="shrink-0" />
+                  <span>High Fit (&gt;80%)</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={10} className="shrink-0" />
+                  <span>Active Divergence</span>
+                </>
+              )}
             </span>
           </div>
         </div>

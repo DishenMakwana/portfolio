@@ -1,4 +1,4 @@
-import { Layers } from "lucide-react";
+import { Layers, Trophy, Star, ExternalLink } from "lucide-react";
 import { parseRank } from "@/helpers/watchlist";
 import type { FactsheetSchemeProfileCardProps } from "@/types/fund-details";
 
@@ -6,6 +6,8 @@ export default function FactsheetSchemeProfileCard({
   factsheetMeta,
   cleanCategory,
   rankingsData,
+  schemeName,
+  vroUrl,
 }: FactsheetSchemeProfileCardProps) {
   const ranks = rankingsData?.annualised?.categoryRank || {};
   const r5Y = parseRank(ranks["5Y"]);
@@ -35,12 +37,24 @@ export default function FactsheetSchemeProfileCard({
             ? "bg-sky-950/70 text-sky-300 border-sky-500/30"
             : "bg-slate-850 text-slate-300 border-slate-700";
 
-    const rankText =
-      primary.rank === 1
-        ? `🏆 #1 in Cat (${primary.horizon})`
-        : primary.rank <= 5
-          ? `⭐ #${primary.rank} (${primary.horizon})`
-          : `Rank #${primary.rank} (${primary.horizon})`;
+    const rankContent =
+      primary.rank === 1 ? (
+        <>
+          <Trophy size={11} className="shrink-0 text-amber-400" />
+          <span>#1 in Cat ({primary.horizon})</span>
+        </>
+      ) : primary.rank <= 5 ? (
+        <>
+          <Star size={11} className="shrink-0 text-amber-400" />
+          <span>
+            #{primary.rank} ({primary.horizon})
+          </span>
+        </>
+      ) : (
+        <span>
+          Rank #{primary.rank} ({primary.horizon})
+        </span>
+      );
 
     return (
       <div className="flex justify-between items-center text-sm border-b border-slate-850/60 pb-2">
@@ -48,7 +62,7 @@ export default function FactsheetSchemeProfileCard({
         <span
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border ${rankPillClass}`}
         >
-          {rankText}
+          {rankContent}
         </span>
       </div>
     );
@@ -60,6 +74,21 @@ export default function FactsheetSchemeProfileCard({
       ? rankingsData.expenseRatio
       : factsheetMeta.profile.expenseRatio
   ).toFixed(2);
+
+  const growwSlug = rankingsData?.growwSlug;
+  const growwLink =
+    growwSlug && growwSlug !== "NOT_FOUND"
+      ? `https://groww.in/mutual-funds/${growwSlug}`
+      : schemeName
+        ? `https://groww.in/search?q=${encodeURIComponent(schemeName)}`
+        : null;
+
+  const vroLink =
+    vroUrl && vroUrl.trim()
+      ? vroUrl.trim()
+      : schemeName
+        ? `https://www.valueresearchonline.com/funds/selector/primary-funds/?search=${encodeURIComponent(schemeName)}`
+        : null;
 
   return (
     <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 shadow-xl flex flex-col justify-between hover:border-slate-850 transition duration-300 backdrop-blur-sm">
@@ -109,6 +138,40 @@ export default function FactsheetSchemeProfileCard({
               {factsheetMeta.profile.benchmarkName}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Bottom Actions & Research Links */}
+      <div className="border-t border-slate-850 pt-4 mt-5 space-y-3">
+        <span className="text-[11px] text-slate-400 font-extrabold uppercase tracking-wider block">
+          Research Links
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {vroLink && (
+            <a
+              href={vroLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-slate-800 bg-slate-950/60 text-xs font-semibold text-slate-300 hover:border-slate-700 hover:text-teal-400 transition"
+              title="Open Value Research Online"
+            >
+              <ExternalLink size={13} className="text-slate-400" />
+              <span>Value Research</span>
+            </a>
+          )}
+
+          {growwLink && (
+            <a
+              href={growwLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl border border-slate-800 bg-slate-950/60 text-xs font-semibold text-slate-300 hover:border-slate-700 hover:text-emerald-400 transition"
+              title="Open Groww fund page"
+            >
+              <ExternalLink size={13} className="text-slate-400" />
+              <span>Groww</span>
+            </a>
+          )}
         </div>
       </div>
     </div>

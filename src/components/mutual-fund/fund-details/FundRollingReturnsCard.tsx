@@ -22,7 +22,7 @@ import {
   CheckCircle2,
   Calendar,
 } from "lucide-react";
-import { formatPercent } from "@/helpers/formatters";
+import { formatPercent } from "@/utils/formatters";
 import type { RollingHorizon } from "@/types/rollingReturns";
 import type {
   FundRollingReturnsCardProps,
@@ -110,7 +110,7 @@ export default function FundRollingReturnsCard({
   holdingName,
   isStock = false,
 }: FundRollingReturnsCardProps) {
-  // Priority order: default 5y -> fallback 3y -> fallback 1y
+  // Priority order: default 5y -> fallback 3y -> fallback 1y -> fallback si
   const defaultHorizon: RollingHorizon = useMemo(() => {
     if (rollingReturns?.statsByHorizon?.["5y"]?.totalObservations) {
       return "5y";
@@ -120,6 +120,9 @@ export default function FundRollingReturnsCard({
     }
     if (rollingReturns?.statsByHorizon?.["1y"]?.totalObservations) {
       return "1y";
+    }
+    if (rollingReturns?.statsByHorizon?.["si"]?.totalObservations) {
+      return "si";
     }
     return "1y";
   }, [rollingReturns]);
@@ -140,6 +143,7 @@ export default function FundRollingReturnsCard({
     { key: "1y", label: "1 Year" },
     { key: "3y", label: "3 Years" },
     { key: "5y", label: "5 Years" },
+    { key: "si", label: "Since Inception" },
   ];
 
   const activeStats = rollingReturns?.statsByHorizon[selectedHorizon];
@@ -433,6 +437,7 @@ export default function FundRollingReturnsCard({
           <div className="h-72 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
+                key={`fund-rolling-chart-${selectedHorizon}-${activeChartData.length}`}
                 data={activeChartData}
                 margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
               >
@@ -504,7 +509,9 @@ export default function FundRollingReturnsCard({
                   stroke="#14b8a6"
                   strokeWidth={2.2}
                   fill="url(#fundRollingGradient)"
-                  isAnimationActive={false}
+                  isAnimationActive={true}
+                  animationDuration={1000}
+                  animationEasing="ease-out"
                 />
                 <Line
                   type="monotone"
@@ -514,7 +521,9 @@ export default function FundRollingReturnsCard({
                   strokeWidth={1.8}
                   strokeDasharray="4 4"
                   dot={false}
-                  isAnimationActive={false}
+                  isAnimationActive={true}
+                  animationDuration={1000}
+                  animationEasing="ease-out"
                 />
               </AreaChart>
             </ResponsiveContainer>

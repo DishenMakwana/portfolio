@@ -1,16 +1,11 @@
 import { motion } from "framer-motion";
-import { PieChart, RotateCw } from "lucide-react";
+import { PieChart } from "lucide-react";
 import type { FactsheetMarketCapSplitCardProps } from "@/types/fund-details";
 
 export default function FactsheetMarketCapSplitCard({
   factsheetMeta,
   rankingsData,
   vroPortfolio,
-  schemeCodeApi,
-  holdingSchemeCodeApi,
-  isRefreshingVro,
-  onRefreshMarketCap,
-  isRefreshingMarketCap,
 }: FactsheetMarketCapSplitCardProps) {
   const largeCapVal =
     vroPortfolio?.marketCap?.largeCap ?? rankingsData?.marketCap?.largeCap ?? 0;
@@ -27,26 +22,13 @@ export default function FactsheetMarketCapSplitCard({
             <PieChart size={18} className="text-teal-400" />
             <span>Market Cap Split (%)</span>
           </h3>
-          <button
-            type="button"
-            onClick={onRefreshMarketCap}
-            disabled={
-              isRefreshingMarketCap ||
-              isRefreshingVro ||
-              (!schemeCodeApi && !holdingSchemeCodeApi)
-            }
-            className="p-1.5 rounded-lg border border-slate-800 bg-slate-950/60 text-slate-400 hover:text-emerald-400 hover:border-slate-700 transition disabled:opacity-50"
-            title="Sync Market Cap Data from Groww and Value Research Online"
-          >
-            <RotateCw
-              size={14}
-              className={
-                isRefreshingMarketCap || isRefreshingVro
-                  ? "animate-spin text-emerald-400"
-                  : ""
-              }
-            />
-          </button>
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60">
+            {vroPortfolio?.marketCap
+              ? "VRO"
+              : rankingsData?.marketCap
+                ? "Groww"
+                : "Portfolio"}
+          </span>
         </div>
 
         <div className="space-y-4">

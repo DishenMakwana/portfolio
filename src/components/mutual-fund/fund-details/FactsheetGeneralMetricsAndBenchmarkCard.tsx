@@ -1,5 +1,5 @@
 import { Layers, AlertTriangle } from "lucide-react";
-import { formatHoldingYearsAndDays } from "@/helpers/formatters";
+import { formatHoldingYearsAndDays } from "@/utils/formatters";
 import type { FactsheetGeneralMetricsAndBenchmarkCardProps } from "@/types/fund-details";
 
 export default function FactsheetGeneralMetricsAndBenchmarkCard({

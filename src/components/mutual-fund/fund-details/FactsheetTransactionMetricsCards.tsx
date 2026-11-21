@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, Coins, Receipt, Scale } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency } from "@/utils/formatters";
 import type { FactsheetTransactionMetricsCardsProps } from "@/types/fund-details";
 
 export default function FactsheetTransactionMetricsCards({

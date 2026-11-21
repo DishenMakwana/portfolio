@@ -10,8 +10,8 @@ import {
   formatHoldingYearsAndDays,
   formatCurrency,
   formatPercent,
-} from "@/helpers/formatters";
-import { calculateTransactionHoldingDays } from "@/helpers/dates";
+} from "@/utils/formatters";
+import { calculateTransactionHoldingDays } from "@/utils/dates";
 import { calculateTransactionReturns } from "@/helpers/transactions";
 import { getTaxHorizon } from "@/helpers/taxHarvesting";
 import {
@@ -272,9 +272,7 @@ export default function FactsheetTransactionHistorySection({
             ) : (
               paginatedTransactions.map((tx) => {
                 const txTypeDisplay =
-                  tx.transactionType ||
-                  (tx as { rawTransactionType?: string }).rawTransactionType ||
-                  null;
+                  tx.transactionType || tx.rawTransactionType || null;
                 const hDays = calculateTransactionHoldingDays(
                   tx.date,
                   holding.asOfDate

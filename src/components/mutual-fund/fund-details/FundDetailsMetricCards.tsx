@@ -9,11 +9,8 @@ import {
   Target,
   Layers,
 } from "lucide-react";
-import {
-  formatCurrency,
-  formatHoldingYearsAndDays,
-} from "@/helpers/formatters";
-import { FundDetailsMetricCardsProps } from "@/types/fund-details";
+import { formatCurrency, formatHoldingYearsAndDays } from "@/utils/formatters";
+import type { FundDetailsMetricCardsProps } from "@/types/fund-details";
 
 export default function FundDetailsMetricCards({
   holding,

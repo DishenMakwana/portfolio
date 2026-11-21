@@ -1,9 +1,7 @@
 import { TrendingUp, Calendar, Layers, Sparkles, X, Check } from "lucide-react";
-import { formatNullableDate } from "@/helpers/formatters";
-import type {
-  FundTimeframe,
-  HistoricalReturnsChartHeaderProps,
-} from "@/types/fund-details";
+import { formatNullableDate } from "@/utils/formatters";
+import type { HistoricalReturnsChartHeaderProps } from "@/types/fund-details";
+import type { FundTimeframe } from "@/types/portfolio";
 
 export default function HistoricalReturnsChartHeader({
   timeframe,
@@ -38,24 +36,24 @@ export default function HistoricalReturnsChartHeader({
         {/* Timeframe Filter Buttons, Inv Date & Custom Date Range Filter */}
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap relative">
           <div className="flex items-center bg-slate-950/80 border border-slate-800/80 p-1 rounded-xl shadow-inner gap-1">
-            {(["3m", "6m", "1y", "3y", "5y", "all"] as FundTimeframe[]).map(
-              (tf) => (
-                <button
-                  key={tf}
-                  onClick={() => {
-                    onCloseCustomDatePicker();
-                    onTimeframeChange(tf);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${
-                    timeframe === tf
-                      ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-                  }`}
-                >
-                  {tf}
-                </button>
-              )
-            )}
+            {(
+              ["3m", "6m", "1y", "3y", "5y", "10y", "all"] as FundTimeframe[]
+            ).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => {
+                  onCloseCustomDatePicker();
+                  onTimeframeChange(tf);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition duration-200 cursor-pointer ${
+                  timeframe === tf
+                    ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-950/50 scale-105"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
 
             {/* Inv Date Button (Starts graph from 1st Tx to Current Date!) */}
             {earliestTxDateStr && (

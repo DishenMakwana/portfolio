@@ -1,4 +1,4 @@
-import { PieChart } from "lucide-react";
+import { PieChart, Shield, CheckCircle2 } from "lucide-react";
 import type { FundAdvancedValuationRatiosPanelProps } from "@/types/fund-details";
 
 export default function FundAdvancedValuationRatiosPanel({
@@ -41,8 +41,9 @@ export default function FundAdvancedValuationRatiosPanel({
               <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight tabular-nums">
                 {top5}
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 font-semibold border border-slate-700/80">
-                🛡️ Lower is Better
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 font-semibold border border-slate-700/80 inline-flex items-center gap-1">
+                <Shield size={10} className="shrink-0" />
+                Lower is Better
               </span>
             </div>
           </div>
@@ -82,8 +83,9 @@ export default function FundAdvancedValuationRatiosPanel({
               <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight tabular-nums">
                 {top20}
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 font-semibold border border-slate-700/80">
-                🛡️ Lower is Better
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 font-semibold border border-slate-700/80 inline-flex items-center gap-1">
+                <Shield size={10} className="shrink-0" />
+                Lower is Better
               </span>
             </div>
           </div>
@@ -123,8 +125,9 @@ export default function FundAdvancedValuationRatiosPanel({
               <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight tabular-nums">
                 {peRatio != null ? peRatio.toFixed(2) : "--"}
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
-                🟢 Lower = Value
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 inline-flex items-center gap-1">
+                <CheckCircle2 size={10} className="shrink-0" />
+                Lower = Value
               </span>
             </div>
           </div>
@@ -164,8 +167,9 @@ export default function FundAdvancedValuationRatiosPanel({
               <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight tabular-nums">
                 {pbRatio != null ? pbRatio.toFixed(2) : "--"}
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
-                🟢 Lower = Value
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 inline-flex items-center gap-1">
+                <CheckCircle2 size={10} className="shrink-0" />
+                Lower = Value
               </span>
             </div>
           </div>

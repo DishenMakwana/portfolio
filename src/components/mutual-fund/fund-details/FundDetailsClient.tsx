@@ -1,16 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { globalRefreshAction } from "@/actions/portfolio";
-import { fetchVroFundDataAction } from "@/actions/watchlist";
-import { FundDetailsClientProps } from "@/types/fund-details";
+import { globalRefreshApi } from "@/service/portfolioService";
+import { fetchVroFundDataApi } from "@/service/rankingService";
+import type { FundDetailsClientProps } from "@/types/fund-details";
 import FundDetailsHeader from "./FundDetailsHeader";
 import FundDetailsMetricCards from "./FundDetailsMetricCards";
-import HistoricalReturnsChartCard from "./HistoricalReturnsChartCard";
 import FactsheetPanels from "./FactsheetPanels";
-import VroUrlModal from "@/components/watchlist/details/VroUrlModal";
+import ChartSkeletonCard from "@/components/shared/ChartSkeletonCard";
+
+const HistoricalReturnsChartCard = dynamic(
+  () => import("./HistoricalReturnsChartCard"),
+  {
+    ssr: false,
+    loading: () => (
+      <ChartSkeletonCard
+        title="Historical Returns & Benchmark Chart"
+        height="h-96"
+      />
+    ),
+  }
+);
+
+const VroUrlModal = dynamic(
+  () => import("@/components/watchlist/details/VroUrlModal"),
+  { ssr: false }
+);
 
 export default function FundDetailsClient({
   holding,
@@ -38,6 +56,7 @@ export default function FundDetailsClient({
   lastVroSyncedAt,
 }: FundDetailsClientProps) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const [isRefreshingGlobal, setIsRefreshingGlobal] = useState(false);
   const [currentVroRisk, setCurrentVroRisk] = useState(vroRisk);
   const [currentVroReturns, setCurrentVroReturns] = useState(vroReturns);
@@ -48,12 +67,21 @@ export default function FundDetailsClient({
   const [isRefreshingVro, setIsRefreshingVro] = useState(false);
   const [isVroModalOpen, setIsVroModalOpen] = useState(false);
 
+  // Sync internal state when fresh props arrive from the server
+  useEffect(() => {
+    setCurrentVroRisk(vroRisk);
+    setCurrentVroReturns(vroReturns);
+    setCurrentVroPortfolio(vroPortfolio);
+    setCurrentVroUrl(vroUrl);
+    setCurrentLastVroSyncedAt(lastVroSyncedAt);
+  }, [vroRisk, vroReturns, vroPortfolio, vroUrl, lastVroSyncedAt]);
+
   const handleSyncVro = async (customUrl?: string): Promise<void> => {
     if (isRefreshingVro) return;
     setIsRefreshingVro(true);
     try {
       const code = schemeCodeApi || holding.schemeCodeApi || "";
-      const res = await fetchVroFundDataAction(
+      const res = await fetchVroFundDataApi(
         code,
         customUrl || currentVroUrl || undefined
       );
@@ -65,10 +93,17 @@ export default function FundDetailsClient({
         if (res.data.vroUrl) {
           setCurrentVroUrl(res.data.vroUrl);
         }
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
+      } else {
+        throw new Error(
+          res.error || "Failed to fetch analytics from Value Research Online."
+        );
       }
     } catch (err) {
       console.error("Failed to sync Value Research Online data:", err);
+      throw err;
     } finally {
       setIsRefreshingVro(false);
     }
@@ -78,9 +113,11 @@ export default function FundDetailsClient({
     if (isRefreshingGlobal) return;
     setIsRefreshingGlobal(true);
     try {
-      const res = await globalRefreshAction();
+      const res = await globalRefreshApi();
       if (res.success) {
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err) {
       console.error("Failed to refresh global cache:", err);
@@ -204,7 +241,7 @@ export default function FundDetailsClient({
       </motion.div>
 
       {/* Value Research Online URL Modal */}
-      {!isStock && (
+      {!isStock && isVroModalOpen && (
         <VroUrlModal
           isOpen={isVroModalOpen}
           onClose={() => setIsVroModalOpen(false)}
@@ -212,6 +249,12 @@ export default function FundDetailsClient({
           schemeName={holding.schemeName || "Fund"}
           currentVroUrl={currentVroUrl || undefined}
           onSync={handleSyncVro}
+          onUrlSaved={(newUrl) => {
+            setCurrentVroUrl(newUrl);
+            startTransition(() => {
+              router.refresh();
+            });
+          }}
           isSyncing={isRefreshingVro}
         />
       )}

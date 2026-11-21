@@ -24,7 +24,7 @@ export const HighLabelBadge = (props: HistoricalChartLabelBadgeProps) => {
         fill="#047857"
         stroke="#34d399"
         strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+        className="chart-badge-shadow"
       />
       <text
         x={textX}
@@ -62,7 +62,7 @@ export const LowLabelBadge = (props: HistoricalChartLabelBadgeProps) => {
         fill="#be123c"
         stroke="#f43f5e"
         strokeWidth={1.5}
-        style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5))" }}
+        className="chart-badge-shadow"
       />
       <text
         x={textX}
@@ -97,7 +97,7 @@ export const FundActiveDot = (props: ChartActiveDotProps) => {
         fill="#10b981"
         stroke="#ffffff"
         strokeWidth={2}
-        style={{ filter: "drop-shadow(0px 1.5px 3px rgba(0, 0, 0, 0.45))" }}
+        className="chart-badge-shadow-sm"
       />
     </g>
   );
@@ -124,7 +124,7 @@ export const BenchmarkActiveDot = (props: ChartActiveDotProps) => {
         stroke="#ffffff"
         strokeWidth={2}
         transform={`rotate(45 ${cx} ${cy})`}
-        style={{ filter: "drop-shadow(0px 1.5px 3px rgba(0, 0, 0, 0.45))" }}
+        className="chart-badge-shadow-sm"
       />
     </g>
   );

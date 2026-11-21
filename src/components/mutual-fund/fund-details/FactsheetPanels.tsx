@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
-import { refreshSchemeCategoryRankingAction } from "@/actions/fundRankings";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { calculate52WeekRange } from "@/helpers/range52Week";
 import { calculateFactsheetTransactionSummary } from "@/helpers/transactions";
 import type { NavPoint } from "@/types/alpha";
@@ -14,22 +12,53 @@ import type {
 
 import FactsheetSchemeProfileCard from "./FactsheetSchemeProfileCard";
 import FactsheetAssetCompositionCard from "./FactsheetAssetCompositionCard";
-import FactsheetMarketCapSplitCard from "./FactsheetMarketCapSplitCard";
 import FactsheetGeneralMetricsAndBenchmarkCard from "./FactsheetGeneralMetricsAndBenchmarkCard";
 import FactsheetTransactionMetricsCards from "./FactsheetTransactionMetricsCards";
 import FactsheetTransactionHistorySection from "./FactsheetTransactionHistorySection";
 
 import FundReturnsAndRankingsCard from "./FundReturnsAndRankingsCard";
-import FundRollingReturnsCard from "./FundRollingReturnsCard";
 import FundAdvancedRatiosCard from "./FundAdvancedRatiosCard";
 import FundAthOpportunityCard from "./FundAthOpportunityCard";
 import Range52WeekCard from "@/components/shared/Range52WeekCard";
-import FundYoyReturnsCard from "./FundYoyReturnsCard";
 import FundCaptureRatioCard from "@/components/shared/FundCaptureRatioCard";
 import { StockInsightsPanels } from "./StockInsightsPanels";
 import WatchlistVroRiskCard from "@/components/watchlist/details/WatchlistVroRiskCard";
 import WatchlistVroReturnsCard from "@/components/watchlist/details/WatchlistVroReturnsCard";
 import WatchlistPortfolioBreakdownCard from "@/components/watchlist/details/WatchlistPortfolioBreakdownCard";
+import ChartSkeletonCard from "@/components/shared/ChartSkeletonCard";
+
+const FactsheetMarketCapSplitCard = dynamic(
+  () => import("./FactsheetMarketCapSplitCard"),
+  {
+    ssr: false,
+    loading: () => (
+      <ChartSkeletonCard
+        title="Market Capitalization Breakdown"
+        height="h-80"
+      />
+    ),
+  }
+);
+
+const FundRollingReturnsCard = dynamic(
+  () => import("./FundRollingReturnsCard"),
+  {
+    ssr: false,
+    loading: () => (
+      <ChartSkeletonCard
+        title="Rolling Returns & Consistency Analysis"
+        height="h-96"
+      />
+    ),
+  }
+);
+
+const FundYoyReturnsCard = dynamic(() => import("./FundYoyReturnsCard"), {
+  ssr: false,
+  loading: () => (
+    <ChartSkeletonCard title="Year-on-Year Annual Returns" height="h-80" />
+  ),
+});
 
 export default function FactsheetPanels({
   holding,
@@ -49,15 +78,14 @@ export default function FactsheetPanels({
   vroRisk,
   vroReturns,
   vroPortfolio,
+  vroUrl,
   lastVroSyncedAt,
   onOpenVroModal,
   onSyncVro,
   isRefreshingVro,
 }: FactsheetPanelsProps) {
-  const router = useRouter();
   const [rankingsData, setRankingsData] =
     useState<SchemeCategoryRankingsData | null>(categoryRankingsData || null);
-  const [isRefreshingMarketCap, setIsRefreshingMarketCap] = useState(false);
 
   useEffect(() => {
     setRankingsData(categoryRankingsData || null);
@@ -101,35 +129,6 @@ export default function FactsheetPanels({
       }));
   }, [benchNavHistory, chartData]);
 
-  const handleRefreshMarketCap = async (): Promise<void> => {
-    const code = schemeCodeApi || holding.schemeCodeApi || "";
-    if (!code || isRefreshingMarketCap) return;
-    setIsRefreshingMarketCap(true);
-    const toastId = toast.loading(
-      "Updating Market Cap Split from Groww & VRO..."
-    );
-    try {
-      const [growwRes] = await Promise.allSettled([
-        refreshSchemeCategoryRankingAction(code),
-        onSyncVro ? onSyncVro() : Promise.resolve(),
-      ]);
-      if (
-        growwRes.status === "fulfilled" &&
-        growwRes.value?.success &&
-        growwRes.value.data
-      ) {
-        setRankingsData(growwRes.value.data);
-      }
-      toast.success("Market Cap Split synced successfully!", { id: toastId });
-      router.refresh();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to refresh market cap: ${msg}`, { id: toastId });
-    } finally {
-      setIsRefreshingMarketCap(false);
-    }
-  };
-
   // Summary totals for Buy, Sell, Stamp Duty & Realised PnL
   const txSummary = useMemo(
     () =>
@@ -146,7 +145,6 @@ export default function FactsheetPanels({
           symbol={
             schemeCodeApi || holding.schemeCodeApi || holding.schemeName || ""
           }
-          currentPrice={holding.currentNav}
           sector={holding.sector || undefined}
           marketCapCategory={holding.marketCapCategory || undefined}
         />
@@ -157,6 +155,8 @@ export default function FactsheetPanels({
             factsheetMeta={factsheetMeta}
             cleanCategory={cleanCategory}
             rankingsData={rankingsData}
+            schemeName={holding.schemeName}
+            vroUrl={vroUrl}
           />
 
           {/* PANEL 2: ASSET COMPOSITION */}
@@ -171,11 +171,6 @@ export default function FactsheetPanels({
             factsheetMeta={factsheetMeta}
             rankingsData={rankingsData}
             vroPortfolio={vroPortfolio}
-            schemeCodeApi={schemeCodeApi}
-            holdingSchemeCodeApi={holding.schemeCodeApi}
-            isRefreshingVro={isRefreshingVro}
-            onRefreshMarketCap={handleRefreshMarketCap}
-            isRefreshingMarketCap={isRefreshingMarketCap}
           />
         </div>
       )}
@@ -272,15 +267,6 @@ export default function FactsheetPanels({
       {/* VALUE RESEARCH ONLINE (VRO) RISK MEASURES, RETURNS & PORTFOLIO BREAKDOWN */}
       {!isStock && (
         <>
-          {!isSif && (
-            <WatchlistVroRiskCard
-              riskData={vroRisk}
-              onOpenVroModal={onOpenVroModal}
-              onSyncVro={onSyncVro}
-              isRefreshingVro={isRefreshingVro}
-              lastVroSyncedAt={lastVroSyncedAt}
-            />
-          )}
           <WatchlistVroReturnsCard
             returnsData={vroReturns}
             onOpenVroModal={onOpenVroModal}
@@ -289,14 +275,19 @@ export default function FactsheetPanels({
             lastVroSyncedAt={lastVroSyncedAt}
           />
           {!isSif && (
-            <WatchlistPortfolioBreakdownCard
-              vroPortfolio={vroPortfolio}
+            <WatchlistVroRiskCard
+              riskData={vroRisk}
               onOpenVroModal={onOpenVroModal}
-              onSyncVro={onSyncVro}
               isRefreshingVro={isRefreshingVro}
               lastVroSyncedAt={lastVroSyncedAt}
             />
           )}
+          {/* Top Equity Holdings & Sector-wise Holdings (Enabled for SIF & non-SIF) */}
+          <WatchlistPortfolioBreakdownCard
+            vroPortfolio={vroPortfolio}
+            onOpenVroModal={onOpenVroModal}
+            isRefreshingVro={isRefreshingVro}
+          />
         </>
       )}
 
@@ -307,11 +298,19 @@ export default function FactsheetPanels({
       />
 
       {/* TRANSACTION HISTORY SECTION */}
-      <FactsheetTransactionHistorySection
-        transactions={transactions}
-        holding={holding}
-        isStock={isStock}
-      />
+      <Suspense
+        fallback={
+          <div className="h-72 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+            Loading transaction history...
+          </div>
+        }
+      >
+        <FactsheetTransactionHistorySection
+          transactions={transactions}
+          holding={holding}
+          isStock={isStock}
+        />
+      </Suspense>
     </div>
   );
 }
