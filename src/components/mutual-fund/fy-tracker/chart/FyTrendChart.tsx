@@ -138,7 +138,8 @@ export function FyTrendChart({
                 fill="#94a3b8"
                 fontSize={10}
                 fontWeight={600}
-                style={{ textAnchor: "middle" }}
+                textAnchor="middle"
+                className="text-anchor-middle font-semibold text-[10px] fill-slate-400"
               />
             </YAxis>
             <Tooltip content={<FyTrendTooltip metric={metric} />} />

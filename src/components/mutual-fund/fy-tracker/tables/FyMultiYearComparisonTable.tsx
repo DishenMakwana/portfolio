@@ -1,7 +1,7 @@
 "use client";
 
 import { History } from "lucide-react";
-import { formatInrCompact } from "@/helpers/formatters";
+import { formatInrCompact } from "@/utils/formatters";
 import type { FyMultiYearComparisonTableProps } from "@/types/insights";
 
 export function FyMultiYearComparisonTable({

@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { formatFyTableValue } from "@/helpers/formatters";
+import { formatFyTableValue } from "@/utils/formatters";
 import type { FySinceInceptionTableProps } from "@/types/insights";
 
 export function FySinceInceptionTable({

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Layers } from "lucide-react";
-import { formatFyTableValue } from "@/helpers/formatters";
+import { formatFyTableValue } from "@/utils/formatters";
 import type { FyMovementBreakdownTableProps } from "@/types/insights";
 
 export function FyMovementBreakdownTable({

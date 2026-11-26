@@ -1,24 +1,40 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
-import { getFyTrackerDataAction } from "@/actions/portfolio";
+import { getFyTrackerDataApi } from "@/service/insightService";
 import { FyTrackerHeader } from "./FyTrackerHeader";
 import { FyTrackerHeroCards } from "./FyTrackerHeroCards";
-import { FyTrendChart } from "./chart/FyTrendChart";
 import { FySinceInceptionTable } from "./tables/FySinceInceptionTable";
 import { FyMovementBreakdownTable } from "./tables/FyMovementBreakdownTable";
 import { FyMultiYearComparisonTable } from "./tables/FyMultiYearComparisonTable";
-import type { FyTrackerClientProps, FyTrackerData } from "@/types/insights";
+import type {
+  FyTrackerClientProps,
+  FyTrackerData,
+  FyTrackerMetric,
+} from "@/types/insights";
+
+const FyTrendChart = dynamic(
+  () => import("./chart/FyTrendChart").then((m) => m.FyTrendChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-80 w-full animate-pulse rounded-2xl bg-slate-900/60 border border-slate-800/80 p-6 flex items-center justify-center text-slate-500 text-sm">
+        Loading FY trend chart...
+      </div>
+    ),
+  }
+);
 
 export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const initialMetric =
-    (searchParams.get("metric") as "xirr" | "cagr") || "xirr";
+    (searchParams.get("metric") as FyTrackerMetric) || "xirr";
   const [data, setData] = useState<FyTrackerData>(initialData);
-  const [metric, setMetric] = useState<"xirr" | "cagr">(initialMetric);
+  const [metric, setMetric] = useState<FyTrackerMetric>(initialMetric);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -26,7 +42,7 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
   }, [initialData]);
 
   useEffect(() => {
-    const m = searchParams.get("metric") as "xirr" | "cagr";
+    const m = searchParams.get("metric") as FyTrackerMetric;
     if (m && (m === "xirr" || m === "cagr")) {
       setMetric(m);
     }
@@ -52,7 +68,7 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
     }
   };
 
-  const handleMetricChange = (nextMetric: "xirr" | "cagr") => {
+  const handleMetricChange = (nextMetric: FyTrackerMetric) => {
     setMetric(nextMetric);
     updateUrl({ metric: nextMetric === "xirr" ? null : nextMetric });
   };
@@ -61,9 +77,9 @@ export default function FyTrackerClient({ initialData }: FyTrackerClientProps) {
     updateUrl({ fy: label });
     startTransition(async () => {
       try {
-        const freshData = await getFyTrackerDataAction(label);
-        if (freshData) {
-          setData(freshData);
+        const res = await getFyTrackerDataApi(label);
+        if (res.success && res.data) {
+          setData(res.data);
         }
       } catch (err) {
         console.error("Failed to load FY data:", err);

@@ -8,7 +8,7 @@ import {
   IndianRupee,
   Sparkles,
 } from "lucide-react";
-import { formatCurrency } from "@/helpers/formatters";
+import { formatCurrency } from "@/utils/formatters";
 import type { FyTrackerHeroCardsProps } from "@/types/insights";
 
 const CARD_HOVER_ANIMATION = {
