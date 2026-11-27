@@ -1,13 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import {
   SingleSelectFilter,
   MultiSelectFilter,
   FilterSectionDivider,
 } from "@/components/shared/filters/CommonFilterComponents";
-import type { HoldingsFilterModalProps } from "@/types/holdings";
+import type {
+  HoldingsFilterModalProps,
+  HoldingStatusFilter,
+  HoldingsCategoryFilters,
+} from "@/types/holdings";
 
 const PLAN_OPTIONS = [
   { id: "MF", label: "Mutual Fund (MF)" },
@@ -23,21 +28,48 @@ export default function HoldingsFilterModal({
   isOpen,
   onClose,
   memberFilter,
-  onMemberChange,
   memberOptions,
   planFilter,
-  onPlanChange,
   statusFilter,
-  onStatusChange,
   categoryFilters,
-  onCategoryToggle: _onCategoryToggle,
-  onCategoryClear,
   categoryOptions,
-  onClearAll,
-  totalFilteredCount,
-  onCategoryChange,
+  onApply,
 }: HoldingsFilterModalProps) {
+  // Local draft state buffered until user clicks "Show results"
+  const [draftMember, setDraftMember] = useState(memberFilter);
+  const [draftPlan, setDraftPlan] = useState(planFilter);
+  const [draftStatus, setDraftStatus] =
+    useState<HoldingStatusFilter>(statusFilter);
+  const [draftCategories, setDraftCategories] =
+    useState<HoldingsCategoryFilters>(categoryFilters);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraftMember(memberFilter);
+      setDraftPlan(planFilter);
+      setDraftStatus(statusFilter);
+      setDraftCategories(categoryFilters);
+    }
+  }, [isOpen, memberFilter, planFilter, statusFilter, categoryFilters]);
+
   if (!isOpen || typeof document === "undefined") return null;
+
+  const handleClearAll = () => {
+    setDraftMember("All");
+    setDraftPlan("All");
+    setDraftStatus("all");
+    setDraftCategories([]);
+  };
+
+  const handleApply = () => {
+    onApply({
+      member: draftMember,
+      plan: draftPlan,
+      status: draftStatus,
+      categories: draftCategories,
+    });
+    onClose();
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -59,10 +91,10 @@ export default function HoldingsFilterModal({
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition text-xs"
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800/60 text-slate-400 hover:text-slate-100 hover:bg-slate-700/60 transition cursor-pointer"
             aria-label="Close filters"
           >
-            ✕
+            <X size={15} />
           </button>
         </div>
 
@@ -71,8 +103,8 @@ export default function HoldingsFilterModal({
           {/* Applicant */}
           <SingleSelectFilter
             label="Applicant"
-            value={memberFilter}
-            onChange={onMemberChange}
+            value={draftMember}
+            onChange={setDraftMember}
             options={memberOptions}
             allLabel="All Applicants"
             allId="All"
@@ -83,8 +115,8 @@ export default function HoldingsFilterModal({
           {/* Plan Type */}
           <SingleSelectFilter
             label="Plan Type"
-            value={planFilter}
-            onChange={onPlanChange}
+            value={draftPlan}
+            onChange={setDraftPlan}
             options={PLAN_OPTIONS}
             allLabel="All Plans"
             allId="All"
@@ -95,10 +127,8 @@ export default function HoldingsFilterModal({
           {/* Status */}
           <SingleSelectFilter
             label="Folio Status"
-            value={statusFilter}
-            onChange={(val) =>
-              onStatusChange(val as "active" | "inactive" | "all")
-            }
+            value={draftStatus}
+            onChange={(val) => setDraftStatus(val as HoldingStatusFilter)}
             options={STATUS_OPTIONS}
             allLabel="All Folios"
             allId="all"
@@ -109,32 +139,29 @@ export default function HoldingsFilterModal({
           {/* Category */}
           <MultiSelectFilter
             label="Fund Category"
-            values={categoryFilters}
-            onChange={(cats) => {
-              if (onCategoryChange) {
-                onCategoryChange(cats);
-              }
-            }}
+            values={draftCategories}
+            onChange={setDraftCategories}
             options={categoryOptions}
             allLabel="All Categories"
-            onClear={onCategoryClear}
+            onClear={() => setDraftCategories([])}
           />
         </div>
 
         {/* Sticky footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-slate-800/80 bg-slate-950 shrink-0">
           <button
-            onClick={onClearAll}
-            className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 transition"
+            type="button"
+            onClick={handleClearAll}
+            className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 transition cursor-pointer"
           >
             Clear all
           </button>
           <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-teal-500/20"
+            type="button"
+            onClick={handleApply}
+            className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-teal-500/20 cursor-pointer"
           >
-            Show {totalFilteredCount} result
-            {totalFilteredCount !== 1 ? "s" : ""}
+            Show results
           </button>
         </div>
       </div>

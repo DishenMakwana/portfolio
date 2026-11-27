@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { trackFilterLatency } from "@/helpers/performance";
-import HoldingsFilterModal from "./modal/HoldingsFilterModal";
 import HoldingsToolbar from "./HoldingsToolbar";
 import HoldingsTable from "./table/HoldingsTable";
 import {
@@ -19,14 +19,21 @@ import {
   scoreItem,
   PORTFOLIO_SEARCH_WEIGHTS,
 } from "@/helpers/search";
-import {
-  HOLDINGS_SORT_FIELDS,
-  type HoldingsCategoryFilters,
-  type HoldingsSortField,
-  type HoldingsTabProps,
+import { HOLDINGS_SORT_FIELDS } from "@/types/holdings";
+import type {
+  HoldingsCategoryFilters,
+  HoldingsSortField,
+  HoldingsTabProps,
+  HoldingStatusFilter,
+  HoldingsFilterApplyPayload,
 } from "@/types/holdings";
 import type { SearchScoreMap } from "@/types/filters";
-import { useTableSort } from "@/helpers/useTableSort";
+import { useTableSort } from "@/hooks/useTableSort";
+
+const HoldingsFilterModal = dynamic(
+  () => import("./modal/HoldingsFilterModal"),
+  { ssr: false }
+);
 
 export default function HoldingsTab({
   holdings,
@@ -53,7 +60,8 @@ export default function HoldingsTab({
     searchParams.get("category")
   );
 
-  const initialStatus = searchParams.get("status") || "active";
+  const initialStatus =
+    (searchParams.get("status") as HoldingStatusFilter) || "active";
   const initialPageSize = (() => {
     const ps = parseInt(
       searchParams.get("pageSize") || searchParams.get("perPage") || "25",
@@ -72,7 +80,8 @@ export default function HoldingsTab({
   const [planFilter, setPlanFilter] = useState(initialPlan);
   const [categoryFilters, setCategoryFilters] =
     useState<HoldingsCategoryFilters>(initialCategoryFilters);
-  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [statusFilter, setStatusFilter] =
+    useState<HoldingStatusFilter>(initialStatus);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [page, setPage] = useState(initialPage);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -130,7 +139,9 @@ export default function HoldingsTab({
     setMemberFilter(searchParams.get("member") || "All");
     setPlanFilter(searchParams.get("plan") || "All");
     setCategoryFilters(parseCategoryFilters(searchParams.get("category")));
-    setStatusFilter(searchParams.get("status") || "active");
+    setStatusFilter(
+      (searchParams.get("status") as HoldingStatusFilter) || "active"
+    );
     const rawP = parseInt(searchParams.get("page") || "1", 10);
     if (!isNaN(rawP) && rawP > 0) setPage(rawP);
     const rawPs = parseInt(
@@ -178,24 +189,7 @@ export default function HoldingsTab({
     });
   };
 
-  const handleCategoryChange = (cats: string[]): void => {
-    trackFilterLatency("Mutual Funds - Holdings", "Category", cats.join(", "));
-    setCategoryFilters(cats);
-    setPage(1);
-    updateUrl({
-      category: serializeCategoryFilters(cats),
-      page: "1",
-    });
-  };
-
-  const handleCategoryClear = (): void => {
-    trackFilterLatency("Mutual Funds - Holdings", "Category Clear", "all");
-    setCategoryFilters([]);
-    setPage(1);
-    updateUrl({ category: null, page: "1" });
-  };
-
-  const handleStatusChange = (value: string) => {
+  const handleStatusChange = (value: HoldingStatusFilter) => {
     trackFilterLatency("Mutual Funds - Holdings", "Status", value);
     setStatusFilter(value);
     setPage(1);
@@ -216,6 +210,27 @@ export default function HoldingsTab({
       status: null,
       category: null,
       q: null,
+      page: "1",
+    });
+  };
+
+  const handleApplyFilters = (filters: HoldingsFilterApplyPayload) => {
+    trackFilterLatency(
+      "Mutual Funds - Holdings",
+      "Apply Filters",
+      `${filters.member} | ${filters.plan} | ${filters.status}`
+    );
+    setMemberFilter(filters.member);
+    setPlanFilter(filters.plan);
+    setStatusFilter(filters.status);
+    setCategoryFilters(filters.categories);
+    setPage(1);
+
+    updateUrl({
+      member: filters.member === "All" ? null : filters.member,
+      plan: filters.plan === "All" ? null : filters.plan,
+      status: filters.status === "active" ? null : filters.status,
+      category: serializeCategoryFilters(filters.categories) || null,
       page: "1",
     });
   };
@@ -372,24 +387,19 @@ export default function HoldingsTab({
       transition={{ duration: 0.25 }}
     >
       {/* ── Filter Modal ── */}
-      <HoldingsFilterModal
-        isOpen={filterPanelOpen}
-        onClose={() => setFilterPanelOpen(false)}
-        memberFilter={memberFilter}
-        onMemberChange={handleMemberChange}
-        memberOptions={memberOptions}
-        planFilter={planFilter}
-        onPlanChange={handlePlanChange}
-        statusFilter={statusFilter}
-        onStatusChange={handleStatusChange}
-        categoryFilters={categoryFilters}
-        onCategoryToggle={handleCategoryToggle}
-        onCategoryClear={handleCategoryClear}
-        categoryOptions={categoryOptions}
-        onClearAll={handleClearAll}
-        totalFilteredCount={filtered.length}
-        onCategoryChange={handleCategoryChange}
-      />
+      {filterPanelOpen && (
+        <HoldingsFilterModal
+          isOpen={filterPanelOpen}
+          onClose={() => setFilterPanelOpen(false)}
+          memberFilter={memberFilter}
+          memberOptions={memberOptions}
+          planFilter={planFilter}
+          statusFilter={statusFilter}
+          categoryFilters={categoryFilters}
+          categoryOptions={categoryOptions}
+          onApply={handleApplyFilters}
+        />
+      )}
 
       {/* ── Search + Filters card ── */}
       <HoldingsToolbar

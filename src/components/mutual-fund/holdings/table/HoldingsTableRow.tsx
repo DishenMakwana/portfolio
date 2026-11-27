@@ -1,13 +1,15 @@
+import { memo } from "react";
+import { Trophy, Star, Flame } from "lucide-react";
 import FolioBadge from "@/components/shared/FolioBadge";
 import {
   formatCurrency,
   formatPercent,
   formatHoldingYearsAndDays,
-} from "@/helpers/formatters";
+} from "@/utils/formatters";
 import { isUnlistedStock } from "@/lib/stockApi";
 import type { HoldingsTableRowProps } from "@/types/holdings";
 
-export default function HoldingsTableRow({
+function HoldingsTableRow({
   holding: h,
   rank,
   categoryRankingsMap,
@@ -53,12 +55,24 @@ export default function HoldingsTableRow({
                     ? "bg-sky-950/70 text-sky-300 border-sky-500/30"
                     : "bg-slate-850/90 text-slate-300 border-slate-700/60";
 
-            const rankText =
-              catRank === 1
-                ? `🏆 #1 in Cat (${horizon})`
-                : catRank <= 5
-                  ? `⭐ #${catRank} (${horizon})`
-                  : `Rank #${catRank} (${horizon})`;
+            const rankContent =
+              catRank === 1 ? (
+                <>
+                  <Trophy size={11} className="shrink-0 text-amber-400" />
+                  <span>#1 in Cat ({horizon})</span>
+                </>
+              ) : catRank <= 5 ? (
+                <>
+                  <Star size={11} className="shrink-0 text-amber-400" />
+                  <span>
+                    #{catRank} ({horizon})
+                  </span>
+                </>
+              ) : (
+                <span>
+                  Rank #{catRank} ({horizon})
+                </span>
+              );
 
             const titleText = `Category: ${rankInfo.categoryName || h.category}\n${Object.entries(
               rankInfo.allRanks
@@ -72,7 +86,7 @@ export default function HoldingsTableRow({
                 title={titleText}
                 className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${rankPillClass}`}
               >
-                {rankText}
+                {rankContent}
               </span>
             );
           })()}
@@ -162,9 +176,10 @@ export default function HoldingsTableRow({
             {h.isLumpsumOpportunity && (
               <span
                 title="Down ≥5% from All-Time High — Prime Lumpsum Opportunity"
-                className="text-[10px] font-black uppercase text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/50 inline-flex items-center gap-0.5 shadow-sm shadow-amber-500/10"
+                className="text-[10px] font-black uppercase text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-600/50 inline-flex items-center gap-1 shadow-sm shadow-amber-500/10"
               >
-                🔥 Buy Dip
+                <Flame size={11} className="shrink-0 text-amber-400" />
+                <span>Buy Dip</span>
               </span>
             )}
             {/* Pct Correction */}
@@ -211,3 +226,5 @@ export default function HoldingsTableRow({
     </tr>
   );
 }
+
+export default memo(HoldingsTableRow);

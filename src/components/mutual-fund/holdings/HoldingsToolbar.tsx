@@ -1,7 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import {
+  SlidersHorizontal,
+  User,
+  Package,
+  Bookmark,
+  Tag,
+  X,
+} from "lucide-react";
 import SearchFilterBar from "@/components/shared/SearchFilterBar";
 import type { HoldingsToolbarProps } from "@/types/holdings";
 
@@ -31,15 +38,16 @@ export default function HoldingsToolbar({
     chips.push(
       <span
         key="member"
-        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
       >
-        👤 {memberFilter}
+        <User size={11} className="shrink-0 text-teal-400" />
+        <span>{memberFilter}</span>
         <button
           onClick={() => onMemberChange("All")}
-          className="hover:opacity-70 transition ml-0.5"
+          className="hover:opacity-70 transition ml-0.5 cursor-pointer"
           aria-label="Remove member filter"
         >
-          ✕
+          <X size={11} className="shrink-0" />
         </button>
       </span>
     );
@@ -49,15 +57,16 @@ export default function HoldingsToolbar({
     chips.push(
       <span
         key="plan"
-        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
       >
-        📦 {planFilter === "MF" ? "Mutual Fund" : "Specialized (SIF)"}
+        <Package size={11} className="shrink-0 text-amber-400" />
+        <span>{planFilter === "MF" ? "Mutual Fund" : "Specialized (SIF)"}</span>
         <button
           onClick={() => onPlanChange("All")}
-          className="hover:opacity-70 transition ml-0.5"
+          className="hover:opacity-70 transition ml-0.5 cursor-pointer"
           aria-label="Remove plan filter"
         >
-          ✕
+          <X size={11} className="shrink-0" />
         </button>
       </span>
     );
@@ -67,15 +76,18 @@ export default function HoldingsToolbar({
     chips.push(
       <span
         key="status"
-        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30"
       >
-        🔖 {statusFilter === "inactive" ? "Inactive / Sold" : "All Folios"}
+        <Bookmark size={11} className="shrink-0 text-indigo-400" />
+        <span>
+          {statusFilter === "inactive" ? "Inactive / Sold" : "All Folios"}
+        </span>
         <button
           onClick={() => onStatusChange("active")}
-          className="hover:opacity-70 transition ml-0.5"
+          className="hover:opacity-70 transition ml-0.5 cursor-pointer"
           aria-label="Remove status filter"
         >
-          ✕
+          <X size={11} className="shrink-0" />
         </button>
       </span>
     );
@@ -85,15 +97,16 @@ export default function HoldingsToolbar({
     chips.push(
       <span
         key={`cat-${cat}`}
-        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
+        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
       >
-        🏷 {cat}
+        <Tag size={11} className="shrink-0 text-sky-400" />
+        <span>{cat}</span>
         <button
           onClick={() => onCategoryToggle(cat)}
-          className="hover:opacity-70 transition ml-0.5"
+          className="hover:opacity-70 transition ml-0.5 cursor-pointer"
           aria-label={`Remove ${cat} filter`}
         >
-          ✕
+          <X size={11} className="shrink-0" />
         </button>
       </span>
     )

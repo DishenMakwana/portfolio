@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import TablePagination from "@/components/shared/TablePagination";
-import { getFundDetailsUrl } from "@/helpers/formatters";
+import { getFundDetailsUrl } from "@/utils/formatters";
 import HoldingsTableTopBar from "./HoldingsTableTopBar";
 import HoldingsTableRow from "./HoldingsTableRow";
 import HoldingsTableEmptyState from "./HoldingsTableEmptyState";
@@ -52,24 +52,44 @@ export default function HoldingsTable({
                 </div>
               </th>
               <th className="p-4">Holder</th>
-              <th
-                className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => onSort("currentValue")}
-              >
-                <div className="flex items-center gap-1">
-                  Valuation {renderSortIcon("currentValue")}
+              <th className="p-4 select-none whitespace-nowrap">
+                <div className="flex flex-col items-start gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onSort("currentValue")}
+                    className="flex items-center gap-1 hover:text-slate-200 cursor-pointer"
+                  >
+                    <span>Valuation</span>
+                    {renderSortIcon("currentValue")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSort("purchaseValue")}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    <span>Cost</span>
+                    {renderSortIcon("purchaseValue")}
+                  </button>
                 </div>
               </th>
-              <th
-                className="p-4 cursor-pointer hover:text-slate-200 select-none"
-                onClick={() => onSort("gain")}
-              >
-                <div className="flex items-center gap-1">
-                  <div className="leading-tight">
-                    <div>Profit /</div>
-                    <div>Loss</div>
-                  </div>
-                  {renderSortIcon("gain")}
+              <th className="p-4 select-none whitespace-nowrap">
+                <div className="flex flex-col items-start gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onSort("gain")}
+                    className="flex items-center gap-1 hover:text-slate-200 cursor-pointer"
+                  >
+                    <span>P/L</span>
+                    {renderSortIcon("gain")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSort("absoluteReturn")}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    <span>Abs return</span>
+                    {renderSortIcon("absoluteReturn")}
+                  </button>
                 </div>
               </th>
               <th
